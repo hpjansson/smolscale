@@ -339,11 +339,11 @@ interp_horizontal_boxes_256 (const SmolScaleCtx *scale_ctx, const guint32 *row_i
         r = unpack_pixel_256 (*(pp++));
         s = r * F;
 
-        q = (s >> 1) & 0x7fff7fff7fff7fff;
+        q = (s >> 1) & 0x7fff7fff7fff7fffULL;
 
-        accum += ((p + q) >> 7) & 0x01ff01ff01ff01ff;
+        accum += ((p + q) >> 7) & 0x01ff01ff01ff01ffULL;
 
-        p = (((r << 8) - r - s) >> 1) & 0x7fff7fff7fff7fff;
+        p = (((r << 8) - r - s) >> 1) & 0x7fff7fff7fff7fffULL;
 
         scale_and_store_256 (accum, scale_ctx->span_mul_x, &row_parts_out);
         accum = 0;
@@ -358,7 +358,7 @@ interp_horizontal_boxes_256 (const SmolScaleCtx *scale_ctx, const guint32 *row_i
     if (F > 0)
         q = weight_pixel_256 (unpack_pixel_256 (*(pp)), F);
 
-    accum += ((p + q) >> 7) & 0x01ff01ff01ff01ff;
+    accum += ((p + q) >> 7) & 0x01ff01ff01ff01ffULL;
     scale_and_store_256 (accum, scale_ctx->span_mul_x, &row_parts_out);
 }
 
