@@ -606,6 +606,49 @@ weight_row_256 (guint64 *row, guint16 w, guint n)
     }
 }
 
+#if 0
+static void
+scale_and_weight_top_edge_rows_box_256 (const guint64 *first_row, const guint64 *last_row, guint64 *accum, guint16 w2, guint n)
+{
+    const guint64 *first_row_max = first_row + n;
+
+    while (first_row != first_row_max)
+    {
+        guint64 r, s, p, q;
+
+        r = *(first_row++);
+        p = r << 7;
+
+        r = *(last_row++);
+        s = r * w2;
+        q = (s >> 1) & 0x7fff7fff7fff7fffULL;
+
+        *(accum++) = ((p + q) >> 7) & 0x1ff01ff01ff01ffULL;
+    }
+}
+#endif
+
+static void
+scale_and_weight_edge_rows_box_256 (const guint64 *first_row, const guint64 *last_row, guint64 *accum, guint16 w1, guint16 w2, guint n)
+{
+    const guint64 *first_row_max = first_row + n;
+
+    while (first_row != first_row_max)
+    {
+        guint64 r, s, p, q;
+
+        r = *(first_row++);
+        s = r * w1;
+        p = (s >> 1) & 0x7fff7fff7fff7fffULL;
+
+        r = *(last_row++);
+        s = r * w2;
+        q = (s >> 1) & 0x7fff7fff7fff7fffULL;
+
+        *(accum++) = ((p + q) >> 7) & 0x1ff01ff01ff01ffULL;
+    }
+}
+
 static void
 convert_parts_65536_to_256 (guint64 *row, guint n)
 {
@@ -634,20 +677,54 @@ scale_outrow_box_vertical_256 (const SmolScaleCtx *scale_ctx, VerticalCtx *verti
                                guint outrow_index, guint32 *row_out)
 {
     guint ofs_y, ofs_y_max;
-    guint w;
+    guint w1, w2;
 
     /* Get the inrow range for this outrow: [ofs_y .. ofs_y_max> */
 
     ofs_y = scale_ctx->offsets_y [outrow_index * 2];
     ofs_y_max = scale_ctx->offsets_y [(outrow_index + 1) * 2];
 
-    /* Scale the first inrow and store it */
+    /* Scale the first and last rows, weight them and store in accumulator */
 
-    scale_horizontal_for_vertical_256 (scale_ctx, inrow_ofs_to_pointer (scale_ctx, ofs_y),
+    w1 = (outrow_index == 0) ? 256 : 255 - scale_ctx->offsets_y [outrow_index * 2 - 1];
+    w2 = scale_ctx->offsets_y [outrow_index * 2 + 1];
+
+    scale_horizontal_for_vertical_256 (scale_ctx,
+                                       inrow_ofs_to_pointer (scale_ctx, ofs_y),
                                        vertical_ctx->parts_top_row);
-    weight_row_256 (vertical_ctx->parts_top_row,
-                    outrow_index == 0 ? 256 : 255 - scale_ctx->offsets_y [outrow_index * 2 - 1],
-                    scale_ctx->width_out);
+    if (w2)
+    {
+        scale_horizontal_for_vertical_256 (scale_ctx,
+                                           inrow_ofs_to_pointer (scale_ctx, ofs_y_max),
+                                           vertical_ctx->parts_bottom_row);
+    }
+    else
+    {
+        /* When w2 == 0, the final inrow may be out of bounds. Don't try to access it. */
+        memset (vertical_ctx->parts_bottom_row, 0, scale_ctx->width_out * sizeof (guint64));
+    }
+
+#if 0
+    /* Probably doesn't make us much faster... */
+    if (outrow_index == 0)
+    {
+        scale_and_weight_top_edge_rows_box_256 (vertical_ctx->parts_top_row,
+                                                vertical_ctx->parts_bottom_row,
+                                                vertical_ctx->parts_top_row,
+                                                w2,
+                                                scale_ctx->width_out);
+    }
+    else
+#endif
+    {
+        scale_and_weight_edge_rows_box_256 (vertical_ctx->parts_top_row,
+                                            vertical_ctx->parts_bottom_row,
+                                            vertical_ctx->parts_top_row,
+                                            w1,
+                                            w2,
+                                            scale_ctx->width_out);
+    }
+
     ofs_y++;
 
     /* Add up whole rows */
@@ -663,23 +740,10 @@ scale_outrow_box_vertical_256 (const SmolScaleCtx *scale_ctx, VerticalCtx *verti
         ofs_y++;
     }
 
-    /* Final row is optional; if this is the bottommost outrow it could be out of bounds */
-
-    w = scale_ctx->offsets_y [outrow_index * 2 + 1];
-    if (w > 0)
-    {
-        scale_horizontal_for_vertical_256 (scale_ctx, inrow_ofs_to_pointer (scale_ctx, ofs_y),
-                                           vertical_ctx->parts_bottom_row);
-        weight_row_256 (vertical_ctx->parts_bottom_row,
-                        w - 1,  /* Subtract 1 to avoid overflow */
-                        scale_ctx->width_out);
-        add_parts (vertical_ctx->parts_bottom_row,
-                   vertical_ctx->parts_top_row,
-                   scale_ctx->width_out);
-    }
-
-    finalize_vertical_256 (vertical_ctx->parts_top_row, scale_ctx->span_mul_y,
-                           row_out, scale_ctx->width_out);
+    finalize_vertical_256 (vertical_ctx->parts_top_row,
+                           scale_ctx->span_mul_y,
+                           row_out,
+                           scale_ctx->width_out);
 }
 
 static void
