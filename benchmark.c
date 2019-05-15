@@ -8,6 +8,19 @@
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include "scale.h"
 
+/* --- Common --- */
+
+typedef struct
+{
+    guint in_width, in_height;
+    gpointer in_data, out_data;
+}
+ScaleParams;
+
+typedef void (*ScaleInitFunc) (ScaleParams *, gpointer, guint, guint);
+typedef void (*ScaleFiniFunc) (ScaleParams *);
+typedef void (*ScaleDoFunc) (ScaleParams *, guint, guint);
+
 static gpointer
 gen_color_canvas (guint width, guint height, guint32 color)
 {
@@ -24,7 +37,20 @@ gen_color_canvas (guint width, guint height, guint32 color)
     return canvas;
 }
 
-#if 0
+static gdouble
+compute_elapsed (struct timespec *before, struct timespec *after)
+{
+    gint64 before_usec = before->tv_nsec / 1000;
+    gint64 after_usec = after->tv_nsec / 1000;
+    guint64 diff;
+
+    diff = (after->tv_sec * 1000000) - (before->tv_sec * 1000000);
+    diff += (after_usec - before_usec);
+
+    return diff / (gdouble) 1000000.0;
+}
+
+/* --- Pixman --- */
 
 static double
 min4 (double a, double b, double c, double d)
@@ -73,12 +99,30 @@ compute_extents (pixman_f_transform_t *trans, double *sx, double *sy)
 }
 
 static void
-scale_pixman (guint width, guint height, guint target_width, guint target_height, pixman_image_t *pixman_image)
+scale_init_pixman (ScaleParams *params, gpointer in_raw, guint in_width, guint in_height)
 {
+    params->in_width = in_width;
+    params->in_height = in_height;
+    params->in_data = pixman_image_create_bits (PIXMAN_r8g8b8a8,
+                                                in_width, in_height,
+                                                in_raw,
+                                                in_width * sizeof (guint32));
+}
+
+static void
+scale_fini_pixman (ScaleParams *params)
+{
+    pixman_image_unref (params->in_data);
+}
+
+static void
+scale_do_pixman (ScaleParams *params, guint out_width, guint out_height)
+{
+    pixman_image_t *pixman_image = params->in_data;
     pixman_f_transform_t ftransform;
     pixman_transform_t transform;
     double fscale_x, fscale_y;
-    pixman_fixed_t *params;
+    pixman_fixed_t *pixman_params;
     int n_params;
     guint32 *pixels;
     pixman_image_t *tmp;
@@ -87,15 +131,15 @@ scale_pixman (guint width, guint height, guint target_width, guint target_height
 
     pixman_f_transform_init_identity (&ftransform);
 
-    fscale_x = (double) width / (double) target_width;
-    fscale_y = (double) height / (double) target_height;
+    fscale_x = (double) params->in_width / (double) out_width;
+    fscale_y = (double) params->in_height / (double) out_height;
 
     pixman_f_transform_scale (&ftransform, NULL, fscale_x, fscale_y);
     pixman_transform_from_pixman_f_transform (&transform, &ftransform);
 
     pixman_image_set_transform (pixman_image, &transform);
 
-    params = pixman_filter_create_separable_convolution (
+    pixman_params = pixman_filter_create_separable_convolution (
         &n_params,
         pixman_double_to_fixed (fscale_x),
         pixman_double_to_fixed (fscale_y),
@@ -106,64 +150,35 @@ scale_pixman (guint width, guint height, guint target_width, guint target_height
         1,
         1);
 
-#if 1
-    pixman_image_set_filter (pixman_image, PIXMAN_FILTER_SEPARABLE_CONVOLUTION, params, n_params);
-#else
-    pixman_image_set_filter (pixman_image, PIXMAN_FILTER_BILINEAR, NULL, 0);
-#endif
+    if (fscale_x > 2.0 || fscale_y > 2.0)
+    {
+        pixman_image_set_filter (pixman_image, PIXMAN_FILTER_SEPARABLE_CONVOLUTION, pixman_params, n_params);
+    }
+    else
+    {
+        pixman_image_set_filter (pixman_image, PIXMAN_FILTER_BILINEAR, NULL, 0);
+    }
+
     pixman_image_set_repeat (pixman_image, PIXMAN_REPEAT_NONE);
     
-    free (params);
+    free (pixman_params);
 
     /* Scale */
 
-    pixels = calloc (1, target_width * target_height * sizeof (guint32));
-    tmp = pixman_image_create_bits (
-        PIXMAN_r8g8b8a8, target_width, target_height, pixels, target_width * 4);
+    pixels = calloc (1, out_width * out_height * sizeof (guint32));
+    tmp = pixman_image_create_bits (PIXMAN_r8g8b8a8,
+                                    out_width, out_height,
+                                    pixels,
+                                    out_width * 4);
 
-    pixman_image_composite (
-        PIXMAN_OP_SRC,
-        pixman_image, NULL, tmp,
-        0, 0, 0, 0, 0, 0,
-        target_width, target_height);
+    pixman_image_composite (PIXMAN_OP_SRC,
+                            pixman_image, NULL, tmp,
+                            0, 0, 0, 0, 0, 0,
+                            out_width, out_height);
 
-    save_pixdata ("pixman", pixels, target_width, target_height);
     free (pixels);
     pixman_image_unref (tmp);
 }
-
-static void
-run_benchmark_pixman (guint width, guint height, gpointer data)
-{
-    guint target_width, target_height;
-    pixman_image_t *pixman_image;
-
-    pixman_image = pixman_image_create_bits (PIXMAN_r8g8b8a8, width, height, data, width * sizeof (guint32));
-
-    for (target_height = TARGET_HEIGHT_MIN; target_height <= TARGET_HEIGHT_MAX; target_height += TARGET_HEIGHT_STEP_SIZE)
-    {
-        for (target_width = TARGET_WIDTH_MIN; target_width <= TARGET_WIDTH_MAX; target_width += TARGET_WIDTH_STEP_SIZE)
-        {
-            scale_pixman (width, height, target_width, target_height, pixman_image);
-        }
-
-        g_printerr ("*");
-        fflush (stderr);
-    }
-}
-
-#endif
-
-typedef struct
-{
-    guint in_width, in_height;
-    gpointer in_data, out_data;
-}
-ScaleParams;
-
-typedef void (*ScaleInitFunc) (ScaleParams *, gpointer, guint, guint);
-typedef void (*ScaleFiniFunc) (ScaleParams *);
-typedef void (*ScaleDoFunc) (ScaleParams *, guint, guint);
 
 /* --- GDK-Pixbuf --- */
 
@@ -215,19 +230,6 @@ scale_do_smol (ScaleParams *params, guint out_width, guint out_height)
                                 params->in_width, params->in_height,
                                 out_width, out_height);
     g_free (scaled);
-}
-
-static gdouble
-compute_elapsed (struct timespec *before, struct timespec *after)
-{
-    gint64 before_usec = before->tv_nsec / 1000;
-    gint64 after_usec = after->tv_nsec / 1000;
-    guint64 diff;
-
-    diff = (after->tv_sec * 1000000) - (before->tv_sec * 1000000);
-    diff += (after_usec - before_usec);
-
-    return diff / (gdouble) 1000000.0;
 }
 
 static void
@@ -368,17 +370,23 @@ main (int argc, char *argv [])
     out_height_max = DEFAULT_OUT_HEIGHT_MAX;
     out_height_steps = DEFAULT_OUT_HEIGHT_STEPS;
 
-    if (!strcasecmp (argv [1], "gdk_pixbuf"))
-    {
-        init_func = scale_init_gdk_pixbuf;
-        fini_func = scale_fini_gdk_pixbuf;
-        do_func = scale_do_gdk_pixbuf;
-    }
-    else if (!strcasecmp (argv [1], "smol"))
+    if (!strcasecmp (argv [1], "smol"))
     {
         init_func = scale_init_smol;
         fini_func = scale_fini_smol;
         do_func = scale_do_smol;
+    }
+    else if (!strcasecmp (argv [1], "pixman"))
+    {
+        init_func = scale_init_pixman;
+        fini_func = scale_fini_pixman;
+        do_func = scale_do_pixman;
+    }
+    else if (!strcasecmp (argv [1], "gdk_pixbuf"))
+    {
+        init_func = scale_init_gdk_pixbuf;
+        fini_func = scale_fini_gdk_pixbuf;
+        do_func = scale_do_gdk_pixbuf;
     }
     else
     {
