@@ -26,28 +26,6 @@ gen_color_canvas (guint width, guint height, guint32 color)
 
 #if 0
 
-static void
-run_benchmark_chafa (guint width, guint height, gpointer data)
-{
-    guint target_width, target_height;
-
-    for (target_height = TARGET_HEIGHT_MIN; target_height <= TARGET_HEIGHT_MAX; target_height += TARGET_HEIGHT_STEP_SIZE)
-    {
-        for (target_width = TARGET_WIDTH_MIN; target_width <= TARGET_WIDTH_MAX; target_width += TARGET_WIDTH_STEP_SIZE)
-        {
-            gpointer data_scaled;
-
-            data_scaled = chafa_scale_bilinear_simple (data, width, height,
-                                                       target_width, target_height);
-            save_pixdata ("chafa", data_scaled, target_width, target_height);
-            g_free (data_scaled);
-        }
-
-        g_printerr ("*");
-        fflush (stderr);
-    }
-}
-
 static double
 min4 (double a, double b, double c, double d)
 {
