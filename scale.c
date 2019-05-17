@@ -326,7 +326,7 @@ precalc_boxes_array (guint16 *array, guint *span_mul, guint dim_in, guint dim_ou
     *(pu16++) = 0;
 }
 
-/* --- Scaling --- */
+/* --- Horizontal scaling --- */
 
 static void
 interp_horizontal_bilinear (const SmolScaleCtx *scale_ctx, const guint32 *row_in, guint64 *row_parts_out)
@@ -529,6 +529,8 @@ scale_horizontal_for_vertical_65536 (const SmolScaleCtx *scale_ctx,
     }
 }
 
+/* --- Vertical scaling --- */
+
 static void
 interp_vertical_bilinear_256 (guint64 F, const guint64 *top_row_parts_in,
                               const guint64 *bottom_row_parts_in, guint32 *row_out, guint width)
@@ -569,6 +571,49 @@ interp_vertical_bilinear_256 (guint64 F, const guint64 *top_row_parts_in,
 
         *(row_out++) = (guint32) (p | p >> 24);
     }
+}
+
+static void
+update_vertical_ctx_bilinear (const SmolScaleCtx *scale_ctx, VerticalCtx *vertical_ctx, guint new_out_ofs)
+{
+    guint new_in_ofs = scale_ctx->offsets_y [new_out_ofs * 2];
+
+    if (new_in_ofs == vertical_ctx->in_ofs)
+        return;
+
+    if (new_in_ofs == vertical_ctx->in_ofs + 1)
+    {
+        guint64 *t = vertical_ctx->parts_top_row;
+        vertical_ctx->parts_top_row = vertical_ctx->parts_bottom_row;
+        vertical_ctx->parts_bottom_row = t;
+
+        scale_horizontal_for_vertical_256 (scale_ctx,
+                                           inrow_ofs_to_pointer (scale_ctx, new_in_ofs + 1),
+                                           vertical_ctx->parts_bottom_row);
+    }
+    else
+    {
+        scale_horizontal_for_vertical_256 (scale_ctx,
+                                           inrow_ofs_to_pointer (scale_ctx, new_in_ofs),
+                                           vertical_ctx->parts_top_row);
+        scale_horizontal_for_vertical_256 (scale_ctx,
+                                           inrow_ofs_to_pointer (scale_ctx, new_in_ofs + 1),
+                                           vertical_ctx->parts_bottom_row);
+    }
+
+    vertical_ctx->in_ofs = new_in_ofs;
+}
+
+static void
+scale_outrow_bilinear_vertical_256 (const SmolScaleCtx *scale_ctx, VerticalCtx *vertical_ctx,
+                                    guint outrow_index, guint32 *row_out)
+{
+    update_vertical_ctx_bilinear (scale_ctx, vertical_ctx, outrow_index);
+    interp_vertical_bilinear_256 (scale_ctx->offsets_y [outrow_index * 2 + 1],
+                                  vertical_ctx->parts_top_row,
+                                  vertical_ctx->parts_bottom_row,
+                                  row_out,
+                                  scale_ctx->width_out);
 }
 
 static void
@@ -746,49 +791,6 @@ scale_outrow_box_vertical_65536 (const SmolScaleCtx *scale_ctx, VerticalCtx *ver
 
     finalize_vertical_65536 (vertical_ctx->parts_top_row, scale_ctx->span_mul_y,
                              row_out, scale_ctx->width_out);
-}
-
-static void
-update_vertical_ctx_bilinear (const SmolScaleCtx *scale_ctx, VerticalCtx *vertical_ctx, guint new_out_ofs)
-{
-    guint new_in_ofs = scale_ctx->offsets_y [new_out_ofs * 2];
-
-    if (new_in_ofs == vertical_ctx->in_ofs)
-        return;
-
-    if (new_in_ofs == vertical_ctx->in_ofs + 1)
-    {
-        guint64 *t = vertical_ctx->parts_top_row;
-        vertical_ctx->parts_top_row = vertical_ctx->parts_bottom_row;
-        vertical_ctx->parts_bottom_row = t;
-
-        scale_horizontal_for_vertical_256 (scale_ctx,
-                                           inrow_ofs_to_pointer (scale_ctx, new_in_ofs + 1),
-                                           vertical_ctx->parts_bottom_row);
-    }
-    else
-    {
-        scale_horizontal_for_vertical_256 (scale_ctx,
-                                           inrow_ofs_to_pointer (scale_ctx, new_in_ofs),
-                                           vertical_ctx->parts_top_row);
-        scale_horizontal_for_vertical_256 (scale_ctx,
-                                           inrow_ofs_to_pointer (scale_ctx, new_in_ofs + 1),
-                                           vertical_ctx->parts_bottom_row);
-    }
-
-    vertical_ctx->in_ofs = new_in_ofs;
-}
-
-static void
-scale_outrow_bilinear_vertical_256 (const SmolScaleCtx *scale_ctx, VerticalCtx *vertical_ctx,
-                                    guint outrow_index, guint32 *row_out)
-{
-    update_vertical_ctx_bilinear (scale_ctx, vertical_ctx, outrow_index);
-    interp_vertical_bilinear_256 (scale_ctx->offsets_y [outrow_index * 2 + 1],
-                                  vertical_ctx->parts_top_row,
-                                  vertical_ctx->parts_bottom_row,
-                                  row_out,
-                                  scale_ctx->width_out);
 }
 
 static void
