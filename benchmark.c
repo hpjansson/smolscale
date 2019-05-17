@@ -296,6 +296,7 @@ run_benchmark (gpointer raw_data,
         for (height_step = 0; height_step < n_height_steps; height_step++)
         {
             gdouble best_time = 999999.9;
+            guint out_width, out_height;
 
             for (rep = 0; rep < n_repetitions; rep++)
             {
@@ -307,10 +308,12 @@ run_benchmark (gpointer raw_data,
                     best_time = t;
             }
 
-            g_print ("%u %u %lf\n",
-                     (guint) (out_width_min + width_step * width_step_size),
-                     (guint) (out_height_min + height_step * height_step_size),
-                     best_time);
+            out_width = out_width_min + width_step * width_step_size;
+            out_height = out_height_min + height_step * height_step_size;
+
+            g_print ("%u %u %.4lf %.3lf\n",
+                     out_width, out_height, best_time,
+                     (out_width * out_height + in_width * in_height) / (best_time * 1000000.0));
         }
     }
 }
