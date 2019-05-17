@@ -413,6 +413,7 @@ interp_horizontal_boxes_256 (const SmolScaleCtx *scale_ctx, const guint32 *row_i
 
         accum += ((p + q) >> 7) & 0x01ff01ff01ff01ffULL;
 
+        /* (255 * r) - (F * r) */
         p = (((r << 8) - r - s) >> 1) & 0x7fff7fff7fff7fffULL;
 
         *(row_parts_out++) = scale_256 (accum, scale_ctx->span_mul_x);
@@ -630,7 +631,19 @@ finalize_vertical_256 (const guint64 *accums, guint64 multiplier, guint32 *row_o
 }
 
 static void
-scale_and_weight_edge_rows_box_256 (const guint64 *first_row, const guint64 *last_row, guint64 *accum, guint16 w1, guint16 w2, guint n)
+weight_edge_row_256 (guint64 *row, guint16 w, guint n)
+{
+    guint64 *row_max = row + n;
+
+    while (row != row_max)
+    {
+        *row = ((*row * w) >> 1) & 0x7fff7fff7fff7fffULL;
+        row++;
+    }
+}
+
+static void
+scale_and_weight_edge_rows_box_256 (const guint64 *first_row, guint64 *last_row, guint64 *accum, guint16 w2, guint n)
 {
     const guint64 *first_row_max = first_row + n;
 
@@ -638,13 +651,13 @@ scale_and_weight_edge_rows_box_256 (const guint64 *first_row, const guint64 *las
     {
         guint64 r, s, p, q;
 
-        r = *(first_row++);
-        s = r * w1;
-        p = (s >> 1) & 0x7fff7fff7fff7fffULL;
+        p = *(first_row++);
 
-        r = *(last_row++);
+        r = *(last_row);
         s = r * w2;
         q = (s >> 1) & 0x7fff7fff7fff7fffULL;
+        /* (255 * r) - (F * r) */
+        *(last_row++) = (((r << 8) - r - s) >> 1) & 0x7fff7fff7fff7fffULL;
 
         *(accum++) = ((p + q) >> 7) & 0x1ff01ff01ff01ffULL;
     }
@@ -665,6 +678,7 @@ update_vertical_ctx_box_256 (const SmolScaleCtx *scale_ctx, VerticalCtx *vertica
         scale_horizontal_for_vertical_256 (scale_ctx,
                                            inrow_ofs_to_pointer (scale_ctx, ofs_y),
                                            vertical_ctx->parts_row [0]);
+        weight_edge_row_256 (vertical_ctx->parts_row [0], w1, scale_ctx->width_out);
     }
 
     /* When w2 == 0, the final inrow may be out of bounds. Don't try to access it in
@@ -705,7 +719,6 @@ scale_outrow_box_vertical_256 (const SmolScaleCtx *scale_ctx, VerticalCtx *verti
     scale_and_weight_edge_rows_box_256 (vertical_ctx->parts_row [0],
                                         vertical_ctx->parts_row [1],
                                         vertical_ctx->parts_row [2],
-                                        w1,
                                         w2,
                                         scale_ctx->width_out);
 
