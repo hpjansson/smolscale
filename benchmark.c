@@ -316,9 +316,89 @@ run_benchmark (gpointer raw_data,
 }
 
 static void
+run_benchmark_proportional (gpointer raw_data,
+                            guint n_repetitions,
+                            guint in_width, guint in_height,
+                            guint out_width_min, guint out_width_max,
+                            guint out_height_min, guint out_height_max,
+                            guint n_steps,
+                            ScaleInitFunc init_func,
+                            ScaleFiniFunc fini_func,
+                            ScaleDoFunc do_func)
+{
+    gfloat width_step_size, height_step_size;
+    guint step;
+    guint rep;
+    ScaleParams params;
+    gdouble *results;
+
+    if (n_steps > 1)
+    {
+        width_step_size = (out_width_max - out_width_min) / ((gfloat) n_steps - 1.0);
+        height_step_size = (out_height_max - out_height_min) / ((gfloat) n_steps - 1.0);
+    }
+    else
+    {
+        width_step_size = 99999.0;
+        height_step_size = 99999.0;
+    }
+
+    results = alloca (n_steps * n_repetitions * sizeof (gdouble));
+
+    (*init_func) (&params, raw_data, in_width, in_height);
+
+    for (rep = 0; rep < n_repetitions; rep++)
+    {
+        for (step = 0; step < n_steps; step++)
+        {
+            struct timespec before, after;
+
+            clock_gettime (CLOCK_MONOTONIC_RAW, &before);
+            (*do_func) (&params,
+                        out_width_min + step * width_step_size,
+                        out_height_min +step * height_step_size);
+            clock_gettime (CLOCK_MONOTONIC_RAW, &after);
+            results [step * n_repetitions + rep] = compute_elapsed (&before, &after);
+        }
+
+        g_printerr ("*");
+        fflush (stderr);
+    }
+
+    g_printerr ("\n");
+    fflush (stderr);
+
+    (*fini_func) (&params);
+
+    for (step = 0; step < n_steps; step++)
+    {
+        gdouble best_time = 999999.9;
+        guint out_width, out_height;
+
+        for (rep = 0; rep < n_repetitions; rep++)
+        {
+            gdouble t = results [step * n_repetitions + rep];
+
+            if (t < best_time)
+                best_time = t;
+        }
+
+        out_width = out_width_min + step * width_step_size;
+        out_height = out_height_min + step * height_step_size;
+
+        g_print ("%u %u %.4lf %.3lf\n",
+                 out_width, out_height, best_time,
+                 (out_width * out_height + in_width * in_height) / (best_time * 1000000.0));
+    }
+}
+
+static void
 print_usage (void)
 {
     g_printerr ("Usage: benchmark <smol|pixman|gdk_pixbuf>\n"
+                "                 [ proportional\n"
+                "                   <in_width> <in_height>\n"
+                "                   <min_scale> <max_scale> <n_steps> ] |\n"
                 "                 [ <n_repetitions>\n"
                 "                   <in_width> <in_height>\n"
                 "                   <min_width> <max_width> <width_steps>\n"
@@ -342,6 +422,9 @@ main (int argc, char *argv [])
     guint in_width, in_height;
     guint out_width_min, out_width_max, out_width_steps;
     guint out_height_min, out_height_max, out_height_steps;
+    gboolean proportional = FALSE;
+    gdouble scale_min, scale_max;
+    guint scale_steps;
     gpointer raw_data;
     ScaleInitFunc init_func;
     ScaleFiniFunc fini_func;
@@ -350,12 +433,6 @@ main (int argc, char *argv [])
 
     if (argc < 2)
     {
-        print_usage ();
-        return 1;
-    }
-    else if (argc > 2 && argc != 11)
-    {
-        g_printerr ("Error: All or no optional arguments must be present.\n");
         print_usage ();
         return 1;
     }
@@ -394,9 +471,41 @@ main (int argc, char *argv [])
         return 1;
     }
 
-    if (argc == 11)
+    if (argc > 2)
     {
+        if (!strcasecmp (argv [2], "proportional"))
+            proportional = TRUE;
+    }
+
+    if (proportional)
+    {
+        if (argc < 9)
+        {
+            g_printerr ("Missing arguments for proportional scaling.");
+            print_usage ();
+            return 1;
+        }
+
+        i = 3;
+
+        n_repetitions = strtoul (argv [i++], NULL, 10);
+        in_width = strtoul (argv [i++], NULL, 10);
+        in_height = strtoul (argv [i++], NULL, 10);
+        scale_min = strtod (argv [i++], NULL);
+        scale_max = strtod (argv [i++], NULL);
+        scale_steps = strtoul (argv [i++], NULL, 10);
+    }
+    else
+    {
+        if (argc < 11)
+        {
+            g_printerr ("Missing arguments for stretch scaling.");
+            print_usage ();
+            return 1;
+        }
+
         i = 2;
+
         n_repetitions = strtoul (argv [i++], NULL, 10);
         in_width = strtoul (argv [i++], NULL, 10);
         in_height = strtoul (argv [i++], NULL, 10);
@@ -410,13 +519,22 @@ main (int argc, char *argv [])
 
     raw_data = gen_color_canvas (in_width, in_height, 0x55555555);
 
-    run_benchmark (raw_data,
-                   n_repetitions,
-                   in_width, in_height,
-                   out_width_min, out_width_max,
-                   out_height_min, out_height_max,
-                   out_width_steps, out_height_steps,
-                   init_func, fini_func, do_func);
+    if (proportional)
+        run_benchmark_proportional (raw_data,
+                                    n_repetitions,
+                                    in_width, in_height,
+                                    in_width * scale_min, in_width * scale_max,
+                                    in_height * scale_min, in_height * scale_max,
+                                    scale_steps,
+                                    init_func, fini_func, do_func);
+    else
+        run_benchmark (raw_data,
+                       n_repetitions,
+                       in_width, in_height,
+                       out_width_min, out_width_max,
+                       out_height_min, out_height_max,
+                       out_width_steps, out_height_steps,
+                       init_func, fini_func, do_func);
 
     g_free (raw_data);
     return 0;
