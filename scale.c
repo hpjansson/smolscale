@@ -3,6 +3,7 @@
 /* Copyright (C) 2019 Hans Petter Jansson */
 
 #include "scale.h"
+#include <string.h> /* memset */
 
 #define SMALL_MUL 256U
 #define BIG_MUL 65536U
