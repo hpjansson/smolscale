@@ -43,6 +43,95 @@ struct SmolScaleCtx
     guint span_mul_x, span_mul_y;  /* For box filter */
 };
 
+/* --- Pixel and parts manipulation --- */
+
+static const guint32 *
+inrow_ofs_to_pointer (const SmolScaleCtx *scale_ctx, guint inrow_ofs)
+{
+    return scale_ctx->pixels_in + scale_ctx->rowstride_in * inrow_ofs;
+}
+
+static guint32 *
+outrow_ofs_to_pointer (const SmolScaleCtx *scale_ctx, guint outrow_ofs)
+{
+    return scale_ctx->pixels_out + scale_ctx->rowstride_out * outrow_ofs;
+}
+
+static inline guint32
+pack_pixel_256 (guint64 in)
+{
+    return in | (in >> 24);
+}
+
+static inline guint64
+unpack_pixel_256 (guint32 p)
+{
+    return (((guint64) p & 0xff00ff00) << 24) | (p & 0x00ff00ff);
+}
+
+static inline guint64
+weight_pixel_256 (guint64 p, guint16 w)
+{
+    return ((p * w) >> 1) & 0x7fff7fff7fff7fff;
+}
+
+static inline void
+sum_pixels_256 (const guint32 **pp, guint64 *accum, guint n)
+{
+    const guint32 *pp_end;
+
+    for (pp_end = *pp + n; *pp < pp_end; (*pp)++)
+    {
+        *accum += unpack_pixel_256 (**pp);
+    }
+}
+
+static inline void
+scale_and_store_256 (guint64 accum, guint64 multiplier, guint64 **row_parts_out)
+{
+    guint64 a, b;
+
+    /* Average the inputs */
+    a = ((accum & 0x0000ffff0000ffffULL) * multiplier
+         + (BOXES_MULTIPLIER / 2) + ((BOXES_MULTIPLIER / 2) << 32)) / BOXES_MULTIPLIER;
+    b = (((accum & 0xffff0000ffff0000ULL) >> 16) * multiplier
+         + (BOXES_MULTIPLIER / 2) + ((BOXES_MULTIPLIER / 2) << 32)) / BOXES_MULTIPLIER;
+
+    /* Store pixel */
+    *(*row_parts_out)++ = (a & 0x000000ff000000ffULL) | ((b & 0x000000ff000000ffULL) << 16);
+}
+
+static void
+convert_parts_256_to_65536 (guint64 *row, guint n)
+{
+    guint64 *temp;
+    guint i, j;
+
+    temp = alloca (n * sizeof (guint64) * 2);
+
+    for (i = 0, j = 0; i < n; )
+    {
+        temp [j++] = (row [i] >> 16) & 0x000000ff000000ff;
+        temp [j++] = row [i++] & 0x000000ff000000ff;
+    }
+
+    memcpy (row, temp, n * sizeof (guint64) * 2);
+}
+
+static void
+convert_parts_65536_to_256 (guint64 *row, guint n)
+{
+    guint i, j;
+
+    for (i = 0, j = 0; j < n; )
+    {
+        row [j] = row [i++] << 16;
+        row [j++] |= row [i++];
+    }
+}
+
+/* --- Precalculation --- */
+
 static void
 calc_size_steps (guint dim_in, guint dim_out, Algorithm *algo)
 {
@@ -168,57 +257,6 @@ precalc_boxes_array (guint16 *array, guint *span_mul, guint dim_in, guint dim_ou
     *(pu16++) = 0;
 }
 
-void
-smol_scale_init (SmolScaleCtx *scale_ctx,
-                 const guint32 *pixels_in, guint width_in, guint height_in, guint rowstride_in,
-                 guint32 *pixels_out, guint width_out, guint height_out, guint rowstride_out)
-{
-    /* FIXME: Special handling for images that are a single pixel wide or tall */
-
-    scale_ctx->pixels_in = pixels_in;
-    scale_ctx->width_in = width_in;
-    scale_ctx->height_in = height_in;
-    scale_ctx->rowstride_in = rowstride_in / sizeof (guint32);
-    scale_ctx->pixels_out = pixels_out;
-    scale_ctx->width_out = width_out;
-    scale_ctx->height_out = height_out;
-    scale_ctx->rowstride_out = rowstride_out / sizeof (guint32);
-
-    calc_size_steps (width_in, width_out, &scale_ctx->algo_h);
-    calc_size_steps (height_in, height_out, &scale_ctx->algo_v);
-
-    scale_ctx->offsets_x = g_new (guint16, (scale_ctx->width_out + 1) * 2 + (scale_ctx->height_out + 1) * 2);
-    scale_ctx->offsets_y = scale_ctx->offsets_x + (scale_ctx->width_out + 1) * 2;
-
-    if (scale_ctx->algo_h == ALGORITHM_BILINEAR)
-    {
-        precalc_bilinear_array (scale_ctx->offsets_x,
-                                width_in, scale_ctx->width_out, FALSE);
-    }
-    else
-    {
-        precalc_boxes_array (scale_ctx->offsets_x, &scale_ctx->span_mul_x,
-                             width_in, scale_ctx->width_out, FALSE);
-    }
-
-    if (scale_ctx->algo_v == ALGORITHM_BILINEAR)
-    {
-        precalc_bilinear_array (scale_ctx->offsets_y,
-                                height_in, scale_ctx->height_out, TRUE);
-    }
-    else
-    {
-        precalc_boxes_array (scale_ctx->offsets_y, &scale_ctx->span_mul_y,
-                             height_in, scale_ctx->height_out, TRUE);
-    }
-}
-
-void
-smol_scale_finalize (SmolScaleCtx *scale_ctx)
-{
-    g_free (scale_ctx->offsets_x);
-}
-
 static void
 interp_horizontal_bilinear (const SmolScaleCtx *scale_ctx, const guint32 *row_in, guint64 *row_parts_out)
 {
@@ -274,44 +312,6 @@ interp_horizontal_bilinear (const SmolScaleCtx *scale_ctx, const guint32 *row_in
 
         *(row_parts_out++) = p & 0x00ff00ff00ff00ff;
     }
-}
-
-static inline guint64
-unpack_pixel_256 (guint32 p)
-{
-    return (((guint64) p & 0xff00ff00) << 24) | (p & 0x00ff00ff);
-}
-
-static inline guint64
-weight_pixel_256 (guint64 p, guint16 w)
-{
-    return ((p * w) >> 1) & 0x7fff7fff7fff7fff;
-}
-
-static inline void
-sum_pixels_256 (const guint32 **pp, guint64 *accum, guint n)
-{
-    const guint32 *pp_end;
-
-    for (pp_end = *pp + n; *pp < pp_end; (*pp)++)
-    {
-        *accum += unpack_pixel_256 (**pp);
-    }
-}
-
-static inline void
-scale_and_store_256 (guint64 accum, guint64 multiplier, guint64 **row_parts_out)
-{
-    guint64 a, b;
-
-    /* Average the inputs */
-    a = ((accum & 0x0000ffff0000ffffULL) * multiplier
-         + (BOXES_MULTIPLIER / 2) + ((BOXES_MULTIPLIER / 2) << 32)) / BOXES_MULTIPLIER;
-    b = (((accum & 0xffff0000ffff0000ULL) >> 16) * multiplier
-         + (BOXES_MULTIPLIER / 2) + ((BOXES_MULTIPLIER / 2) << 32)) / BOXES_MULTIPLIER;
-
-    /* Store pixel */
-    *(*row_parts_out)++ = (a & 0x000000ff000000ffULL) | ((b & 0x000000ff000000ffULL) << 16);
 }
 
 static void
@@ -497,6 +497,28 @@ scale_horizontal (const SmolScaleCtx *scale_ctx, const guint32 *row_in, guint64 
 }
 
 static void
+scale_horizontal_for_vertical_256 (const SmolScaleCtx *scale_ctx, 
+                                   const guint32 *row_in, guint64 *row_parts_out)
+{
+    scale_horizontal (scale_ctx, row_in, row_parts_out);
+    if (scale_ctx->algo_h == ALGORITHM_BOX_65536)
+    {
+        convert_parts_65536_to_256 (row_parts_out, scale_ctx->width_out);
+    }
+}
+
+static void
+scale_horizontal_for_vertical_65536 (const SmolScaleCtx *scale_ctx, 
+                                     const guint32 *row_in, guint64 *row_parts_out)
+{
+    scale_horizontal (scale_ctx, row_in, row_parts_out);
+    if (scale_ctx->algo_h != ALGORITHM_BOX_65536)
+    {
+        convert_parts_256_to_65536 (row_parts_out, scale_ctx->width_out);
+    }
+}
+
+static void
 add_parts (const guint64 *parts_in, guint64 *parts_acc_out, guint n)
 {
     const guint64 *parts_in_max = parts_in + n;
@@ -547,24 +569,6 @@ interp_vertical_bilinear_256 (guint64 F, const guint64 *top_row_parts_in,
     }
 }
 
-static const guint32 *
-inrow_ofs_to_pointer (const SmolScaleCtx *scale_ctx, guint inrow_ofs)
-{
-    return scale_ctx->pixels_in + scale_ctx->rowstride_in * inrow_ofs;
-}
-
-static guint32 *
-outrow_ofs_to_pointer (const SmolScaleCtx *scale_ctx, guint outrow_ofs)
-{
-    return scale_ctx->pixels_out + scale_ctx->rowstride_out * outrow_ofs;
-}
-
-static inline guint32
-pack_pixel_256 (guint64 in)
-{
-    return in | (in >> 24);
-}
-
 static inline guint64
 scale_256 (guint64 accum, guint64 multiplier)
 {
@@ -595,40 +599,6 @@ finalize_vertical_256 (const guint64 *accums, guint64 multiplier, guint32 *row_o
 }
 
 static void
-weight_row_256 (guint64 *row, guint16 w, guint n)
-{
-    guint64 *row_max = row + n;
-
-    while (row != row_max)
-    {
-        *row = ((*row * w) >> 8) & 0x00ff00ff00ff00ffULL;
-        row++;
-    }
-}
-
-#if 0
-static void
-scale_and_weight_top_edge_rows_box_256 (const guint64 *first_row, const guint64 *last_row, guint64 *accum, guint16 w2, guint n)
-{
-    const guint64 *first_row_max = first_row + n;
-
-    while (first_row != first_row_max)
-    {
-        guint64 r, s, p, q;
-
-        r = *(first_row++);
-        p = r << 7;
-
-        r = *(last_row++);
-        s = r * w2;
-        q = (s >> 1) & 0x7fff7fff7fff7fffULL;
-
-        *(accum++) = ((p + q) >> 7) & 0x1ff01ff01ff01ffULL;
-    }
-}
-#endif
-
-static void
 scale_and_weight_edge_rows_box_256 (const guint64 *first_row, const guint64 *last_row, guint64 *accum, guint16 w1, guint16 w2, guint n)
 {
     const guint64 *first_row_max = first_row + n;
@@ -646,29 +616,6 @@ scale_and_weight_edge_rows_box_256 (const guint64 *first_row, const guint64 *las
         q = (s >> 1) & 0x7fff7fff7fff7fffULL;
 
         *(accum++) = ((p + q) >> 7) & 0x1ff01ff01ff01ffULL;
-    }
-}
-
-static void
-convert_parts_65536_to_256 (guint64 *row, guint n)
-{
-    guint i, j;
-
-    for (i = 0, j = 0; j < n; )
-    {
-        row [j] = row [i++] << 16;
-        row [j++] |= row [i++];
-    }
-}
-
-static void
-scale_horizontal_for_vertical_256 (const SmolScaleCtx *scale_ctx, 
-                                   const guint32 *row_in, guint64 *row_parts_out)
-{
-    scale_horizontal (scale_ctx, row_in, row_parts_out);
-    if (scale_ctx->algo_h == ALGORITHM_BOX_65536)
-    {
-        convert_parts_65536_to_256 (row_parts_out, scale_ctx->width_out);
     }
 }
 
@@ -704,26 +651,12 @@ scale_outrow_box_vertical_256 (const SmolScaleCtx *scale_ctx, VerticalCtx *verti
         memset (vertical_ctx->parts_bottom_row, 0, scale_ctx->width_out * sizeof (guint64));
     }
 
-#if 0
-    /* Probably doesn't make us much faster... */
-    if (outrow_index == 0)
-    {
-        scale_and_weight_top_edge_rows_box_256 (vertical_ctx->parts_top_row,
-                                                vertical_ctx->parts_bottom_row,
-                                                vertical_ctx->parts_top_row,
-                                                w2,
-                                                scale_ctx->width_out);
-    }
-    else
-#endif
-    {
-        scale_and_weight_edge_rows_box_256 (vertical_ctx->parts_top_row,
-                                            vertical_ctx->parts_bottom_row,
-                                            vertical_ctx->parts_top_row,
-                                            w1,
-                                            w2,
-                                            scale_ctx->width_out);
-    }
+    scale_and_weight_edge_rows_box_256 (vertical_ctx->parts_top_row,
+                                        vertical_ctx->parts_bottom_row,
+                                        vertical_ctx->parts_top_row,
+                                        w1,
+                                        w2,
+                                        scale_ctx->width_out);
 
     ofs_y++;
 
@@ -772,34 +705,6 @@ weight_row_65536 (guint64 *row, guint16 w, guint n)
         row [0] = ((row [0] * w) >> 8) & 0x00ffffff00ffffffULL;
         row [1] = ((row [1] * w) >> 8) & 0x00ffffff00ffffffULL;
         row += 2;
-    }
-}
-
-static void
-convert_parts_256_to_65536 (guint64 *row, guint n)
-{
-    guint64 *temp;
-    guint i, j;
-
-    temp = alloca (n * sizeof (guint64) * 2);
-
-    for (i = 0, j = 0; i < n; )
-    {
-        temp [j++] = (row [i] >> 16) & 0x000000ff000000ff;
-        temp [j++] = row [i++] & 0x000000ff000000ff;
-    }
-
-    memcpy (row, temp, n * sizeof (guint64) * 2);
-}
-
-static void
-scale_horizontal_for_vertical_65536 (const SmolScaleCtx *scale_ctx, 
-                                     const guint32 *row_in, guint64 *row_parts_out)
-{
-    scale_horizontal (scale_ctx, row_in, row_parts_out);
-    if (scale_ctx->algo_h != ALGORITHM_BOX_65536)
-    {
-        convert_parts_256_to_65536 (row_parts_out, scale_ctx->width_out);
     }
 }
 
@@ -930,6 +835,59 @@ do_rows (const SmolScaleCtx *scale_ctx, guint row_out_index, guint n_rows)
     {
         scale_outrow (scale_ctx, &vertical_ctx, i, outrow_ofs_to_pointer (scale_ctx, i));
     }
+}
+
+/* --- API --- */
+
+void
+smol_scale_init (SmolScaleCtx *scale_ctx,
+                 const guint32 *pixels_in, guint width_in, guint height_in, guint rowstride_in,
+                 guint32 *pixels_out, guint width_out, guint height_out, guint rowstride_out)
+{
+    /* FIXME: Special handling for images that are a single pixel wide or tall */
+
+    scale_ctx->pixels_in = pixels_in;
+    scale_ctx->width_in = width_in;
+    scale_ctx->height_in = height_in;
+    scale_ctx->rowstride_in = rowstride_in / sizeof (guint32);
+    scale_ctx->pixels_out = pixels_out;
+    scale_ctx->width_out = width_out;
+    scale_ctx->height_out = height_out;
+    scale_ctx->rowstride_out = rowstride_out / sizeof (guint32);
+
+    calc_size_steps (width_in, width_out, &scale_ctx->algo_h);
+    calc_size_steps (height_in, height_out, &scale_ctx->algo_v);
+
+    scale_ctx->offsets_x = g_new (guint16, (scale_ctx->width_out + 1) * 2 + (scale_ctx->height_out + 1) * 2);
+    scale_ctx->offsets_y = scale_ctx->offsets_x + (scale_ctx->width_out + 1) * 2;
+
+    if (scale_ctx->algo_h == ALGORITHM_BILINEAR)
+    {
+        precalc_bilinear_array (scale_ctx->offsets_x,
+                                width_in, scale_ctx->width_out, FALSE);
+    }
+    else
+    {
+        precalc_boxes_array (scale_ctx->offsets_x, &scale_ctx->span_mul_x,
+                             width_in, scale_ctx->width_out, FALSE);
+    }
+
+    if (scale_ctx->algo_v == ALGORITHM_BILINEAR)
+    {
+        precalc_bilinear_array (scale_ctx->offsets_y,
+                                height_in, scale_ctx->height_out, TRUE);
+    }
+    else
+    {
+        precalc_boxes_array (scale_ctx->offsets_y, &scale_ctx->span_mul_y,
+                             height_in, scale_ctx->height_out, TRUE);
+    }
+}
+
+void
+smol_scale_finalize (SmolScaleCtx *scale_ctx)
+{
+    g_free (scale_ctx->offsets_x);
 }
 
 void
