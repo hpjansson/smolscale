@@ -3,9 +3,9 @@
 /* Copyright (C) 2019 Hans Petter Jansson */
 
 #include <glib.h>
-#include <png.h>
 #include <pixman.h>
 #include <gdk-pixbuf/gdk-pixbuf.h>
+#include <stdlib.h> /* strtoul, strtod */
 #include "scale.h"
 
 /* --- Common --- */
@@ -231,6 +231,8 @@ scale_do_smol (ScaleParams *params, guint out_width, guint out_height)
                                 out_width, out_height);
     g_free (scaled);
 }
+
+/* --- Main --- */
 
 static void
 run_benchmark (gpointer raw_data,
