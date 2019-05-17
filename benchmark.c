@@ -226,9 +226,13 @@ scale_do_smol (ScaleParams *params, guint out_width, guint out_height)
 {
     gpointer scaled;
 
-    scaled = smol_scale_simple (params->in_data,
-                                params->in_width, params->in_height,
-                                out_width, out_height);
+    scaled = g_new (guint32, out_width * out_height);
+    smol_scale_simple (params->in_data,
+                       params->in_width, params->in_height,
+                       params->in_width * sizeof (guint32),
+                       scaled,
+                       out_width, out_height,
+                       out_width * sizeof (guint32));
     g_free (scaled);
 }
 

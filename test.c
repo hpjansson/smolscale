@@ -56,6 +56,19 @@ check_color_canvas (const guint32 *canvas, guint width, guint height, guint32 co
     return TRUE;
 }
 
+static guint32 *
+do_scale (const guint32 *pixels_in,
+          guint32 width_in, guint32 height_in,
+          guint32 width_out, guint32 height_out)
+{
+    guint32 *scaled;
+
+    scaled = g_new (guint32, width_out * height_out);
+    smol_scale_simple (pixels_in, width_in, height_in, width_in * sizeof (guint32),
+                       scaled, width_out, height_out, width_out * sizeof (guint32));
+    return scaled;
+}
+
 static void
 check_horizontal (void)
 {
@@ -75,11 +88,11 @@ check_horizontal (void)
 
             g_printerr ("\rWidth %u -> %u:        ", i, j);
 
-            data_scaled = smol_scale_simple (canvas [0], i, 2, j, 2);
+            data_scaled = do_scale (canvas [0], i, 2, j, 2);
             check_color_canvas (data_scaled, j, 2, 0xffffffff);
             g_free (data_scaled);
 
-            data_scaled = smol_scale_simple (canvas [1], i, 2, j, 2);
+            data_scaled = do_scale (canvas [1], i, 2, j, 2);
             check_color_canvas (data_scaled, j, 2, 0x01010101);
             g_free (data_scaled);
         }
@@ -113,11 +126,11 @@ check_vertical (void)
 
             g_printerr ("\rHeight %u -> %u:        ", i, j);
 
-            data_scaled = smol_scale_simple (canvas [0], 2, i, 2, j);
+            data_scaled = do_scale (canvas [0], 2, i, 2, j);
             check_color_canvas (data_scaled, 2, j, 0xffffffff);
             g_free (data_scaled);
 
-            data_scaled = smol_scale_simple (canvas [1], 2, i, 2, j);
+            data_scaled = do_scale (canvas [1], 2, i, 2, j);
             check_color_canvas (data_scaled, 2, j, 0x01010101);
             g_free (data_scaled);
         }
@@ -151,11 +164,11 @@ check_both (void)
 
             g_printerr ("\rWidth %u -> %u:        ", i, j);
 
-            data_scaled = smol_scale_simple (canvas [0], i, 2, j, 2);
+            data_scaled = do_scale (canvas [0], i, 2, j, 2);
             check_color_canvas (data_scaled, j, 2, 0xffffffff);
             g_free (data_scaled);
 
-            data_scaled = smol_scale_simple (canvas [1], i, 2, j, 2);
+            data_scaled = do_scale (canvas [1], i, 2, j, 2);
             check_color_canvas (data_scaled, j, 2, 0x01010101);
             g_free (data_scaled);
         }
@@ -166,11 +179,11 @@ check_both (void)
 
             g_printerr ("\rHeight %u -> %u:        ", i, j);
 
-            data_scaled = smol_scale_simple (canvas [0], 2, i, 2, j);
+            data_scaled = do_scale (canvas [0], 2, i, 2, j);
             check_color_canvas (data_scaled, 2, j, 0xffffffff);
             g_free (data_scaled);
 
-            data_scaled = smol_scale_simple (canvas [1], 2, i, 2, j);
+            data_scaled = do_scale (canvas [1], 2, i, 2, j);
             check_color_canvas (data_scaled, 2, j, 0x01010101);
             g_free (data_scaled);
         }
@@ -204,9 +217,9 @@ run_correctness_test (void)
         {
             gpointer data_scaled;
 
-            data_scaled = smol_scale_simple (canvas,
-                                             in_width, in_height,
-                                             width, height);
+            data_scaled = do_scale (canvas,
+                                    in_width, in_height,
+                                    width, height);
 #if 0
             save_pixdata ("chafa", data_scaled, width, height);
 #endif

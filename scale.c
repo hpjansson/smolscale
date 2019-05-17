@@ -3,11 +3,21 @@
 /* Copyright (C) 2019 Hans Petter Jansson */
 
 #include "scale.h"
+#include <stdlib.h> /* malloc, free */
 #include <string.h> /* memset */
+#include <alloca.h> /* alloca */
+#include <limits.h>
+
+#ifndef TRUE
+# define TRUE 1
+#endif
+#ifndef FALSE
+# define FALSE 0
+#endif
 
 #define SMALL_MUL 256U
 #define BIG_MUL 65536U
-#define BOXES_MULTIPLIER ((guint64) BIG_MUL * SMALL_MUL)
+#define BOXES_MULTIPLIER ((uint64_t) BIG_MUL * SMALL_MUL)
 #define FUDGE_FACTOR (SMALL_MUL + SMALL_MUL / 2 + SMALL_MUL / 4)
 
 typedef enum
@@ -21,56 +31,54 @@ Algorithm;
 /* For reusing rows that have already undergone horizontal scaling */
 typedef struct
 {
-    guint in_ofs;
-    guint64 *parts_row [3];
+    uint32_t in_ofs;
+    uint64_t *parts_row [3];
 }
 VerticalCtx;
 
-typedef struct SmolScaleCtx SmolScaleCtx;
-
-struct SmolScaleCtx
+struct _SmolScaleCtx
 {
-    const guint32 *pixels_in;
-    guint32 *pixels_out;
-    guint width_in, height_in, rowstride_in;
-    guint width_out, height_out, rowstride_out;
+    const uint32_t *pixels_in;
+    uint32_t *pixels_out;
+    uint32_t width_in, height_in, rowstride_in;
+    uint32_t width_out, height_out, rowstride_out;
 
     Algorithm algo_h, algo_v;
 
-    /* Each offset is split in two guint16s: { pixel index, fraction }. These
+    /* Each offset is split in two uint16s: { pixel index, fraction }. These
      * are relative to the image after halvings have taken place. */
-    guint16 *offsets_x, *offsets_y;
-    guint span_mul_x, span_mul_y;  /* For box filter */
+    uint16_t *offsets_x, *offsets_y;
+    uint32_t span_mul_x, span_mul_y;  /* For box filter */
 };
 
 /* --- Pixel and parts manipulation --- */
 
-static const guint32 *
-inrow_ofs_to_pointer (const SmolScaleCtx *scale_ctx, guint inrow_ofs)
+static const uint32_t *
+inrow_ofs_to_pointer (const SmolScaleCtx *scale_ctx, uint32_t inrow_ofs)
 {
     return scale_ctx->pixels_in + scale_ctx->rowstride_in * inrow_ofs;
 }
 
-static guint32 *
-outrow_ofs_to_pointer (const SmolScaleCtx *scale_ctx, guint outrow_ofs)
+static uint32_t *
+outrow_ofs_to_pointer (const SmolScaleCtx *scale_ctx, uint32_t outrow_ofs)
 {
     return scale_ctx->pixels_out + scale_ctx->rowstride_out * outrow_ofs;
 }
 
-static inline guint32
-pack_pixel_256 (guint64 in)
+static inline uint32_t
+pack_pixel_256 (uint64_t in)
 {
     return in | (in >> 24);
 }
 
-static inline guint64
-unpack_pixel_256 (guint32 p)
+static inline uint64_t
+unpack_pixel_256 (uint32_t p)
 {
-    return (((guint64) p & 0xff00ff00) << 24) | (p & 0x00ff00ff);
+    return (((uint64_t) p & 0xff00ff00) << 24) | (p & 0x00ff00ff);
 }
 
-static inline guint32
-pack_pixel_65536 (guint64 *in)
+static inline uint32_t
+pack_pixel_65536 (uint64_t *in)
 {
     /* FIXME: Are masks needed? */
     return ((in [0] >> 8) & 0xff000000)
@@ -80,29 +88,29 @@ pack_pixel_65536 (guint64 *in)
 }
 
 static inline void
-unpack_pixel_65536 (guint32 p, guint64 *out)
+unpack_pixel_65536 (uint32_t p, uint64_t *out)
 {
-    out [0] = (((guint64) p & 0xff000000) << 8) | (((guint64) p & 0x00ff0000) >> 16);
-    out [1] = (((guint64) p & 0x0000ff00) << 24) | (p & 0x000000ff);
+    out [0] = (((uint64_t) p & 0xff000000) << 8) | (((uint64_t) p & 0x00ff0000) >> 16);
+    out [1] = (((uint64_t) p & 0x0000ff00) << 24) | (p & 0x000000ff);
 }
 
-static inline guint64
-weight_pixel_256 (guint64 p, guint16 w)
+static inline uint64_t
+weight_pixel_256 (uint64_t p, uint16_t w)
 {
     return ((p * w) >> 1) & 0x7fff7fff7fff7fff;
 }
 
 static inline void
-weight_pixel_65536 (guint64 *p, guint64 *out, guint16 w)
+weight_pixel_65536 (uint64_t *p, uint64_t *out, uint16_t w)
 {
     out [0] = ((p [0] * w) >> 1) & 0x7fffffff7fffffffULL;
     out [1] = ((p [1] * w) >> 1) & 0x7fffffff7fffffffULL;
 }
 
 static inline void
-sum_pixels_256 (const guint32 **pp, guint64 *accum, guint n)
+sum_pixels_256 (const uint32_t **pp, uint64_t *accum, uint32_t n)
 {
-    const guint32 *pp_end;
+    const uint32_t *pp_end;
 
     for (pp_end = *pp + n; *pp < pp_end; (*pp)++)
     {
@@ -111,23 +119,23 @@ sum_pixels_256 (const guint32 **pp, guint64 *accum, guint n)
 }
 
 static inline void
-sum_pixels_65536 (const guint32 **pp, guint64 *accum, guint n)
+sum_pixels_65536 (const uint32_t **pp, uint64_t *accum, uint32_t n)
 {
-    const guint32 *pp_end;
+    const uint32_t *pp_end;
 
     for (pp_end = *pp + n; *pp < pp_end; (*pp)++)
     {
-        guint64 p [2];
+        uint64_t p [2];
         unpack_pixel_65536 (**pp, p);
         accum [0] += p [0];
         accum [1] += p [1];
     }
 }
 
-static inline guint64
-scale_256 (guint64 accum, guint64 multiplier)
+static inline uint64_t
+scale_256 (uint64_t accum, uint64_t multiplier)
 {
-    guint64 a, b;
+    uint64_t a, b;
 
     /* Average the inputs */
     a = ((accum & 0x0000ffff0000ffffULL) * multiplier
@@ -139,10 +147,10 @@ scale_256 (guint64 accum, guint64 multiplier)
     return (a & 0x000000ff000000ffULL) | ((b & 0x000000ff000000ffULL) << 16);
 }
 
-static inline guint64
-scale_65536_half (guint64 accum, guint64 multiplier)
+static inline uint64_t
+scale_65536_half (uint64_t accum, uint64_t multiplier)
 {
-    guint64 a, b;
+    uint64_t a, b;
 
     a = accum & 0x00000000ffffffffULL;
     a = (a * multiplier + BOXES_MULTIPLIER / 2) / BOXES_MULTIPLIER;
@@ -155,19 +163,19 @@ scale_65536_half (guint64 accum, guint64 multiplier)
 }
 
 static inline void
-scale_and_store_65536 (guint64 *accum, guint64 multiplier, guint64 **row_parts_out)
+scale_and_store_65536 (uint64_t *accum, uint64_t multiplier, uint64_t **row_parts_out)
 {
     *(*row_parts_out)++ = scale_65536_half (accum [0], multiplier);
     *(*row_parts_out)++ = scale_65536_half (accum [1], multiplier);
 }
 
 static void
-convert_parts_256_to_65536 (guint64 *row, guint n)
+convert_parts_256_to_65536 (uint64_t *row, uint32_t n)
 {
-    guint64 *temp;
-    guint i, j;
+    uint64_t *temp;
+    uint32_t i, j;
 
-    temp = alloca (n * sizeof (guint64) * 2);
+    temp = alloca (n * sizeof (uint64_t) * 2);
 
     for (i = 0, j = 0; i < n; )
     {
@@ -175,13 +183,13 @@ convert_parts_256_to_65536 (guint64 *row, guint n)
         temp [j++] = row [i++] & 0x000000ff000000ff;
     }
 
-    memcpy (row, temp, n * sizeof (guint64) * 2);
+    memcpy (row, temp, n * sizeof (uint64_t) * 2);
 }
 
 static void
-convert_parts_65536_to_256 (guint64 *row, guint n)
+convert_parts_65536_to_256 (uint64_t *row, uint32_t n)
 {
-    guint i, j;
+    uint32_t i, j;
 
     for (i = 0, j = 0; j < n; )
     {
@@ -191,9 +199,9 @@ convert_parts_65536_to_256 (guint64 *row, guint n)
 }
 
 static void
-add_parts (const guint64 *parts_in, guint64 *parts_acc_out, guint n)
+add_parts (const uint64_t *parts_in, uint64_t *parts_acc_out, uint32_t n)
 {
-    const guint64 *parts_in_max = parts_in + n;
+    const uint64_t *parts_in_max = parts_in + n;
 
     while (parts_in < parts_in_max)
         *(parts_acc_out++) += *(parts_in++);
@@ -202,9 +210,9 @@ add_parts (const guint64 *parts_in, guint64 *parts_acc_out, guint n)
 /* --- Precalculation --- */
 
 static void
-calc_size_steps (guint dim_in, guint dim_out, Algorithm *algo)
+calc_size_steps (uint32_t dim_in, uint32_t dim_out, Algorithm *algo)
 {
-    guint n_halvings;
+    uint32_t n_halvings;
 
     n_halvings = 0;
 
@@ -223,11 +231,11 @@ calc_size_steps (guint dim_in, guint dim_out, Algorithm *algo)
 }
 
 static void
-precalc_bilinear_array (guint16 *array, guint dim_in, guint dim_out, gboolean absolute_offsets)
+precalc_bilinear_array (uint16_t *array, uint32_t dim_in, uint32_t dim_out, unsigned int make_absolute_offsets)
 {
-    guint32 ofs_stepF, fracF, frac_stepF;
-    guint16 *pu16 = array;
-    guint16 last_ofs = 0;
+    uint32_t ofs_stepF, fracF, frac_stepF;
+    uint16_t *pu16 = array;
+    uint16_t last_ofs = 0;
 
     /* Works when dim_in >= dim_out, 1=1 is perfect */
     frac_stepF = ofs_stepF = ((dim_in - 1) * BIG_MUL + FUDGE_FACTOR) / (dim_out - 1);
@@ -235,14 +243,14 @@ precalc_bilinear_array (guint16 *array, guint dim_in, guint dim_out, gboolean ab
 
     do
     {
-        guint16 ofs = fracF / BIG_MUL;
+        uint16_t ofs = fracF / BIG_MUL;
 
         /* We sample ofs and its neighbor -- prevent out of bounds access
          * for the latter. */
         if (ofs >= dim_in - 1)
             break;
 
-        *(pu16++) = absolute_offsets ? ofs : ofs - last_ofs;
+        *(pu16++) = make_absolute_offsets ? ofs : ofs - last_ofs;
         *(pu16++) = SMALL_MUL - ((fracF / (BIG_MUL / SMALL_MUL)) % SMALL_MUL);
         fracF += frac_stepF;
 
@@ -254,7 +262,7 @@ precalc_bilinear_array (guint16 *array, guint dim_in, guint dim_out, gboolean ab
      * bias towards the last pixel */
     while (dim_out)
     {
-        *(pu16++) = absolute_offsets ? dim_in - 2 : (dim_in - 2) - last_ofs;
+        *(pu16++) = make_absolute_offsets ? dim_in - 2 : (dim_in - 2) - last_ofs;
         *(pu16++) = 0;
         dim_out--;
 
@@ -263,32 +271,32 @@ precalc_bilinear_array (guint16 *array, guint dim_in, guint dim_out, gboolean ab
 }
 
 static void
-precalc_boxes_array (guint16 *array, guint *span_mul, guint dim_in, guint dim_out,
-                     gboolean absolute_offsets)
+precalc_boxes_array (uint16_t *array, uint32_t *span_mul, uint32_t dim_in, uint32_t dim_out,
+                     unsigned int make_absolute_offsets)
 {
-    guint64 fracF, frac_stepF;
-    guint16 *pu16 = array;
-    guint16 ofs, next_ofs;
-    guint span_mul_orig;
-    guint64 f;
-    guint64 stride;
+    uint64_t fracF, frac_stepF;
+    uint16_t *pu16 = array;
+    uint16_t ofs, next_ofs;
+    uint32_t span_mul_orig;
+    uint64_t f;
+    uint64_t stride;
 
-    frac_stepF = ((guint64) dim_in * BIG_MUL) / (guint64) dim_out;
+    frac_stepF = ((uint64_t) dim_in * BIG_MUL) / (uint64_t) dim_out;
     fracF = 0;
     ofs = 0;
 
     *span_mul = span_mul_orig = (BOXES_MULTIPLIER * BIG_MUL * SMALL_MUL) / (frac_stepF * SMALL_MUL - BIG_MUL);
 
-    stride = frac_stepF / (guint64) BIG_MUL;
+    stride = frac_stepF / (uint64_t) BIG_MUL;
     f = (frac_stepF / SMALL_MUL) % SMALL_MUL;
     while (((((stride * 255) + ((f * 255) / 2) / 128) - 1)
-            * (guint64) *span_mul + (BOXES_MULTIPLIER / 4)) / (BOXES_MULTIPLIER) < 255)
+            * (uint64_t) *span_mul + (BOXES_MULTIPLIER / 4)) / (BOXES_MULTIPLIER) < 255)
         (*span_mul)++;
 
     do
     {
         fracF += frac_stepF;
-        next_ofs = (guint64) fracF / ((guint64) BIG_MUL);
+        next_ofs = (uint64_t) fracF / ((uint64_t) BIG_MUL);
 
         /* Prevent out of bounds access */
         if (ofs >= dim_in - 1)
@@ -306,7 +314,7 @@ precalc_boxes_array (guint16 *array, guint *span_mul, guint dim_in, guint dim_ou
 
         /* Fraction is the other way around, since left pixel of each span
          * comes first, and it's on the right side of the fractional sample. */
-        *(pu16++) = absolute_offsets ? ofs : stride;
+        *(pu16++) = make_absolute_offsets ? ofs : stride;
         *(pu16++) = f;
 
         ofs = next_ofs;
@@ -317,25 +325,25 @@ precalc_boxes_array (guint16 *array, guint *span_mul, guint dim_in, guint dim_ou
      * bias towards the last pixel */
     while (dim_out)
     {
-        *(pu16++) = absolute_offsets ? ofs : 0;
+        *(pu16++) = make_absolute_offsets ? ofs : 0;
         *(pu16++) = 0;
         dim_out--;
     }
 
-    *(pu16++) = absolute_offsets ? ofs : 0;
+    *(pu16++) = make_absolute_offsets ? ofs : 0;
     *(pu16++) = 0;
 }
 
 /* --- Horizontal scaling --- */
 
 static void
-interp_horizontal_bilinear (const SmolScaleCtx *scale_ctx, const guint32 *row_in, guint64 *row_parts_out)
+interp_horizontal_bilinear (const SmolScaleCtx *scale_ctx, const uint32_t *row_in, uint64_t *row_parts_out)
 {
-    const guint32 *pp;
-    guint64 p, q;
-    const guint16 *ofs_x = scale_ctx->offsets_x;
-    guint64 F;
-    guint64 *row_parts_out_max = row_parts_out + (scale_ctx->width_out & ~(1ULL));
+    const uint32_t *pp;
+    uint64_t p, q;
+    const uint16_t *ofs_x = scale_ctx->offsets_x;
+    uint64_t F;
+    uint64_t *row_parts_out_max = row_parts_out + (scale_ctx->width_out & ~(1ULL));
 
     pp = row_in;
 
@@ -386,15 +394,15 @@ interp_horizontal_bilinear (const SmolScaleCtx *scale_ctx, const guint32 *row_in
 }
 
 static void
-interp_horizontal_boxes_256 (const SmolScaleCtx *scale_ctx, const guint32 *row_in, guint64 *row_parts_out)
+interp_horizontal_boxes_256 (const SmolScaleCtx *scale_ctx, const uint32_t *row_in, uint64_t *row_parts_out)
 {
-    const guint32 *pp;
-    const guint16 *ofs_x = scale_ctx->offsets_x;
-    guint64 *row_parts_out_max = row_parts_out + scale_ctx->width_out - 1;
-    guint64 accum = 0;
-    guint64 p, q, r, s;
-    guint n;
-    guint64 F;
+    const uint32_t *pp;
+    const uint16_t *ofs_x = scale_ctx->offsets_x;
+    uint64_t *row_parts_out_max = row_parts_out + scale_ctx->width_out - 1;
+    uint64_t accum = 0;
+    uint64_t p, q, r, s;
+    uint32_t n;
+    uint64_t F;
 
     pp = row_in;
     p = weight_pixel_256 (unpack_pixel_256 (*(pp++)), 256);
@@ -435,15 +443,15 @@ interp_horizontal_boxes_256 (const SmolScaleCtx *scale_ctx, const guint32 *row_i
 }
 
 static void
-interp_horizontal_boxes_65536 (const SmolScaleCtx *scale_ctx, const guint32 *row_in, guint64 *row_parts_out)
+interp_horizontal_boxes_65536 (const SmolScaleCtx *scale_ctx, const uint32_t *row_in, uint64_t *row_parts_out)
 {
-    const guint32 *pp;
-    const guint16 *ofs_x = scale_ctx->offsets_x;
-    guint64 *row_parts_out_max = row_parts_out + (scale_ctx->width_out - /* 2 */ 1) * 2;
-    guint64 accum [2] = { 0, 0 };
-    guint64 p [2], q [2], r [2], s [2];
-    guint n;
-    guint64 F;
+    const uint32_t *pp;
+    const uint16_t *ofs_x = scale_ctx->offsets_x;
+    uint64_t *row_parts_out_max = row_parts_out + (scale_ctx->width_out - /* 2 */ 1) * 2;
+    uint64_t accum [2] = { 0, 0 };
+    uint64_t p [2], q [2], r [2], s [2];
+    uint32_t n;
+    uint64_t F;
 
     pp = row_in;
     unpack_pixel_65536 (*(pp++), p);
@@ -498,7 +506,7 @@ interp_horizontal_boxes_65536 (const SmolScaleCtx *scale_ctx, const guint32 *row
 }
 
 static void
-scale_horizontal (const SmolScaleCtx *scale_ctx, const guint32 *row_in, guint64 *row_parts_out)
+scale_horizontal (const SmolScaleCtx *scale_ctx, const uint32_t *row_in, uint64_t *row_parts_out)
 {
     if (scale_ctx->algo_h == ALGORITHM_BILINEAR)
         interp_horizontal_bilinear (scale_ctx, row_in, row_parts_out);
@@ -510,7 +518,7 @@ scale_horizontal (const SmolScaleCtx *scale_ctx, const guint32 *row_in, guint64 
 
 static void
 scale_horizontal_for_vertical_256 (const SmolScaleCtx *scale_ctx, 
-                                   const guint32 *row_in, guint64 *row_parts_out)
+                                   const uint32_t *row_in, uint64_t *row_parts_out)
 {
     scale_horizontal (scale_ctx, row_in, row_parts_out);
     if (scale_ctx->algo_h == ALGORITHM_BOX_65536)
@@ -521,7 +529,7 @@ scale_horizontal_for_vertical_256 (const SmolScaleCtx *scale_ctx,
 
 static void
 scale_horizontal_for_vertical_65536 (const SmolScaleCtx *scale_ctx, 
-                                     const guint32 *row_in, guint64 *row_parts_out)
+                                     const uint32_t *row_in, uint64_t *row_parts_out)
 {
     scale_horizontal (scale_ctx, row_in, row_parts_out);
     if (scale_ctx->algo_h != ALGORITHM_BOX_65536)
@@ -533,14 +541,14 @@ scale_horizontal_for_vertical_65536 (const SmolScaleCtx *scale_ctx,
 /* --- Vertical scaling --- */
 
 static void
-interp_vertical_bilinear_256 (guint64 F, const guint64 *top_row_parts_in,
-                              const guint64 *bottom_row_parts_in, guint32 *row_out, guint width)
+interp_vertical_bilinear_256 (uint64_t F, const uint64_t *top_row_parts_in,
+                              const uint64_t *bottom_row_parts_in, uint32_t *row_out, uint32_t width)
 {
-    guint32 *row_out_last = row_out + (width & ~(1ULL));
+    uint32_t *row_out_last = row_out + (width & ~(1ULL));
 
     do
     {
-        guint64 p, q;
+        uint64_t p, q;
 
         p = *(top_row_parts_in++);
         q = *(bottom_row_parts_in++);
@@ -548,7 +556,7 @@ interp_vertical_bilinear_256 (guint64 F, const guint64 *top_row_parts_in,
         p = (((p - q) * F) >> 8) + q;
         p &= 0x00ff00ff00ff00ff;
 
-        *(row_out++) = (guint32) (p | p >> 24);
+        *(row_out++) = (uint32_t) (p | p >> 24);
 
         p = *(top_row_parts_in++);
         q = *(bottom_row_parts_in++);
@@ -556,13 +564,13 @@ interp_vertical_bilinear_256 (guint64 F, const guint64 *top_row_parts_in,
         p = (((p - q) * F) >> 8) + q;
         p &= 0x00ff00ff00ff00ff;
 
-        *(row_out++) = (guint32) (p | p >> 24);
+        *(row_out++) = (uint32_t) (p | p >> 24);
     }
     while (row_out != row_out_last);
 
     if (width & 1)
     {
-        guint64 p, q;
+        uint64_t p, q;
 
         p = *(top_row_parts_in++);
         q = *(bottom_row_parts_in++);
@@ -570,21 +578,21 @@ interp_vertical_bilinear_256 (guint64 F, const guint64 *top_row_parts_in,
         p = (((p - q) * F) >> 8) + q;
         p &= 0x00ff00ff00ff00ff;
 
-        *(row_out++) = (guint32) (p | p >> 24);
+        *(row_out++) = (uint32_t) (p | p >> 24);
     }
 }
 
 static void
-update_vertical_ctx_bilinear (const SmolScaleCtx *scale_ctx, VerticalCtx *vertical_ctx, guint new_out_ofs)
+update_vertical_ctx_bilinear (const SmolScaleCtx *scale_ctx, VerticalCtx *vertical_ctx, uint32_t new_out_ofs)
 {
-    guint new_in_ofs = scale_ctx->offsets_y [new_out_ofs * 2];
+    uint32_t new_in_ofs = scale_ctx->offsets_y [new_out_ofs * 2];
 
     if (new_in_ofs == vertical_ctx->in_ofs)
         return;
 
     if (new_in_ofs == vertical_ctx->in_ofs + 1)
     {
-        guint64 *t = vertical_ctx->parts_row [0];
+        uint64_t *t = vertical_ctx->parts_row [0];
         vertical_ctx->parts_row [0] = vertical_ctx->parts_row [1];
         vertical_ctx->parts_row [1] = t;
 
@@ -607,7 +615,7 @@ update_vertical_ctx_bilinear (const SmolScaleCtx *scale_ctx, VerticalCtx *vertic
 
 static void
 scale_outrow_bilinear_vertical_256 (const SmolScaleCtx *scale_ctx, VerticalCtx *vertical_ctx,
-                                    guint outrow_index, guint32 *row_out)
+                                    uint32_t outrow_index, uint32_t *row_out)
 {
     update_vertical_ctx_bilinear (scale_ctx, vertical_ctx, outrow_index);
     interp_vertical_bilinear_256 (scale_ctx->offsets_y [outrow_index * 2 + 1],
@@ -618,13 +626,13 @@ scale_outrow_bilinear_vertical_256 (const SmolScaleCtx *scale_ctx, VerticalCtx *
 }
 
 static void
-finalize_vertical_256 (const guint64 *accums, guint64 multiplier, guint32 *row_out, guint n)
+finalize_vertical_256 (const uint64_t *accums, uint64_t multiplier, uint32_t *row_out, uint32_t n)
 {
-    guint32 *row_out_max = row_out + n;
+    uint32_t *row_out_max = row_out + n;
 
     while (row_out != row_out_max)
     {
-        guint64 p;
+        uint64_t p;
 
         p = scale_256 (*(accums++), multiplier);
         *(row_out++) = pack_pixel_256 (p);
@@ -632,9 +640,9 @@ finalize_vertical_256 (const guint64 *accums, guint64 multiplier, guint32 *row_o
 }
 
 static void
-weight_edge_row_256 (guint64 *row, guint16 w, guint n)
+weight_edge_row_256 (uint64_t *row, uint16_t w, uint32_t n)
 {
-    guint64 *row_max = row + n;
+    uint64_t *row_max = row + n;
 
     while (row != row_max)
     {
@@ -644,13 +652,13 @@ weight_edge_row_256 (guint64 *row, guint16 w, guint n)
 }
 
 static void
-scale_and_weight_edge_rows_box_256 (const guint64 *first_row, guint64 *last_row, guint64 *accum, guint16 w2, guint n)
+scale_and_weight_edge_rows_box_256 (const uint64_t *first_row, uint64_t *last_row, uint64_t *accum, uint16_t w2, uint32_t n)
 {
-    const guint64 *first_row_max = first_row + n;
+    const uint64_t *first_row_max = first_row + n;
 
     while (first_row != first_row_max)
     {
-        guint64 r, s, p, q;
+        uint64_t r, s, p, q;
 
         p = *(first_row++);
 
@@ -665,12 +673,12 @@ scale_and_weight_edge_rows_box_256 (const guint64 *first_row, guint64 *last_row,
 }
 
 static void
-update_vertical_ctx_box_256 (const SmolScaleCtx *scale_ctx, VerticalCtx *vertical_ctx, guint ofs_y, guint ofs_y_max, guint w1, guint w2)
+update_vertical_ctx_box_256 (const SmolScaleCtx *scale_ctx, VerticalCtx *vertical_ctx, uint32_t ofs_y, uint32_t ofs_y_max, uint16_t w1, uint16_t w2)
 {
     /* Old in_ofs is the previous max */
     if (ofs_y == vertical_ctx->in_ofs)
     {
-        guint64 *t = vertical_ctx->parts_row [0];
+        uint64_t *t = vertical_ctx->parts_row [0];
         vertical_ctx->parts_row [0] = vertical_ctx->parts_row [1];
         vertical_ctx->parts_row [1] = t;
     }
@@ -692,7 +700,7 @@ update_vertical_ctx_box_256 (const SmolScaleCtx *scale_ctx, VerticalCtx *vertica
     }
     else
     {
-        memset (vertical_ctx->parts_row [1], 0, scale_ctx->width_out * sizeof (guint64));
+        memset (vertical_ctx->parts_row [1], 0, scale_ctx->width_out * sizeof (uint64_t));
     }
 
     vertical_ctx->in_ofs = ofs_y_max;
@@ -700,10 +708,10 @@ update_vertical_ctx_box_256 (const SmolScaleCtx *scale_ctx, VerticalCtx *vertica
 
 static void
 scale_outrow_box_vertical_256 (const SmolScaleCtx *scale_ctx, VerticalCtx *vertical_ctx,
-                               guint outrow_index, guint32 *row_out)
+                               uint32_t outrow_index, uint32_t *row_out)
 {
-    guint ofs_y, ofs_y_max;
-    guint w1, w2;
+    uint32_t ofs_y, ofs_y_max;
+    uint16_t w1, w2;
 
     /* Get the inrow range for this outrow: [ofs_y .. ofs_y_max> */
 
@@ -745,13 +753,13 @@ scale_outrow_box_vertical_256 (const SmolScaleCtx *scale_ctx, VerticalCtx *verti
 }
 
 static void
-finalize_vertical_65536 (const guint64 *accums, guint64 multiplier, guint32 *row_out, guint n)
+finalize_vertical_65536 (const uint64_t *accums, uint64_t multiplier, uint32_t *row_out, uint32_t n)
 {
-    guint32 *row_out_max = row_out + n;
+    uint32_t *row_out_max = row_out + n;
 
     while (row_out != row_out_max)
     {
-        guint64 p [2];
+        uint64_t p [2];
 
         p [0] = scale_65536_half (*(accums++), multiplier);
         p [1] = scale_65536_half (*(accums++), multiplier);
@@ -761,9 +769,9 @@ finalize_vertical_65536 (const guint64 *accums, guint64 multiplier, guint32 *row
 }
 
 static void
-weight_row_65536 (guint64 *row, guint16 w, guint n)
+weight_row_65536 (uint64_t *row, uint16_t w, uint32_t n)
 {
-    guint64 *row_max = row + (n * 2);
+    uint64_t *row_max = row + (n * 2);
 
     while (row != row_max)
     {
@@ -775,10 +783,10 @@ weight_row_65536 (guint64 *row, guint16 w, guint n)
 
 static void
 scale_outrow_box_vertical_65536 (const SmolScaleCtx *scale_ctx, VerticalCtx *vertical_ctx,
-                                 guint outrow_index, guint32 *row_out)
+                                 uint32_t outrow_index, uint32_t *row_out)
 {
-    guint ofs_y, ofs_y_max;
-    guint w;
+    uint32_t ofs_y, ofs_y_max;
+    uint16_t w;
 
     /* Get the inrow range for this outrow: [ofs_y .. ofs_y_max> */
 
@@ -828,7 +836,7 @@ scale_outrow_box_vertical_65536 (const SmolScaleCtx *scale_ctx, VerticalCtx *ver
 
 static void
 scale_outrow (const SmolScaleCtx *scale_ctx, VerticalCtx *vertical_ctx,
-              guint outrow_index, guint32 *row_out)
+              uint32_t outrow_index, uint32_t *row_out)
 {
     if (scale_ctx->algo_v == ALGORITHM_BILINEAR)
         scale_outrow_bilinear_vertical_256 (scale_ctx, vertical_ctx, outrow_index, row_out);
@@ -839,13 +847,13 @@ scale_outrow (const SmolScaleCtx *scale_ctx, VerticalCtx *vertical_ctx,
 }
 
 static void
-do_rows (const SmolScaleCtx *scale_ctx, guint row_out_index, guint n_rows)
+do_rows (const SmolScaleCtx *scale_ctx, uint32_t row_out_index, uint32_t n_rows)
 {
     VerticalCtx vertical_ctx;
-    guint64 *parts_storage;
-    guint n_parts_per_pixel = 1;
-    guint n_stored_rows = 3;
-    guint i;
+    uint64_t *parts_storage;
+    uint32_t n_parts_per_pixel = 1;
+    uint32_t n_stored_rows = 3;
+    uint32_t i;
 
     if (scale_ctx->algo_h == ALGORITHM_BOX_65536 || scale_ctx->algo_v == ALGORITHM_BOX_65536)
         n_parts_per_pixel = 2;
@@ -853,12 +861,12 @@ do_rows (const SmolScaleCtx *scale_ctx, guint row_out_index, guint n_rows)
     if (scale_ctx->algo_v == ALGORITHM_BILINEAR)
         n_stored_rows = 2;
 
-    parts_storage = alloca (scale_ctx->width_out * sizeof (guint64)
+    parts_storage = alloca (scale_ctx->width_out * sizeof (uint64_t)
                             * n_parts_per_pixel * n_stored_rows);
 
     /* Must be one less, or this test in update_vertical_ctx() will wrap around:
      * if (new_in_ofs == vertical_ctx->in_ofs + 1) { ... } */
-    vertical_ctx.in_ofs = G_MAXUINT - 1;
+    vertical_ctx.in_ofs = UINT_MAX - 1;
     vertical_ctx.parts_row [0] = parts_storage;
     vertical_ctx.parts_row [1] = vertical_ctx.parts_row [0] + scale_ctx->width_out * n_parts_per_pixel;
     if (n_stored_rows == 3)
@@ -876,24 +884,24 @@ do_rows (const SmolScaleCtx *scale_ctx, guint row_out_index, guint n_rows)
 
 void
 smol_scale_init (SmolScaleCtx *scale_ctx,
-                 const guint32 *pixels_in, guint width_in, guint height_in, guint rowstride_in,
-                 guint32 *pixels_out, guint width_out, guint height_out, guint rowstride_out)
+                 const uint32_t *pixels_in, uint32_t width_in, uint32_t height_in, uint32_t rowstride_in,
+                 uint32_t *pixels_out, uint32_t width_out, uint32_t height_out, uint32_t rowstride_out)
 {
     /* FIXME: Special handling for images that are a single pixel wide or tall */
 
     scale_ctx->pixels_in = pixels_in;
     scale_ctx->width_in = width_in;
     scale_ctx->height_in = height_in;
-    scale_ctx->rowstride_in = rowstride_in / sizeof (guint32);
+    scale_ctx->rowstride_in = rowstride_in / sizeof (uint32_t);
     scale_ctx->pixels_out = pixels_out;
     scale_ctx->width_out = width_out;
     scale_ctx->height_out = height_out;
-    scale_ctx->rowstride_out = rowstride_out / sizeof (guint32);
+    scale_ctx->rowstride_out = rowstride_out / sizeof (uint32_t);
 
     calc_size_steps (width_in, width_out, &scale_ctx->algo_h);
     calc_size_steps (height_in, height_out, &scale_ctx->algo_v);
 
-    scale_ctx->offsets_x = g_new (guint16, (scale_ctx->width_out + 1) * 2 + (scale_ctx->height_out + 1) * 2);
+    scale_ctx->offsets_x = malloc (((scale_ctx->width_out + 1) * 2 + (scale_ctx->height_out + 1) * 2) * sizeof (uint16_t));
     scale_ctx->offsets_y = scale_ctx->offsets_x + (scale_ctx->width_out + 1) * 2;
 
     if (scale_ctx->algo_h == ALGORITHM_BILINEAR)
@@ -922,59 +930,32 @@ smol_scale_init (SmolScaleCtx *scale_ctx,
 void
 smol_scale_finalize (SmolScaleCtx *scale_ctx)
 {
-    g_free (scale_ctx->offsets_x);
-}
-
-void
-smol_scale_bilinear_row (SmolScaleCtx *scale_ctx, guint row_out_index)
-{
-    do_rows (scale_ctx, row_out_index, 1);
-}
-
-#define BATCH_N_LINES 64
-
-void
-smol_scale (SmolScaleCtx *scale_ctx)
-{
-    guint i;
-
-#if 0
-    for (i = 0; i < scale_ctx->height_out; i++)
-    {
-        do_rows (scale_ctx, i, 1);
-    }
-#elif 0
-    for (i = 0; i < scale_ctx->height_out && scale_ctx->height_out - i > BATCH_N_LINES; i += BATCH_N_LINES)
-    {
-        do_rows (scale_ctx, i, BATCH_N_LINES);
-    }
-
-    do_rows (scale_ctx, i, scale_ctx->height_out - i);
-
-#else
-    do_rows (scale_ctx, 0, scale_ctx->height_out);
-#endif
+    free (scale_ctx->offsets_x);
 }
 
 #if 1
 
 /* Single thread */
 
-guint32 *
-smol_scale_simple (const guint32 *pixels_in, guint width_in, guint height_in,
-                   guint width_out, guint height_out)
+void
+smol_scale_simple (const uint32_t *pixels_in,
+                   uint32_t width_in, uint32_t height_in, uint32_t rowstride_in,
+                   uint32_t *pixels_out,
+                   uint32_t width_out, uint32_t height_out, uint32_t rowstride_out)
 {
     SmolScaleCtx scale_ctx;
-    guint32 *pixels_out;
 
-    pixels_out = g_malloc (width_out * height_out * sizeof (guint32));
-
-    smol_scale_init (&scale_ctx, pixels_in, width_in, height_in, width_in * 4,
-                     pixels_out, width_out, height_out, width_out * 4);
-    smol_scale (&scale_ctx);
+    smol_scale_init (&scale_ctx,
+                     pixels_in, width_in, height_in, rowstride_in,
+                     pixels_out, width_out, height_out, rowstride_out);
+    do_rows (&scale_ctx, 0, scale_ctx.height_out);
     smol_scale_finalize (&scale_ctx);
+}
 
-    return pixels_out;
+void
+smol_scale_batch (const SmolScaleCtx *scale_ctx, uint32_t first_out_row, uint32_t n_out_rows)
+{
+    do_rows (scale_ctx, first_out_row, n_out_rows);
 }
 
 #else
@@ -982,7 +963,7 @@ smol_scale_simple (const guint32 *pixels_in, guint width_in, guint height_in,
 static void
 smol_scale_worker (gpointer data, SmolScaleCtx *scale_ctx)
 {
-    guint first_row, n_rows;
+    uint32_t first_row, n_rows;
 
     first_row = GPOINTER_TO_UINT (data) >> 16;
     n_rows = GPOINTER_TO_UINT (data) & 0xffff;
@@ -991,16 +972,18 @@ smol_scale_worker (gpointer data, SmolScaleCtx *scale_ctx)
 
 /* Multithreaded */
 
-guint32 *
-smol_scale_simple (const guint32 *pixels_in, guint width_in, guint height_in,
-                   guint width_out, guint height_out)
+void
+smol_scale_simple (const uint32_t *pixels_in,
+                   uint32_t width_in, uint32_t height_in, uint32_t rowstride_in,
+                   uint32_t *pixels_out,
+                   uint32_t width_out, uint32_t height_out, uint32_t rowstride_out)
 {
     SmolScaleCtx scale_ctx;
-    guint32 *pixels_out;
-    guint i;
+    uint32_t *pixels_out;
+    uint32_t i;
     GThreadPool *thread_pool;
-    guint n_threads;
-    guint batch_n_rows;
+    uint32_t n_threads;
+    uint32_t batch_n_rows;
 
     pixels_out = g_malloc (width_out * height_out * 4);
 
@@ -1018,7 +1001,7 @@ smol_scale_simple (const guint32 *pixels_in, guint width_in, guint height_in,
 
     for (i = 0; i < scale_ctx.height_out; )
     {
-        guint n = MIN (batch_n_rows, scale_ctx.height_out - i);
+        uint32_t n = MIN (batch_n_rows, scale_ctx.height_out - i);
         g_thread_pool_push (thread_pool, GUINT_TO_POINTER ((i << 16) | n), NULL);
         i += n;
     }
