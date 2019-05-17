@@ -69,10 +69,34 @@ unpack_pixel_256 (guint32 p)
     return (((guint64) p & 0xff00ff00) << 24) | (p & 0x00ff00ff);
 }
 
+static inline guint32
+pack_pixel_65536 (guint64 *in)
+{
+    /* FIXME: Are masks needed? */
+    return ((in [0] >> 8) & 0xff000000)
+           | ((in [0] << 16) & 0x00ff0000)
+           | ((in [1] >> 24) & 0x0000ff00)
+           | (in [1] & 0x000000ff);
+}
+
+static inline void
+unpack_pixel_65536 (guint32 p, guint64 *out)
+{
+    out [0] = (((guint64) p & 0xff000000) << 8) | (((guint64) p & 0x00ff0000) >> 16);
+    out [1] = (((guint64) p & 0x0000ff00) << 24) | (p & 0x000000ff);
+}
+
 static inline guint64
 weight_pixel_256 (guint64 p, guint16 w)
 {
     return ((p * w) >> 1) & 0x7fff7fff7fff7fff;
+}
+
+static inline void
+weight_pixel_65536 (guint64 *p, guint64 *out, guint16 w)
+{
+    out [0] = ((p [0] * w) >> 1) & 0x7fffffff7fffffffULL;
+    out [1] = ((p [1] * w) >> 1) & 0x7fffffff7fffffffULL;
 }
 
 static inline void
@@ -87,7 +111,21 @@ sum_pixels_256 (const guint32 **pp, guint64 *accum, guint n)
 }
 
 static inline void
-scale_and_store_256 (guint64 accum, guint64 multiplier, guint64 **row_parts_out)
+sum_pixels_65536 (const guint32 **pp, guint64 *accum, guint n)
+{
+    const guint32 *pp_end;
+
+    for (pp_end = *pp + n; *pp < pp_end; (*pp)++)
+    {
+        guint64 p [2];
+        unpack_pixel_65536 (**pp, p);
+        accum [0] += p [0];
+        accum [1] += p [1];
+    }
+}
+
+static inline guint64
+scale_256 (guint64 accum, guint64 multiplier)
 {
     guint64 a, b;
 
@@ -97,8 +135,30 @@ scale_and_store_256 (guint64 accum, guint64 multiplier, guint64 **row_parts_out)
     b = (((accum & 0xffff0000ffff0000ULL) >> 16) * multiplier
          + (BOXES_MULTIPLIER / 2) + ((BOXES_MULTIPLIER / 2) << 32)) / BOXES_MULTIPLIER;
 
-    /* Store pixel */
-    *(*row_parts_out)++ = (a & 0x000000ff000000ffULL) | ((b & 0x000000ff000000ffULL) << 16);
+    /* Return pixel */
+    return (a & 0x000000ff000000ffULL) | ((b & 0x000000ff000000ffULL) << 16);
+}
+
+static inline guint64
+scale_65536_half (guint64 accum, guint64 multiplier)
+{
+    guint64 a, b;
+
+    a = accum & 0x00000000ffffffffULL;
+    a = (a * multiplier + BOXES_MULTIPLIER / 2) / BOXES_MULTIPLIER;
+
+    b = (accum & 0xffffffff00000000ULL) >> 32;
+    b = (b * multiplier + BOXES_MULTIPLIER / 2) / BOXES_MULTIPLIER;
+
+    return (a & 0x00000000000000ffULL)
+           | ((b & 0x00000000000000ffULL) << 32);
+}
+
+static inline void
+scale_and_store_65536 (guint64 *accum, guint64 multiplier, guint64 **row_parts_out)
+{
+    *(*row_parts_out)++ = scale_65536_half (accum [0], multiplier);
+    *(*row_parts_out)++ = scale_65536_half (accum [1], multiplier);
 }
 
 static void
@@ -128,6 +188,15 @@ convert_parts_65536_to_256 (guint64 *row, guint n)
         row [j] = row [i++] << 16;
         row [j++] |= row [i++];
     }
+}
+
+static void
+add_parts (const guint64 *parts_in, guint64 *parts_acc_out, guint n)
+{
+    const guint64 *parts_in_max = parts_in + n;
+
+    while (parts_in < parts_in_max)
+        *(parts_acc_out++) += *(parts_in++);
 }
 
 /* --- Precalculation --- */
@@ -257,6 +326,8 @@ precalc_boxes_array (guint16 *array, guint *span_mul, guint dim_in, guint dim_ou
     *(pu16++) = 0;
 }
 
+/* --- Scaling --- */
+
 static void
 interp_horizontal_bilinear (const SmolScaleCtx *scale_ctx, const guint32 *row_in, guint64 *row_parts_out)
 {
@@ -345,7 +416,7 @@ interp_horizontal_boxes_256 (const SmolScaleCtx *scale_ctx, const guint32 *row_i
 
         p = (((r << 8) - r - s) >> 1) & 0x7fff7fff7fff7fffULL;
 
-        scale_and_store_256 (accum, scale_ctx->span_mul_x, &row_parts_out);
+        *(row_parts_out++) = scale_256 (accum, scale_ctx->span_mul_x);
         accum = 0;
     }
 
@@ -359,67 +430,7 @@ interp_horizontal_boxes_256 (const SmolScaleCtx *scale_ctx, const guint32 *row_i
         q = weight_pixel_256 (unpack_pixel_256 (*(pp)), F);
 
     accum += ((p + q) >> 7) & 0x01ff01ff01ff01ffULL;
-    scale_and_store_256 (accum, scale_ctx->span_mul_x, &row_parts_out);
-}
-
-static inline void
-unpack_pixel_65536 (guint32 p, guint64 *out)
-{
-    out [0] = (((guint64) p & 0xff000000) << 8) | (((guint64) p & 0x00ff0000) >> 16);
-    out [1] = (((guint64) p & 0x0000ff00) << 24) | (p & 0x000000ff);
-}
-
-static inline guint32
-pack_pixel_65536 (guint64 *in)
-{
-    /* FIXME: Are masks needed? */
-    return ((in [0] >> 8) & 0xff000000)
-           | ((in [0] << 16) & 0x00ff0000)
-           | ((in [1] >> 24) & 0x0000ff00)
-           | (in [1] & 0x000000ff);
-}
-
-static inline void
-weight_pixel_65536 (guint64 *p, guint64 *out, guint16 w)
-{
-    out [0] = ((p [0] * w) >> 1) & 0x7fffffff7fffffffULL;
-    out [1] = ((p [1] * w) >> 1) & 0x7fffffff7fffffffULL;
-}
-
-static inline void
-sum_pixels_65536 (const guint32 **pp, guint64 *accum, guint n)
-{
-    const guint32 *pp_end;
-
-    for (pp_end = *pp + n; *pp < pp_end; (*pp)++)
-    {
-        guint64 p [2];
-        unpack_pixel_65536 (**pp, p);
-        accum [0] += p [0];
-        accum [1] += p [1];
-    }
-}
-
-static inline guint64
-scale_65536_half (guint64 accum, guint64 multiplier)
-{
-    guint64 a, b;
-
-    a = accum & 0x00000000ffffffffULL;
-    a = (a * multiplier + BOXES_MULTIPLIER / 2) / BOXES_MULTIPLIER;
-
-    b = (accum & 0xffffffff00000000ULL) >> 32;
-    b = (b * multiplier + BOXES_MULTIPLIER / 2) / BOXES_MULTIPLIER;
-
-    return (a & 0x00000000000000ffULL)
-           | ((b & 0x00000000000000ffULL) << 32);
-}
-
-static inline void
-scale_and_store_65536 (guint64 *accum, guint64 multiplier, guint64 **row_parts_out)
-{
-    *(*row_parts_out)++ = scale_65536_half (accum [0], multiplier);
-    *(*row_parts_out)++ = scale_65536_half (accum [1], multiplier);
+    *(row_parts_out++) = scale_256 (accum, scale_ctx->span_mul_x);
 }
 
 static void
@@ -519,15 +530,6 @@ scale_horizontal_for_vertical_65536 (const SmolScaleCtx *scale_ctx,
 }
 
 static void
-add_parts (const guint64 *parts_in, guint64 *parts_acc_out, guint n)
-{
-    const guint64 *parts_in_max = parts_in + n;
-
-    while (parts_in < parts_in_max)
-        *(parts_acc_out++) += *(parts_in++);
-}
-
-static void
 interp_vertical_bilinear_256 (guint64 F, const guint64 *top_row_parts_in,
                               const guint64 *bottom_row_parts_in, guint32 *row_out, guint width)
 {
@@ -567,21 +569,6 @@ interp_vertical_bilinear_256 (guint64 F, const guint64 *top_row_parts_in,
 
         *(row_out++) = (guint32) (p | p >> 24);
     }
-}
-
-static inline guint64
-scale_256 (guint64 accum, guint64 multiplier)
-{
-    guint64 a, b;
-
-    /* Average the inputs */
-    a = ((accum & 0x0000ffff0000ffffULL) * multiplier
-         + (BOXES_MULTIPLIER / 2) + ((BOXES_MULTIPLIER / 2) << 32)) / BOXES_MULTIPLIER;
-    b = (((accum & 0xffff0000ffff0000ULL) >> 16) * multiplier
-         + (BOXES_MULTIPLIER / 2) + ((BOXES_MULTIPLIER / 2) << 32)) / BOXES_MULTIPLIER;
-
-    /* Return pixel */
-    return (a & 0x000000ff000000ffULL) | ((b & 0x000000ff000000ffULL) << 16);
 }
 
 static void
