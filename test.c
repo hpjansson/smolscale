@@ -10,7 +10,7 @@
 #define CORRECTNESS_WIDTH_MAX 65535
 #define CORRECTNESS_WIDTH_STEPS 100
 #define CORRECTNESS_HEIGHT_MIN 64
-#define CORRECTNESS_HEIGHT_MAX 6000
+#define CORRECTNESS_HEIGHT_MAX 65535
 #define CORRECTNESS_HEIGHT_STEPS 10
 
 #define CORRECTNESS_WIDTH_STEP_SIZE (((CORRECTNESS_WIDTH_MAX) - (CORRECTNESS_WIDTH_MIN)) / (CORRECTNESS_WIDTH_STEPS))
@@ -69,7 +69,7 @@ check_horizontal (void)
         canvas [0] = gen_color_canvas (i, 2, 0xffffffff);
         canvas [1] = gen_color_canvas (i, 2, 0x01010101);
 
-        for (j = 2; j < 65536; j++)
+        for (j = 2; j < MIN (i * 4, 65536); j++)
         {
             gpointer data_scaled;
 
@@ -99,6 +99,44 @@ check_vertical (void)
 {
     guint i, j;
 
+    i = CORRECTNESS_HEIGHT_MIN;
+    for (;;)
+    {
+        gpointer canvas [2];
+
+        canvas [0] = gen_color_canvas (2, i, 0xffffffff);
+        canvas [1] = gen_color_canvas (2, i, 0x01010101);
+
+        for (j = 2; j < MIN (i * 4, 65536); j++)
+        {
+            gpointer data_scaled;
+
+            g_printerr ("\rHeight %u -> %u:        ", i, j);
+
+            data_scaled = smol_scale_simple (canvas [0], 2, i, 2, j);
+            check_color_canvas (data_scaled, 2, j, 0xffffffff);
+            g_free (data_scaled);
+
+            data_scaled = smol_scale_simple (canvas [1], 2, i, 2, j);
+            check_color_canvas (data_scaled, 2, j, 0x01010101);
+            g_free (data_scaled);
+        }
+
+        g_free (canvas [0]);
+        g_free (canvas [1]);
+
+        if (i >= CORRECTNESS_HEIGHT_MAX)
+            break;
+        i += CORRECTNESS_HEIGHT_STEP_SIZE;
+        i = MIN (i, CORRECTNESS_HEIGHT_MAX);
+    }
+}
+
+static void
+check_both (void)
+{
+    guint i, j;
+
     i = CORRECTNESS_WIDTH_MIN;
     for (;;)
     {
@@ -107,7 +145,22 @@ check_vertical (void)
         canvas [0] = gen_color_canvas (2, i, 0xffffffff);
         canvas [1] = gen_color_canvas (2, i, 0x01010101);
 
-        for (j = 2; j < 65536; j++)
+        for (j = 2; j < MIN (i * 4, 65536); j++)
+        {
+            gpointer data_scaled;
+
+            g_printerr ("\rWidth %u -> %u:        ", i, j);
+
+            data_scaled = smol_scale_simple (canvas [0], i, 2, j, 2);
+            check_color_canvas (data_scaled, j, 2, 0xffffffff);
+            g_free (data_scaled);
+
+            data_scaled = smol_scale_simple (canvas [1], i, 2, j, 2);
+            check_color_canvas (data_scaled, j, 2, 0x01010101);
+            g_free (data_scaled);
+        }
+
+        for (j = 2; j < MIN (i * 4, 65536); j++)
         {
             gpointer data_scaled;
 
@@ -139,8 +192,7 @@ run_correctness_test (void)
     guint in_width, in_height;
     gpointer canvas;
 
-    check_horizontal ();
-    check_vertical ();
+    check_both ();
 
     in_width = 2500;
     in_height = 2500;
