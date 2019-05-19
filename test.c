@@ -70,6 +70,42 @@ do_scale (const guint32 *pixels_in,
 }
 
 static void
+scale_and_check (const guint32 *pixels_in,
+                 guint32 width_in, guint32 height_in,
+                 guint32 width_out, guint32 height_out,
+                 guint32 color)
+{
+    gpointer data_scaled;
+
+    data_scaled = do_scale (pixels_in,
+                            width_in, height_in,
+                            width_out, height_out);
+    check_color_canvas (data_scaled, width_out, height_out, color);
+    g_free (data_scaled);
+}
+
+static void
+check_all_levels (guint32 width_in, guint32 height_in,
+                  guint32 width_out, guint32 height_out)
+{
+    guint c;
+    guint32 *p_in, *p_out;
+    guint i;
+
+    p_in = alloca (width_in * height_in * sizeof (guint32));
+
+    for (c = 0; c < 256; c += 4)
+    {
+        guint32 pixel = (c << 24) | ((c + 1) << 16) | ((c + 2) << 8) | (c + 3);
+
+        for (i = 0; i < width_in * height_in; i++)
+            p_in [i] = pixel;
+
+        scale_and_check (p_in, width_in, height_in, width_out, height_out, pixel);
+    }
+}
+
+static void
 check_horizontal (void)
 {
     guint i, j;
@@ -153,43 +189,17 @@ check_both (void)
     i = CORRECTNESS_WIDTH_MIN;
     for (;;)
     {
-        gpointer canvas [2];
-
-        canvas [0] = gen_color_canvas (2, i, 0xffffffff);
-        canvas [1] = gen_color_canvas (2, i, 0x01010101);
-
         for (j = 2; j < MIN (i * 4, 65536); j++)
         {
-            gpointer data_scaled;
-
             g_printerr ("\rWidth %u -> %u:        ", i, j);
-
-            data_scaled = do_scale (canvas [0], i, 2, j, 2);
-            check_color_canvas (data_scaled, j, 2, 0xffffffff);
-            g_free (data_scaled);
-
-            data_scaled = do_scale (canvas [1], i, 2, j, 2);
-            check_color_canvas (data_scaled, j, 2, 0x01010101);
-            g_free (data_scaled);
+            check_all_levels (i, 2, j, 2);
         }
 
         for (j = 2; j < MIN (i * 4, 65536); j++)
         {
-            gpointer data_scaled;
-
             g_printerr ("\rHeight %u -> %u:        ", i, j);
-
-            data_scaled = do_scale (canvas [0], 2, i, 2, j);
-            check_color_canvas (data_scaled, 2, j, 0xffffffff);
-            g_free (data_scaled);
-
-            data_scaled = do_scale (canvas [1], 2, i, 2, j);
-            check_color_canvas (data_scaled, 2, j, 0x01010101);
-            g_free (data_scaled);
+            check_all_levels (2, i, 2, j);
         }
-
-        g_free (canvas [0]);
-        g_free (canvas [1]);
 
         if (i >= CORRECTNESS_WIDTH_MAX)
             break;
