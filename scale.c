@@ -189,22 +189,12 @@ add_parts (const uint64_t *parts_in, uint64_t *parts_acc_out, uint32_t n)
 static void
 calc_size_steps (uint32_t dim_in, uint32_t dim_out, SmolAlgorithm *algo)
 {
-    uint32_t n_halvings;
-
-    n_halvings = 0;
-
-    while (dim_in >= dim_out * 2)
-    {
-        dim_out *= 2;
-        n_halvings++;
-    }
-
-    if (n_halvings == 0)
-        *algo = ALGORITHM_BILINEAR;
-    else if (n_halvings < 8)
+    if (dim_in > dim_out * 255)
+        *algo = ALGORITHM_BOX_65536;
+    else if (dim_in == 1 || dim_in > dim_out * 2)
         *algo = ALGORITHM_BOX_256;
     else
-        *algo = ALGORITHM_BOX_65536;
+        *algo = ALGORITHM_BILINEAR;
 }
 
 static void
