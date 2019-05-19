@@ -217,7 +217,7 @@ scale_init_smol (ScaleParams *params, gpointer in_raw, guint in_width, guint in_
 }
 
 static void
-scale_fini_smol (ScaleParams *params)
+scale_fini_smol (G_GNUC_UNUSED ScaleParams *params)
 {
 }
 
@@ -233,6 +233,70 @@ scale_do_smol (ScaleParams *params, guint out_width, guint out_height)
                        scaled,
                        out_width, out_height,
                        out_width * sizeof (guint32));
+    g_free (scaled);
+}
+
+/* --- Smolscale, threaded --- */
+
+static void
+scale_init_smol_threaded (ScaleParams *params, gpointer in_raw, guint in_width, guint in_height)
+{
+    params->in_width = in_width;
+    params->in_height = in_height;
+    params->in_data = in_raw;
+}
+
+static void
+scale_fini_smol_threaded (G_GNUC_UNUSED ScaleParams *params)
+{
+}
+
+static void
+scale_smol_thread_worker (gpointer data, SmolScaleCtx *scale_ctx)
+{
+    guint32 first_row, n_rows;
+
+    first_row = GPOINTER_TO_UINT (data) >> 16;
+    n_rows = GPOINTER_TO_UINT (data) & 0xffff;
+    smol_scale_batch (scale_ctx, first_row, n_rows);
+}
+
+static void
+scale_do_smol_threaded (ScaleParams *params, guint out_width, guint out_height)
+{
+    SmolScaleCtx scale_ctx;
+    GThreadPool *thread_pool;
+    gpointer scaled;
+    guint32 n_threads;
+    guint32 batch_n_rows;
+    guint32 i;
+
+    scaled = g_new (guint32, out_width * out_height);
+
+    smol_scale_init (&scale_ctx,
+                     params->in_data,
+                     params->in_width, params->in_height, params->in_width * sizeof (guint32),
+                     scaled,
+                     out_width, out_height, out_width * sizeof (guint32));
+
+    n_threads = g_get_num_processors ();
+    thread_pool = g_thread_pool_new ((GFunc) scale_smol_thread_worker,
+                                     &scale_ctx,
+                                     n_threads,
+                                     FALSE,
+                                     NULL);
+
+    batch_n_rows = (out_height + n_threads - 1) / n_threads;
+
+    for (i = 0; i < out_height; )
+    {
+        uint32_t n = MIN (batch_n_rows, out_height - i);
+        g_thread_pool_push (thread_pool, GUINT_TO_POINTER ((i << 16) | n), NULL);
+        i += n;
+    }
+
+    g_thread_pool_free (thread_pool, FALSE, TRUE);
+    smol_scale_finalize (&scale_ctx);
     g_free (scaled);
 }
 
@@ -461,6 +525,12 @@ main (int argc, char *argv [])
         init_func = scale_init_smol;
         fini_func = scale_fini_smol;
         do_func = scale_do_smol;
+    }
+    else if (!strcasecmp (argv [1], "smol-mt"))
+    {
+        init_func = scale_init_smol_threaded;
+        fini_func = scale_fini_smol_threaded;
+        do_func = scale_do_smol_threaded;
     }
     else if (!strcasecmp (argv [1], "pixman"))
     {
