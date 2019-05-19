@@ -205,7 +205,7 @@ precalc_bilinear_array (uint16_t *array, uint32_t dim_in, uint32_t dim_out, unsi
     uint16_t last_ofs = 0;
 
     /* Works when dim_in >= dim_out, 1=1 is perfect */
-    frac_stepF = ofs_stepF = ((dim_in - 1) * BIG_MUL + FUDGE_FACTOR) / (dim_out - 1);
+    frac_stepF = ofs_stepF = ((dim_in - 1) * BIG_MUL + FUDGE_FACTOR) / (dim_out > 1 ? (dim_out - 1) : 1);
     fracF = 0;
 
     do
