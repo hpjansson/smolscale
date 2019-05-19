@@ -910,10 +910,6 @@ smol_scale_finalize (SmolScaleCtx *scale_ctx)
     free (scale_ctx->offsets_x);
 }
 
-#if 1
-
-/* Single thread */
-
 void
 smol_scale_simple (const uint32_t *pixels_in,
                    uint32_t width_in, uint32_t height_in, uint32_t rowstride_in,
@@ -934,59 +930,3 @@ smol_scale_batch (const SmolScaleCtx *scale_ctx, uint32_t first_out_row, uint32_
 {
     do_rows (scale_ctx, first_out_row, n_out_rows);
 }
-
-#else
-
-static void
-smol_scale_worker (gpointer data, SmolScaleCtx *scale_ctx)
-{
-    uint32_t first_row, n_rows;
-
-    first_row = GPOINTER_TO_UINT (data) >> 16;
-    n_rows = GPOINTER_TO_UINT (data) & 0xffff;
-    do_rows (scale_ctx, first_row, n_rows);
-}
-
-/* Multithreaded */
-
-void
-smol_scale_simple (const uint32_t *pixels_in,
-                   uint32_t width_in, uint32_t height_in, uint32_t rowstride_in,
-                   uint32_t *pixels_out,
-                   uint32_t width_out, uint32_t height_out, uint32_t rowstride_out)
-{
-    SmolScaleCtx scale_ctx;
-    uint32_t *pixels_out;
-    uint32_t i;
-    GThreadPool *thread_pool;
-    uint32_t n_threads;
-    uint32_t batch_n_rows;
-
-    pixels_out = g_malloc (width_out * height_out * 4);
-
-    smol_scale_init (&scale_ctx, pixels_in, width_in, height_in, width_in * 4,
-                     pixels_out, width_out, height_out, width_out * 4);
-
-    n_threads = g_get_num_processors ();
-    thread_pool = g_thread_pool_new ((GFunc) smol_scale_worker,
-                                     &scale_ctx,
-                                     n_threads,
-                                     FALSE,
-                                     NULL);
-
-    batch_n_rows = (scale_ctx.height_out + n_threads - 1) / n_threads;
-
-    for (i = 0; i < scale_ctx.height_out; )
-    {
-        uint32_t n = MIN (batch_n_rows, scale_ctx.height_out - i);
-        g_thread_pool_push (thread_pool, GUINT_TO_POINTER ((i << 16) | n), NULL);
-        i += n;
-    }
-
-    g_thread_pool_free (thread_pool, FALSE, TRUE);
-    smol_scale_finalize (&scale_ctx);
-
-    return pixels_out;
-}
-
-#endif
