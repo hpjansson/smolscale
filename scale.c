@@ -310,11 +310,9 @@ interp_horizontal_bilinear (const SmolScaleCtx *scale_ctx, const uint32_t *row_i
     uint64_t p, q;
     const uint16_t *ofs_x = scale_ctx->offsets_x;
     uint64_t F;
-    uint64_t *row_parts_out_max = row_parts_out + (scale_ctx->width_out & ~(1ULL));
+    uint64_t *row_parts_out_max = row_parts_out + scale_ctx->width_out;
 
     pp = row_in;
-
-    /* Unrolling makes us ~2% faster or so */
 
     do
     {
@@ -329,35 +327,8 @@ interp_horizontal_bilinear (const SmolScaleCtx *scale_ctx, const uint32_t *row_i
         p = (((p - q) * F) >> 8) + q;
 
         *(row_parts_out++) = p & 0x00ff00ff00ff00ff;
-
-        pp += *(ofs_x++);
-        F = *(ofs_x++);
-
-        p = *pp;
-        q = *(pp + 1);
-        p = (((p & 0xff00ff00) << 24) | (p & 0x00ff00ff));
-        q = (((q & 0xff00ff00) << 24) | (q & 0x00ff00ff));
-
-        p = (((p - q) * F) >> 8) + q;
-
-        *(row_parts_out++) = p & 0x00ff00ff00ff00ff;
     }
     while (row_parts_out != row_parts_out_max);
-
-    if (scale_ctx->width_out & 1)
-    {
-        pp += *(ofs_x++);
-        F = *(ofs_x++);
-
-        p = *pp;
-        q = *(pp + 1);
-        p = (((p & 0xff00ff00) << 24) | (p & 0x00ff00ff));
-        q = (((q & 0xff00ff00) << 24) | (q & 0x00ff00ff));
-
-        p = (((p - q) * F) >> 8) + q;
-
-        *(row_parts_out++) = p & 0x00ff00ff00ff00ff;
-    }
 }
 
 static void
