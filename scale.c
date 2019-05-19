@@ -482,7 +482,7 @@ static void
 interp_vertical_bilinear_256 (uint64_t F, const uint64_t *top_row_parts_in,
                               const uint64_t *bottom_row_parts_in, uint32_t *row_out, uint32_t width)
 {
-    uint32_t *row_out_last = row_out + (width & ~(1ULL));
+    uint32_t *row_out_last = row_out + width;
 
     do
     {
@@ -495,29 +495,8 @@ interp_vertical_bilinear_256 (uint64_t F, const uint64_t *top_row_parts_in,
         p &= 0x00ff00ff00ff00ff;
 
         *(row_out++) = (uint32_t) (p | p >> 24);
-
-        p = *(top_row_parts_in++);
-        q = *(bottom_row_parts_in++);
-
-        p = (((p - q) * F) >> 8) + q;
-        p &= 0x00ff00ff00ff00ff;
-
-        *(row_out++) = (uint32_t) (p | p >> 24);
     }
     while (row_out != row_out_last);
-
-    if (width & 1)
-    {
-        uint64_t p, q;
-
-        p = *(top_row_parts_in++);
-        q = *(bottom_row_parts_in++);
-
-        p = (((p - q) * F) >> 8) + q;
-        p &= 0x00ff00ff00ff00ff;
-
-        *(row_out++) = (uint32_t) (p | p >> 24);
-    }
 }
 
 static void
