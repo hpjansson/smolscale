@@ -84,6 +84,17 @@ weight_pixel_65536 (uint64_t *p, uint64_t *out, uint16_t w)
     out [1] = ((p [1] * w) >> 1) & 0x7fffffff7fffffffULL;
 }
 
+static void
+pack_row_256 (const uint64_t *row_in, uint32_t *row_out, uint32_t n)
+{
+    uint32_t *row_out_max = row_out + n;
+
+    while (row_out != row_out_max)
+    {
+        *(row_out++) = pack_pixel_256 (*(row_in++));
+    }
+}
+
 static inline void
 sum_pixels_256 (const uint32_t **pp, uint64_t *accum, uint32_t n)
 {
@@ -191,8 +202,10 @@ calc_size_steps (uint32_t dim_in, uint32_t dim_out, SmolAlgorithm *algo)
 {
     if (dim_in > dim_out * 255)
         *algo = ALGORITHM_BOX_65536;
-    else if (dim_in == 1 || dim_in > dim_out * 2)
+    else if (dim_in > dim_out * 2)
         *algo = ALGORITHM_BOX_256;
+    else if (dim_in == 1)
+        *algo = ALGORITHM_ONE;
     else
         *algo = ALGORITHM_BILINEAR;
 }
@@ -444,14 +457,27 @@ interp_horizontal_boxes_65536 (const SmolScaleCtx *scale_ctx, const uint32_t *ro
 }
 
 static void
+interp_horizontal_one (const SmolScaleCtx *scale_ctx, const uint32_t *row_in, uint64_t *row_parts_out)
+{
+    uint64_t *row_parts_out_max = row_parts_out + scale_ctx->width_out;
+    uint64_t part;
+
+    part = unpack_pixel_256 (*row_in);
+    while (row_parts_out != row_parts_out_max)
+        *(row_parts_out++) = part;
+}
+
+static void
 scale_horizontal (const SmolScaleCtx *scale_ctx, const uint32_t *row_in, uint64_t *row_parts_out)
 {
     if (scale_ctx->algo_h == ALGORITHM_BILINEAR)
         interp_horizontal_bilinear (scale_ctx, row_in, row_parts_out);
     else if (scale_ctx->algo_h == ALGORITHM_BOX_256)
         interp_horizontal_boxes_256 (scale_ctx, row_in, row_parts_out);
-    else
+    else if (scale_ctx->algo_h == ALGORITHM_BOX_65536)
         interp_horizontal_boxes_65536 (scale_ctx, row_in, row_parts_out);
+    else /* scale_ctx->algo_h == ALGORITHM_ONE */
+        interp_horizontal_one (scale_ctx, row_in, row_parts_out);
 }
 
 static void
@@ -752,6 +778,22 @@ scale_outrow_box_vertical_65536 (const SmolScaleCtx *scale_ctx, VerticalCtx *ver
 }
 
 static void
+scale_outrow_one_vertical_256 (const SmolScaleCtx *scale_ctx, VerticalCtx *vertical_ctx,
+                               uint32_t *row_out)
+{
+    /* Scale the row and store it */
+
+    if (vertical_ctx->in_ofs != 0)
+    {
+        scale_horizontal_for_vertical_256 (scale_ctx, inrow_ofs_to_pointer (scale_ctx, 0),
+                                           vertical_ctx->parts_row [0]);
+        vertical_ctx->in_ofs = 0;
+    }
+
+    pack_row_256 (vertical_ctx->parts_row [0], row_out, scale_ctx->width_out);
+}
+
+static void
 scale_outrow (const SmolScaleCtx *scale_ctx, VerticalCtx *vertical_ctx,
               uint32_t outrow_index, uint32_t *row_out)
 {
@@ -759,8 +801,10 @@ scale_outrow (const SmolScaleCtx *scale_ctx, VerticalCtx *vertical_ctx,
         scale_outrow_bilinear_vertical_256 (scale_ctx, vertical_ctx, outrow_index, row_out);
     else if (scale_ctx->algo_v == ALGORITHM_BOX_256)
         scale_outrow_box_vertical_256 (scale_ctx, vertical_ctx, outrow_index, row_out);
-    else
+    else if (scale_ctx->algo_v == ALGORITHM_BOX_65536)
         scale_outrow_box_vertical_65536 (scale_ctx, vertical_ctx, outrow_index, row_out);
+    else /* if (scale_ctx->algo_v == ALGORITHM_ONE) */
+        scale_outrow_one_vertical_256 (scale_ctx, vertical_ctx, row_out);
 }
 
 static void
@@ -777,6 +821,8 @@ do_rows (const SmolScaleCtx *scale_ctx, uint32_t row_out_index, uint32_t n_rows)
 
     if (scale_ctx->algo_v == ALGORITHM_BILINEAR)
         n_stored_rows = 2;
+    else if (scale_ctx->algo_v == ALGORITHM_ONE)
+        n_stored_rows = 1;
 
     parts_storage = alloca (scale_ctx->width_out * sizeof (uint64_t)
                             * n_parts_per_pixel * n_stored_rows);
@@ -804,8 +850,6 @@ smol_scale_init (SmolScaleCtx *scale_ctx,
                  const uint32_t *pixels_in, uint32_t width_in, uint32_t height_in, uint32_t rowstride_in,
                  uint32_t *pixels_out, uint32_t width_out, uint32_t height_out, uint32_t rowstride_out)
 {
-    /* FIXME: Special handling for images that are a single pixel wide or tall */
-
     scale_ctx->pixels_in = pixels_in;
     scale_ctx->width_in = width_in;
     scale_ctx->height_in = height_in;
@@ -826,7 +870,7 @@ smol_scale_init (SmolScaleCtx *scale_ctx,
         precalc_bilinear_array (scale_ctx->offsets_x,
                                 width_in, scale_ctx->width_out, FALSE);
     }
-    else
+    else if (scale_ctx->algo_h != ALGORITHM_ONE)
     {
         precalc_boxes_array (scale_ctx->offsets_x, &scale_ctx->span_mul_x,
                              width_in, scale_ctx->width_out, FALSE);
@@ -837,7 +881,7 @@ smol_scale_init (SmolScaleCtx *scale_ctx,
         precalc_bilinear_array (scale_ctx->offsets_y,
                                 height_in, scale_ctx->height_out, TRUE);
     }
-    else
+    else if (scale_ctx->algo_v != ALGORITHM_ONE)
     {
         precalc_boxes_array (scale_ctx->offsets_y, &scale_ctx->span_mul_y,
                              height_in, scale_ctx->height_out, TRUE);
