@@ -82,38 +82,43 @@ do_scale (const guint32 *pixels_in,
     return scaled;
 }
 
-static gpointer
-gen_color_canvas (guint width, guint height, guint32 color)
+typedef enum
 {
-    guint32 *canvas;
-    guint32 *canvas_end;
-    guint32 *p;
-
-    canvas = g_malloc (width * height * sizeof (guint32));
-    canvas_end = canvas + width * height;
-
-    for (p = canvas; p < canvas_end; p++)
-        *p = color;
-    
-    return canvas;
+    DIM_HORIZONTAL,
+    DIM_VERTICAL
 }
+Dimension;
 
 static gboolean
-check_color_canvas (const guint32 *canvas, guint width, guint height, guint32 color)
+check_color_canvas (const guint32 *canvas_in,
+                    guint width_in, guint height_in,
+                    const guint32 *canvas_out,
+                    guint width_out, guint height_out,
+                    Dimension dim)
 {
-    const guint32 *p;
+    guint32 color = canvas_in [0];
     guint x, y;
 
-    for (y = 0; y < height; y++)
-    {
-        const guint32 *row = canvas + y * width;
+    /* Quick check */
 
-        for (x = 0; x < width; x++)
+    if (!memcmp (canvas_in, canvas_out, width_out * height_out * sizeof (guint32)))
+        return TRUE;
+
+    /* Something's wrong: Find the first errant pixel */
+
+    for (y = 0; y < height_out; y++)
+    {
+        const guint32 *row = canvas_out + y * width_out;
+
+        for (x = 0; x < width_out; x++)
         {
             if (*row != color)
             {
-                g_printerr ("%5u,%5u: Color is %08x (want %08x).\n",
-                            x, y, *row, color);
+                g_print ("%s %u -> %u: [%5u,%5u] Color is %08x (want %08x).\n",
+                         dim == DIM_HORIZONTAL ? "Width" : "Height",
+                         dim == DIM_HORIZONTAL ? width_in : height_in,
+                         dim == DIM_HORIZONTAL ? width_out : height_out,
+                         x, y, *row, color);
                 return FALSE;
             }
 
@@ -125,65 +130,85 @@ check_color_canvas (const guint32 *canvas, guint width, guint height, guint32 co
 }
 
 static void
-scale_and_check (const guint32 *pixels_in,
+scale_and_check (const guint32 *canvas_in,
                  guint32 width_in, guint32 height_in,
                  guint32 width_out, guint32 height_out,
-                 guint32 color)
+                 Dimension dim)
 {
-    gpointer data_scaled;
+    gpointer canvas_out;
 
-    data_scaled = do_scale_threaded (pixels_in,
-                                     width_in, height_in,
-                                     width_out, height_out);
-    check_color_canvas (data_scaled, width_out, height_out, color);
-    g_free (data_scaled);
+    canvas_out = do_scale (canvas_in,
+                           width_in, height_in,
+                           width_out, height_out);
+    check_color_canvas (canvas_in,
+                        width_in, height_in,
+                        canvas_out,
+                        width_out, height_out,
+                        dim);
+    g_free (canvas_out);
 }
 
 static void
-check_all_levels (guint32 width_in, guint32 height_in,
-                  guint32 width_out, guint32 height_out)
+check_all_levels (const guint32 * const *canvas_array,
+                  guint32 width_in, guint32 height_in,
+                  guint32 width_out, guint32 height_out,
+                  Dimension dim)
 {
     guint c;
-    guint32 *p_in;
-    guint i;
-
-    p_in = alloca (width_in * height_in * sizeof (guint32));
 
     for (c = 0; c < 256; c += 4)
     {
-        guint32 pixel = (c << 24) | ((c + 1) << 16) | ((c + 2) << 8) | (c + 3);
-
-        for (i = 0; i < width_in * height_in; i++)
-            p_in [i] = pixel;
-
-        scale_and_check (p_in, width_in, height_in, width_out, height_out, pixel);
+        scale_and_check (canvas_array [c / 4],
+                         width_in, height_in,
+                         width_out, height_out,
+                         dim);
     }
 }
 
 static void
 check_both (void)
 {
+    guint32 *canvas_array [256 / 4];
     guint i, j;
+
+    for (i = 0; i < 256; i += 4)
+    {
+        guint32 pixel = (i << 24) | ((i + 1) << 16) | ((i + 2) << 8) | (i + 3);
+
+        canvas_array [i / 4] = g_malloc (65536 * 2 * sizeof (guint32));
+
+        for (j = 0; j < 65536 * 2; j++)
+            canvas_array [i / 4] [j] = pixel;
+    }
 
     i = CORRECTNESS_WIDTH_MIN;
     for (;;)
     {
-        for (j = 1; j < MIN (i * 4, 65536); j++)
+        for (j = 1; j < MIN (i + 1, 65536); j++)
         {
-            g_printerr ("\rWidth %u -> %u:        ", i, j);
-            check_all_levels (i, 2, j, 2);
+            g_printerr ("Width %u -> %u:        \r", i, j);
+            check_all_levels ((const guint32 * const *) canvas_array,
+                              i, 2, j, 2,
+                              DIM_HORIZONTAL);
         }
 
-        for (j = 1; j < MIN (i * 4, 65536); j++)
+        for (j = 1; j < MIN (i + 1, 65536); j++)
         {
-            g_printerr ("\rHeight %u -> %u:        ", i, j);
-            check_all_levels (2, i, 2, j);
+            g_printerr ("Height %u -> %u:        \r", i, j);
+            check_all_levels ((const guint32 * const *) canvas_array,
+                              2, i, 2, j,
+                              DIM_VERTICAL);
         }
 
         if (i >= CORRECTNESS_WIDTH_MAX)
             break;
         i += CORRECTNESS_WIDTH_STEP_SIZE;
         i = MIN (i, CORRECTNESS_WIDTH_MAX);
+    }
+
+    for (i = 0; i < 256 / 4; i++)
+    {
+        g_free (canvas_array [i]);
     }
 }
 
