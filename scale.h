@@ -38,6 +38,9 @@ struct SmolScaleCtx
      * are relative to the image after halvings have taken place. */
     uint16_t *offsets_x, *offsets_y;
     uint32_t span_mul_x, span_mul_y;  /* For box filter */
+
+    uint32_t width_bilin_out, height_bilin_out;
+    unsigned int width_halvings, height_halvings;
 };
 
 /* Simple API: Scales an entire image in one shot. You must provide pointers to
