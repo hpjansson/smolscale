@@ -373,7 +373,7 @@ interp_horizontal_bilinear_##n_halvings (const SmolScaleCtx *scale_ctx, \
                                                                         \
             accum += ((((p - q) * F) >> 8) + q) & 0x00ff00ff00ff00ffULL; \
         }                                                               \
-        *(row_parts_out++) = ((accum + (0x0001000100010001 << ((n_halvings) - 1))) >> (n_halvings)) & 0x00ff00ff00ff00ff; \
+        *(row_parts_out++) = ((accum) >> (n_halvings)) & 0x00ff00ff00ff00ff; \
     }                                                                   \
     while (row_parts_out != row_parts_out_max);                         \
 }
