@@ -708,15 +708,13 @@ interp_vertical_bilinear_final_##n_halvings (uint64_t F, const uint64_t * SMOL_R
         p = *(top_row_parts_in++);                                      \
         q = *(bottom_row_parts_in++);                                   \
                                                                         \
-        p = (((p - q) * F) >> 8) + q;                                   \
-        p &= 0x00ff00ff00ff00ff;                                        \
+        p = ((((p - q) * F) >> 8) + q) & 0x00ff00ff00ff00ffULL;         \
+        p = ((p + *(accum_in++)) >> n_halvings) & 0x00ff00ff00ff00ffULL; \
                                                                         \
-        p += *(accum_in++);                                             \
-        p = (p >> n_halvings) & 0x00ff00ff00ff00ff;                     \
         *(row_out++) = pack_pixel_256 (p);                              \
     }                                                                   \
     while (row_out != row_out_last);                                    \
-}                                                                       \
+}
 
 #define DEF_SCALE_OUTROW_BILINEAR(n_halvings)                           \
 static void                                                             \
