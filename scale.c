@@ -371,8 +371,7 @@ interp_horizontal_bilinear_##n_halvings (const SmolScaleCtx *scale_ctx, \
             p = unpack_pixel_256 (*pp);                                 \
             q = unpack_pixel_256 (*(pp + 1));                           \
                                                                         \
-            p = (((p - q) * F) >> 8) + q;                               \
-            accum += p & 0x00ff00ff00ff00ff;                            \
+            accum += ((((p - q) * F) >> 8) + q) & 0x00ff00ff00ff00ffULL; \
         }                                                               \
         *(row_parts_out++) = ((accum + (0x0001000100010001 << ((n_halvings) - 1))) >> (n_halvings)) & 0x00ff00ff00ff00ff; \
     }                                                                   \
@@ -398,9 +397,7 @@ interp_horizontal_bilinear_0 (const SmolScaleCtx *scale_ctx, const uint32_t *row
         p = unpack_pixel_256 (*pp);
         q = unpack_pixel_256 (*(pp + 1));
 
-        p = (((p - q) * F) >> 8) + q;
-
-        *(row_parts_out++) = p & 0x00ff00ff00ff00ff;
+        *(row_parts_out++) = ((((p - q) * F) >> 8) + q) & 0x00ff00ff00ff00ffULL;
     }
     while (row_parts_out != row_parts_out_max);
 }
@@ -651,8 +648,7 @@ interp_vertical_bilinear_once (uint64_t F, const uint64_t * SMOL_RESTRICT top_ro
         p = *(top_row_parts_in++);
         q = *(bottom_row_parts_in++);
 
-        p = (((p - q) * F) >> 8) + q;
-        p &= 0x00ff00ff00ff00ff;
+        p = ((((p - q) * F) >> 8) + q) & 0x00ff00ff00ff00ff;
 
         *(row_out++) = (uint32_t) (p | p >> 24);
     }
@@ -673,10 +669,7 @@ interp_vertical_bilinear_store (uint64_t F, const uint64_t * SMOL_RESTRICT top_r
         p = *(top_row_parts_in++);
         q = *(bottom_row_parts_in++);
 
-        p = (((p - q) * F) >> 8) + q;
-        p &= 0x00ff00ff00ff00ff;
-
-        *(parts_out++) = p;
+        *(parts_out++) = ((((p - q) * F) >> 8) + q) & 0x00ff00ff00ff00ffULL;
     }
     while (parts_out != parts_out_last);
 }
@@ -695,10 +688,7 @@ interp_vertical_bilinear_add (uint64_t F, const uint64_t * SMOL_RESTRICT top_row
         p = *(top_row_parts_in++);
         q = *(bottom_row_parts_in++);
 
-        p = (((p - q) * F) >> 8) + q;
-        p &= 0x00ff00ff00ff00ff;
-
-        *(accum_out++) += p;
+        *(accum_out++) += ((((p - q) * F) >> 8) + q) & 0x00ff00ff00ff00ffULL;
     }
     while (accum_out != accum_out_last);
 }
