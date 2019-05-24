@@ -348,11 +348,11 @@ precalc_boxes_array (uint16_t *array, uint32_t *span_mul, uint32_t dim_in, uint3
 static void                                                             \
 interp_horizontal_bilinear_##n_halvings (const SmolScaleCtx *scale_ctx, \
                                          const uint32_t *row_in,        \
-                                         uint64_t * SMOL_RESTRICT row_parts_out)       \
+                                         uint64_t * SMOL_RESTRICT row_parts_out) \
 {                                                                       \
-    const uint32_t * SMOL_RESTRICT pp;                                                 \
+    const uint32_t * SMOL_RESTRICT pp;                                  \
     uint64_t p, q;                                                      \
-    const uint16_t * SMOL_RESTRICT ofs_x = scale_ctx->offsets_x;                       \
+    const uint16_t * SMOL_RESTRICT ofs_x = scale_ctx->offsets_x;        \
     uint64_t F;                                                         \
     uint64_t *row_parts_out_max = row_parts_out + scale_ctx->width_out; \
     int i;                                                              \
