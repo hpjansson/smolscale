@@ -366,10 +366,8 @@ interp_horizontal_bilinear_##n_halvings (const SmolScaleCtx *scale_ctx, \
             pp += *(ofs_x++);                                           \
             F = *(ofs_x++);                                             \
                                                                         \
-            p = *pp;                                                    \
-            q = *(pp + 1);                                              \
-            p = (((p & 0xff00ff00) << 24) | (p & 0x00ff00ff));          \
-            q = (((q & 0xff00ff00) << 24) | (q & 0x00ff00ff));          \
+            p = unpack_pixel_256 (*pp);                                 \
+            q = unpack_pixel_256 (*(pp + 1));                           \
                                                                         \
             p = (((p - q) * F) >> 8) + q;                               \
             accum += p & 0x00ff00ff00ff00ff;                            \
@@ -395,10 +393,8 @@ interp_horizontal_bilinear_0 (const SmolScaleCtx *scale_ctx, const uint32_t *row
         pp += *(ofs_x++);
         F = *(ofs_x++);
 
-        p = *pp;
-        q = *(pp + 1);
-        p = (((p & 0xff00ff00) << 24) | (p & 0x00ff00ff));
-        q = (((q & 0xff00ff00) << 24) | (q & 0x00ff00ff));
+        p = unpack_pixel_256 (*pp);
+        q = unpack_pixel_256 (*(pp + 1));
 
         p = (((p - q) * F) >> 8) + q;
 
@@ -725,7 +721,7 @@ interp_vertical_bilinear_final_##n_halvings (uint64_t F, const uint64_t *top_row
                                                                         \
         p += *(accum_in++);                                             \
         p = (p >> n_halvings) & 0x00ff00ff00ff00ff;                     \
-        *(row_out++) = (uint32_t) (p | p >> 24);                        \
+        *(row_out++) = pack_pixel_256 (p);                              \
     }                                                                   \
     while (row_out != row_out_last);                                    \
 }                                                                       \
