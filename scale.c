@@ -15,6 +15,8 @@
 # define FALSE 0
 #endif
 
+#define SMOL_RESTRICT __restrict
+
 #define SMALL_MUL 256U
 #define BIG_MUL 65536U
 #define BOXES_MULTIPLIER ((uint64_t) BIG_MUL * SMALL_MUL)
@@ -346,11 +348,11 @@ precalc_boxes_array (uint16_t *array, uint32_t *span_mul, uint32_t dim_in, uint3
 static void                                                             \
 interp_horizontal_bilinear_##n_halvings (const SmolScaleCtx *scale_ctx, \
                                          const uint32_t *row_in,        \
-                                         uint64_t *row_parts_out)       \
+                                         uint64_t * SMOL_RESTRICT row_parts_out)       \
 {                                                                       \
-    const uint32_t *pp;                                                 \
+    const uint32_t * SMOL_RESTRICT pp;                                                 \
     uint64_t p, q;                                                      \
-    const uint16_t *ofs_x = scale_ctx->offsets_x;                       \
+    const uint16_t * SMOL_RESTRICT ofs_x = scale_ctx->offsets_x;                       \
     uint64_t F;                                                         \
     uint64_t *row_parts_out_max = row_parts_out + scale_ctx->width_out; \
     int i;                                                              \
@@ -380,11 +382,11 @@ interp_horizontal_bilinear_##n_halvings (const SmolScaleCtx *scale_ctx, \
 static void
 interp_horizontal_bilinear_0 (const SmolScaleCtx *scale_ctx, const uint32_t *row_in, uint64_t *row_parts_out)
 {
-    const uint32_t *pp;
+    const uint32_t * SMOL_RESTRICT pp;
     uint64_t p, q;
-    const uint16_t *ofs_x = scale_ctx->offsets_x;
+    const uint16_t * SMOL_RESTRICT ofs_x = scale_ctx->offsets_x;
     uint64_t F;
-    uint64_t *row_parts_out_max = row_parts_out + scale_ctx->width_out;
+    uint64_t * SMOL_RESTRICT row_parts_out_max = row_parts_out + scale_ctx->width_out;
 
     pp = row_in;
 
@@ -556,7 +558,7 @@ interp_horizontal_boxes_65536 (const SmolScaleCtx *scale_ctx, const uint32_t *ro
 }
 
 static void
-interp_horizontal_one (const SmolScaleCtx *scale_ctx, const uint32_t *row_in, uint64_t *row_parts_out)
+interp_horizontal_one (const SmolScaleCtx *scale_ctx, const uint32_t * SMOL_RESTRICT row_in, uint64_t * SMOL_RESTRICT row_parts_out)
 {
     uint64_t *row_parts_out_max = row_parts_out + scale_ctx->width_out;
     uint64_t part;
@@ -636,9 +638,9 @@ update_vertical_ctx_bilinear (const SmolScaleCtx *scale_ctx, VerticalCtx *vertic
 }
 
 static void
-interp_vertical_bilinear_once (uint64_t F, const uint64_t *top_row_parts_in,
-                               const uint64_t *bottom_row_parts_in,
-                               uint32_t *row_out, uint32_t width)
+interp_vertical_bilinear_once (uint64_t F, const uint64_t * SMOL_RESTRICT top_row_parts_in,
+                               const uint64_t * SMOL_RESTRICT bottom_row_parts_in,
+                               uint32_t * SMOL_RESTRICT row_out, uint32_t width)
 {
     uint32_t *row_out_last = row_out + width;
 
@@ -658,9 +660,9 @@ interp_vertical_bilinear_once (uint64_t F, const uint64_t *top_row_parts_in,
 }
 
 static void
-interp_vertical_bilinear_store (uint64_t F, const uint64_t *top_row_parts_in,
-                                const uint64_t *bottom_row_parts_in,
-                                uint64_t *parts_out, uint32_t width)
+interp_vertical_bilinear_store (uint64_t F, const uint64_t * SMOL_RESTRICT top_row_parts_in,
+                                const uint64_t * SMOL_RESTRICT bottom_row_parts_in,
+                                uint64_t * SMOL_RESTRICT parts_out, uint32_t width)
 {
     uint64_t *parts_out_last = parts_out + width;
 
@@ -680,9 +682,9 @@ interp_vertical_bilinear_store (uint64_t F, const uint64_t *top_row_parts_in,
 }
 
 static void
-interp_vertical_bilinear_add (uint64_t F, const uint64_t *top_row_parts_in,
-                              const uint64_t *bottom_row_parts_in,
-                              uint64_t *accum_out, uint32_t width)
+interp_vertical_bilinear_add (uint64_t F, const uint64_t * SMOL_RESTRICT top_row_parts_in,
+                              const uint64_t * SMOL_RESTRICT bottom_row_parts_in,
+                              uint64_t * SMOL_RESTRICT accum_out, uint32_t width)
 {
     uint64_t *accum_out_last = accum_out + width;
 
@@ -703,9 +705,9 @@ interp_vertical_bilinear_add (uint64_t F, const uint64_t *top_row_parts_in,
 
 #define DEF_INTERP_VERTICAL_BILINEAR_FINAL(n_halvings)                  \
 static void                                                             \
-interp_vertical_bilinear_final_##n_halvings (uint64_t F, const uint64_t *top_row_parts_in, \
-                                             const uint64_t *bottom_row_parts_in, \
-                                             const uint64_t *accum_in, uint32_t *row_out, uint32_t width) \
+interp_vertical_bilinear_final_##n_halvings (uint64_t F, const uint64_t * SMOL_RESTRICT top_row_parts_in, \
+                                             const uint64_t * SMOL_RESTRICT bottom_row_parts_in, \
+                                             const uint64_t * SMOL_RESTRICT accum_in, uint32_t * SMOL_RESTRICT row_out, uint32_t width) \
 {                                                                       \
     uint32_t *row_out_last = row_out + width;                           \
                                                                         \
