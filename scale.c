@@ -683,7 +683,7 @@ interp_vertical_bilinear_once (uint64_t F, const uint64_t * SMOL_RESTRICT SMOL_A
 
             p = ((((p - q) * F) >> 8) + q) & 0x00ff00ff00ff00ff;
 
-            *(row_out++) = (uint32_t) (p | p >> 24);
+            *(row_out++) = pack_pixel_256 (p);
         }
     }
 
@@ -696,7 +696,7 @@ interp_vertical_bilinear_once (uint64_t F, const uint64_t * SMOL_RESTRICT SMOL_A
 
         p = ((((p - q) * F) >> 8) + q) & 0x00ff00ff00ff00ff;
 
-        *(row_out++) = (uint32_t) (p | p >> 24);
+        *(row_out++) = pack_pixel_256 (p);
     }
 }
 
