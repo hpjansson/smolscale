@@ -97,6 +97,17 @@ pack_row_256 (const uint64_t *row_in, uint32_t *row_out, uint32_t n)
     }
 }
 
+static void
+unpack_row_256 (const uint32_t *row_in, uint64_t *row_out, uint32_t n)
+{
+    uint64_t *row_out_max = row_out + n;
+
+    while (row_out != row_out_max)
+    {
+        *(row_out++) = unpack_pixel_256 (*(row_in++));
+    }
+}
+
 static inline void
 sum_pixels_256 (const uint32_t **pp, uint64_t *accum, uint32_t n)
 {
@@ -350,14 +361,15 @@ interp_horizontal_bilinear_##n_halvings (const SmolScaleCtx *scale_ctx, \
                                          const uint32_t *row_in,        \
                                          uint64_t * SMOL_RESTRICT row_parts_out) \
 {                                                                       \
-    const uint32_t * SMOL_RESTRICT pp;                                  \
     uint64_t p, q;                                                      \
     const uint16_t * SMOL_RESTRICT ofs_x = scale_ctx->offsets_x;        \
     uint64_t F;                                                         \
     uint64_t *row_parts_out_max = row_parts_out + scale_ctx->width_out; \
+    uint64_t * SMOL_RESTRICT unpacked_in;                               \
     int i;                                                              \
                                                                         \
-    pp = row_in;                                                        \
+    unpacked_in = alloca (scale_ctx->width_in * sizeof (uint64_t));     \
+    unpack_row_256 (row_in, unpacked_in, scale_ctx->width_in);          \
                                                                         \
     do                                                                  \
     {                                                                   \
@@ -365,15 +377,15 @@ interp_horizontal_bilinear_##n_halvings (const SmolScaleCtx *scale_ctx, \
                                                                         \
         for (i = 0; i < (1 << (n_halvings)); i++)                       \
         {                                                               \
-            pp += *(ofs_x++);                                           \
+            unpacked_in += *(ofs_x++);                                  \
             F = *(ofs_x++);                                             \
                                                                         \
-            p = unpack_pixel_256 (*pp);                                 \
-            q = unpack_pixel_256 (*(pp + 1));                           \
+            p = *unpacked_in;                                           \
+            q = *(unpacked_in + 1);                                     \
                                                                         \
             accum += ((((p - q) * F) >> 8) + q) & 0x00ff00ff00ff00ffULL; \
         }                                                               \
-        *(row_parts_out++) = ((accum) >> (n_halvings)) & 0x00ff00ff00ff00ff; \
+        *(row_parts_out++) = ((accum) >> (n_halvings)) & 0x00ff00ff00ff00ffULL; \
     }                                                                   \
     while (row_parts_out != row_parts_out_max);                         \
 }
@@ -381,21 +393,22 @@ interp_horizontal_bilinear_##n_halvings (const SmolScaleCtx *scale_ctx, \
 static void
 interp_horizontal_bilinear_0 (const SmolScaleCtx *scale_ctx, const uint32_t *row_in, uint64_t *row_parts_out)
 {
-    const uint32_t * SMOL_RESTRICT pp;
     uint64_t p, q;
     const uint16_t * SMOL_RESTRICT ofs_x = scale_ctx->offsets_x;
     uint64_t F;
     uint64_t * SMOL_RESTRICT row_parts_out_max = row_parts_out + scale_ctx->width_out;
+    uint64_t * SMOL_RESTRICT unpacked_in;
 
-    pp = row_in;
+    unpacked_in = alloca (scale_ctx->width_in * sizeof (uint64_t));
+    unpack_row_256 (row_in, unpacked_in, scale_ctx->width_in);
 
     do
     {
-        pp += *(ofs_x++);
+        unpacked_in += *(ofs_x++);
         F = *(ofs_x++);
 
-        p = unpack_pixel_256 (*pp);
-        q = unpack_pixel_256 (*(pp + 1));
+        p = *unpacked_in;
+        q = *(unpacked_in + 1);
 
         *(row_parts_out++) = ((((p - q) * F) >> 8) + q) & 0x00ff00ff00ff00ffULL;
     }
