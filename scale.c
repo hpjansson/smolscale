@@ -666,13 +666,28 @@ update_vertical_ctx_bilinear (const SmolScaleCtx *scale_ctx, VerticalCtx *vertic
 }
 
 static void
-interp_vertical_bilinear_once (uint64_t F, const uint64_t * SMOL_RESTRICT top_row_parts_in,
-                               const uint64_t * SMOL_RESTRICT bottom_row_parts_in,
-                               uint32_t * SMOL_RESTRICT row_out, uint32_t width)
+interp_vertical_bilinear_once (uint64_t F, const uint64_t * SMOL_RESTRICT SMOL_ALIGNED_8 top_row_parts_in,
+                               const uint64_t * SMOL_RESTRICT SMOL_ALIGNED_8 bottom_row_parts_in,
+                               uint32_t * SMOL_RESTRICT SMOL_ALIGNED_4 row_out, int width)
 {
-    uint32_t *row_out_last = row_out + width;
+    int i, j;
 
-    do
+    for (i = 0; i + 16 <= width; i += 16)
+    {
+        for (j = 0; j < 16; j++)
+        {
+            uint64_t p, q;
+
+            p = *(top_row_parts_in++);
+            q = *(bottom_row_parts_in++);
+
+            p = ((((p - q) * F) >> 8) + q) & 0x00ff00ff00ff00ff;
+
+            *(row_out++) = (uint32_t) (p | p >> 24);
+        }
+    }
+
+    for ( ; i < width; i++)
     {
         uint64_t p, q;
 
@@ -683,7 +698,6 @@ interp_vertical_bilinear_once (uint64_t F, const uint64_t * SMOL_RESTRICT top_ro
 
         *(row_out++) = (uint32_t) (p | p >> 24);
     }
-    while (row_out != row_out_last);
 }
 
 static void
