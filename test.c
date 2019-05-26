@@ -188,7 +188,7 @@ check_both (void)
         {
             g_printerr ("Width %u -> %u:        \r", i, j);
             check_all_levels ((const guint32 * const *) canvas_array,
-                              i, 2, j, 2,
+                              i, 1, j, 1,
                               DIM_HORIZONTAL);
         }
 
@@ -196,7 +196,7 @@ check_both (void)
         {
             g_printerr ("Height %u -> %u:        \r", i, j);
             check_all_levels ((const guint32 * const *) canvas_array,
-                              2, i, 2, j,
+                              1, i, 1, j,
                               DIM_VERTICAL);
         }
 
