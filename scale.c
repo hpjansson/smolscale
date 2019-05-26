@@ -16,11 +16,21 @@
 #endif
 
 #define SMOL_RESTRICT __restrict
+#define SMOL_INLINE __attribute__((always_inline)) inline
+#define SMOL_CONST __attribute__((const))
+#define SMOL_PURE __attribute__((pure))
+#define SMOL_ALIGNED_4 __attribute__((aligned(4)))
+#define SMOL_ALIGNED_8 __attribute__((aligned(8)))
+#define SMOL_ALIGNED_16 __attribute__((aligned(16)))
+#define SMOL_ALIGNED_32 __attribute__((aligned(32)))
 
 #define SMALL_MUL 256U
 #define BIG_MUL 65536U
 #define BOXES_MULTIPLIER ((uint64_t) BIG_MUL * SMALL_MUL)
 #define FUDGE_FACTOR (SMALL_MUL + SMALL_MUL / 2 + SMALL_MUL / 4)
+
+#define aligned_alloca(s, a) \
+  ({ void *p = alloca ((s) + (a)); p = (void *) (((uintptr_t) (p) + (a)) & ~((a) - 1)); (p); })
 
 /* For reusing rows that have already undergone horizontal scaling */
 typedef struct
@@ -32,25 +42,25 @@ VerticalCtx;
 
 /* --- Pixel and parts manipulation --- */
 
-static const uint32_t *
+static SMOL_PURE SMOL_INLINE const uint32_t *
 inrow_ofs_to_pointer (const SmolScaleCtx *scale_ctx, uint32_t inrow_ofs)
 {
     return scale_ctx->pixels_in + scale_ctx->rowstride_in * inrow_ofs;
 }
 
-static uint32_t *
+static SMOL_PURE SMOL_INLINE uint32_t *
 outrow_ofs_to_pointer (const SmolScaleCtx *scale_ctx, uint32_t outrow_ofs)
 {
     return scale_ctx->pixels_out + scale_ctx->rowstride_out * outrow_ofs;
 }
 
-static inline uint32_t
+static SMOL_CONST SMOL_INLINE uint32_t
 pack_pixel_256 (uint64_t in)
 {
     return in | (in >> 24);
 }
 
-static inline uint64_t
+static SMOL_CONST SMOL_INLINE uint64_t
 unpack_pixel_256 (uint32_t p)
 {
     return (((uint64_t) p & 0xff00ff00) << 24) | (p & 0x00ff00ff);
