@@ -8,6 +8,11 @@
 #include <alloca.h> /* alloca */
 #include <limits.h>
 
+#if 0
+/* To be used in separate compilation unit */
+#include <immintrin.h>  /* AVX2 */
+#endif
+
 #ifndef TRUE
 # define TRUE 1
 #endif
@@ -107,6 +112,9 @@ pack_row_256 (const uint64_t *row_in, uint32_t *row_out, uint32_t n)
     }
 }
 
+/* AVX2 has a useful instruction for this: __m256i _mm256_cvtepu8_epi16 (__m128i a);
+ * It results in a different channel ordering, so it'd be important to match with
+ * the right kind of re-pack. */
 static void
 unpack_row_256 (const uint32_t *row_in, uint64_t *row_out, uint32_t n)
 {
