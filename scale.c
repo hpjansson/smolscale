@@ -237,13 +237,20 @@ calc_size_steps (uint32_t dim_in, uint32_t dim_out,
     *n_halvings = 0;
     *dim_bilin_out = dim_out;
 
-    if (dim_in > dim_out * 127)
-        *algo = ALGORITHM_BOX_65536;
-    else if (dim_in > dim_out * 2)
+    if (dim_in > dim_out * 255)
     {
-#if 0
+        *algo = ALGORITHM_BOX_65536;
+    }
+    else if (dim_in > dim_out * 8)
+    {
         *algo = ALGORITHM_BOX_256;
-#else
+    }
+    else if (dim_in == 1)
+    {
+        *algo = ALGORITHM_ONE;
+    }
+    else
+    {
         uint32_t d = dim_out;
 
         *algo = ALGORITHM_BILINEAR;
@@ -257,12 +264,7 @@ calc_size_steps (uint32_t dim_in, uint32_t dim_out,
         }
         dim_out <<= *n_halvings;
         *dim_bilin_out = dim_out;
-#endif
     }
-    else if (dim_in == 1)
-        *algo = ALGORITHM_ONE;
-    else
-        *algo = ALGORITHM_BILINEAR;
 }
 
 static void
