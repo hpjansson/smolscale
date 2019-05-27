@@ -788,6 +788,7 @@ scale_outrow_bilinear_##n_halvings (const SmolScaleCtx *scale_ctx, VerticalCtx *
         bilin_index++;                                                  \
     }                                                                   \
                                                                         \
+    update_vertical_ctx_bilinear (scale_ctx, vertical_ctx, bilin_index); \
     interp_vertical_bilinear_final_##n_halvings (scale_ctx->offsets_y [bilin_index * 2 + 1], \
                                                  vertical_ctx->parts_row [0], \
                                                  vertical_ctx->parts_row [1], \
