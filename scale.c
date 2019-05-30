@@ -91,14 +91,14 @@ unpack_pixel_65536 (uint32_t p, uint64_t *out)
 static inline uint64_t
 weight_pixel_256 (uint64_t p, uint16_t w)
 {
-    return ((p * w) >> 1) & 0x7fff7fff7fff7fff;
+    return ((p * w) >> 8) & 0x00ff00ff00ff00ff;
 }
 
 static inline void
 weight_pixel_65536 (uint64_t *p, uint64_t *out, uint16_t w)
 {
-    out [0] = ((p [0] * w) >> 1) & 0x7fffffff7fffffffULL;
-    out [1] = ((p [1] * w) >> 1) & 0x7fffffff7fffffffULL;
+    out [0] = ((p [0] * w) >> 8) & 0x00ffffff00ffffffULL;
+    out [1] = ((p [1] * w) >> 8) & 0x00ffffff00ffffffULL;
 }
 
 static void
@@ -237,6 +237,10 @@ calc_size_steps (uint32_t dim_in, uint32_t dim_out,
     *n_halvings = 0;
     *dim_bilin_out = dim_out;
 
+    /* The box algorithms are only sufficiently precise when
+     * dim_in > dim_out * 5. box_256 typically starts outperforming
+     * bilinear+halving at dim_in > dim_out * 8. */
+
     if (dim_in > dim_out * 255)
     {
         *algo = ALGORITHM_BOX_65536;
@@ -316,21 +320,20 @@ precalc_boxes_array (uint16_t *array, uint32_t *span_mul, uint32_t dim_in, uint3
     uint64_t fracF, frac_stepF;
     uint16_t *pu16 = array;
     uint16_t ofs, next_ofs;
-    uint32_t span_mul_orig;
     uint64_t f;
     uint64_t stride;
+    uint64_t a, b;
 
     frac_stepF = ((uint64_t) dim_in * BIG_MUL) / (uint64_t) dim_out;
     fracF = 0;
     ofs = 0;
 
-    *span_mul = span_mul_orig = (BOXES_MULTIPLIER * BIG_MUL * SMALL_MUL) / (frac_stepF * SMALL_MUL - BIG_MUL);
-
     stride = frac_stepF / (uint64_t) BIG_MUL;
     f = (frac_stepF / SMALL_MUL) % SMALL_MUL;
-    while (((((stride * 255) + ((f * 255) / 2) / 128) - 1)
-            * (uint64_t) *span_mul + (BOXES_MULTIPLIER / 4)) / (BOXES_MULTIPLIER) < 255)
-        (*span_mul)++;
+
+    a = (BOXES_MULTIPLIER * 255);
+    b = ((stride * 255) + ((f * 255) / 256));
+    *span_mul = (a + (b / 2)) / b;
 
     do
     {
@@ -500,12 +503,12 @@ interp_horizontal_boxes_256 (const SmolScaleCtx *scale_ctx, const uint32_t *row_
         r = unpack_pixel_256 (*(pp++));
         s = r * F;
 
-        q = (s >> 1) & 0x7fff7fff7fff7fffULL;
+        q = (s >> 8) & 0x00ff00ff00ff00ffULL;
 
-        accum += ((p + q) >> 7) & 0x01ff01ff01ff01ffULL;
+        accum += p + q;
 
         /* (255 * r) - (F * r) */
-        p = (((r << 8) - r - s) >> 1) & 0x7fff7fff7fff7fffULL;
+        p = (((r << 8) - r - s) >> 8) & 0x00ff00ff00ff00ffULL;
 
         *(row_parts_out++) = scale_256 (accum, scale_ctx->span_mul_x);
         accum = 0;
@@ -520,7 +523,7 @@ interp_horizontal_boxes_256 (const SmolScaleCtx *scale_ctx, const uint32_t *row_
     if (F > 0)
         q = weight_pixel_256 (unpack_pixel_256 (*(pp)), F);
 
-    accum += ((p + q) >> 7) & 0x01ff01ff01ff01ffULL;
+    accum += p + q;
     *(row_parts_out++) = scale_256 (accum, scale_ctx->span_mul_x);
 }
 
@@ -552,14 +555,14 @@ interp_horizontal_boxes_65536 (const SmolScaleCtx *scale_ctx, const uint32_t *ro
         s [0] = r [0] * F;
         s [1] = r [1] * F;
 
-        q [0] = (s [0] >> 1) & 0x7fffffff7fffffff;
-        q [1] = (s [1] >> 1) & 0x7fffffff7fffffff;
+        q [0] = (s [0] >> 8) & 0x00ffffff00ffffff;
+        q [1] = (s [1] >> 8) & 0x00ffffff00ffffff;
 
-        accum [0] += ((p [0] + q [0]) >> 7) & 0x01ffffff01ffffff;
-        accum [1] += ((p [1] + q [1]) >> 7) & 0x01ffffff01ffffff;
+        accum [0] += p [0] + q [0];
+        accum [1] += p [1] + q [1];
 
-        p [0] = (((r [0] << 8) - r [0] - s [0]) >> 1) & 0x7fffffff7fffffff;
-        p [1] = (((r [1] << 8) - r [1] - s [1]) >> 1) & 0x7fffffff7fffffff;
+        p [0] = (((r [0] << 8) - r [0] - s [0]) >> 8) & 0x00ffffff00ffffff;
+        p [1] = (((r [1] << 8) - r [1] - s [1]) >> 8) & 0x00ffffff00ffffff;
 
         scale_and_store_65536 (accum, scale_ctx->span_mul_x, &row_parts_out);
 
@@ -581,8 +584,8 @@ interp_horizontal_boxes_65536 (const SmolScaleCtx *scale_ctx, const uint32_t *ro
         weight_pixel_65536 (q, q, F);
     }
 
-    accum [0] += ((p [0] + q [0]) >> 7) & 0x01ffffff01ffffff;
-    accum [1] += ((p [1] + q [1]) >> 7) & 0x01ffffff01ffffff;
+    accum [0] += p [0] + q [0];
+    accum [1] += p [1] + q [1];
 
     scale_and_store_65536 (accum, scale_ctx->span_mul_x, &row_parts_out);
 }
@@ -902,7 +905,7 @@ weight_edge_row_256 (uint64_t *row, uint16_t w, uint32_t n)
 
     while (row != row_max)
     {
-        *row = ((*row * w) >> 1) & 0x7fff7fff7fff7fffULL;
+        *row = ((*row * w) >> 8) & 0x00ff00ff00ff00ffULL;
         row++;
     }
 }
@@ -920,11 +923,11 @@ scale_and_weight_edge_rows_box_256 (const uint64_t *first_row, uint64_t *last_ro
 
         r = *(last_row);
         s = r * w2;
-        q = (s >> 1) & 0x7fff7fff7fff7fffULL;
+        q = (s >> 8) & 0x00ff00ff00ff00ffULL;
         /* (255 * r) - (F * r) */
-        *(last_row++) = (((r << 8) - r - s) >> 1) & 0x7fff7fff7fff7fffULL;
+        *(last_row++) = (((r << 8) - r - s) >> 8) & 0x00ff00ff00ff00ffULL;
 
-        *(accum++) = ((p + q) >> 7) & 0x1ff01ff01ff01ffULL;
+        *(accum++) = p + q;
     }
 }
 
