@@ -2,11 +2,11 @@
 
 /* Copyright (C) 2019 Hans Petter Jansson */
 
-#include "scale.h"
 #include <stdlib.h> /* malloc, free */
 #include <string.h> /* memset */
 #include <alloca.h> /* alloca */
 #include <limits.h>
+#include "smolscale.h"
 
 #if 0
 /* To be used in separate compilation unit */

@@ -6,7 +6,7 @@
 #include <pixman.h>
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include <stdlib.h> /* strtoul, strtod */
-#include "scale.h"
+#include "smolscale.h"
 #include "png.h"
 
 /* --- Common --- */

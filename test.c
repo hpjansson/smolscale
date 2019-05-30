@@ -4,7 +4,7 @@
 
 #include <glib.h>
 #include <png.h>
-#include "scale.h"
+#include "smolscale.h"
 
 #define CORRECTNESS_WIDTH_MIN 1
 #define CORRECTNESS_WIDTH_MAX 65535
