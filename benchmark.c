@@ -7,6 +7,7 @@
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include <stdlib.h> /* strtoul, strtod */
 #include "scale.h"
+#include "png.h"
 
 /* --- Common --- */
 
@@ -14,8 +15,17 @@ typedef struct
 {
     guint in_width, in_height;
     gpointer in_data, out_data;
+    gpointer priv;
 }
 ScaleParams;
+
+typedef enum
+{
+    SCALE_OP_BENCHMARK,
+    SCALE_OP_BENCHMARK_PROP,
+    SCALE_OP_GENERATE
+}
+ScaleOperation;
 
 typedef void (*ScaleInitFunc) (ScaleParams *, gpointer, guint, guint);
 typedef void (*ScaleFiniFunc) (ScaleParams *);
@@ -113,6 +123,8 @@ static void
 scale_fini_pixman (ScaleParams *params)
 {
     pixman_image_unref (params->in_data);
+    free (params->out_data);
+    pixman_image_unref (params->priv);
 }
 
 static void
@@ -126,6 +138,12 @@ scale_do_pixman (ScaleParams *params, guint out_width, guint out_height)
     int n_params;
     guint32 *pixels;
     pixman_image_t *tmp;
+
+    if (params->out_data)
+        free (params->out_data);
+
+    if (params->priv)
+        pixman_image_unref (params->priv);
 
     /* Setup */
 
@@ -176,8 +194,8 @@ scale_do_pixman (ScaleParams *params, guint out_width, guint out_height)
                             0, 0, 0, 0, 0, 0,
                             out_width, out_height);
 
-    free (pixels);
-    pixman_image_unref (tmp);
+    params->priv = tmp;
+    params->out_data = pixels;
 }
 
 /* --- GDK-Pixbuf --- */
@@ -194,6 +212,9 @@ static void
 scale_fini_gdk_pixbuf (ScaleParams *params)
 {
     g_object_unref (params->in_data);
+
+    if (params->priv)
+        g_object_unref (params->priv);
 }
 
 static void
@@ -201,9 +222,9 @@ scale_do_gdk_pixbuf (ScaleParams *params, guint out_width, guint out_height)
 {
     GdkPixbuf *scaled;
 
-    scaled = gdk_pixbuf_scale_simple (params->in_data, out_width, out_height,
-                                      GDK_INTERP_BILINEAR);
-    g_object_unref (scaled);
+    params->priv = gdk_pixbuf_scale_simple (params->in_data, out_width, out_height,
+                                            GDK_INTERP_BILINEAR);
+    params->out_data = gdk_pixbuf_get_pixels (params->priv);
 }
 
 /* --- Smolscale --- */
@@ -219,12 +240,21 @@ scale_init_smol (ScaleParams *params, gpointer in_raw, guint in_width, guint in_
 static void
 scale_fini_smol (G_GNUC_UNUSED ScaleParams *params)
 {
+    if (params->priv)
+        g_free (params->priv);
+    if (params->out_data)
+        g_free (params->out_data);
 }
 
 static void
 scale_do_smol (ScaleParams *params, guint out_width, guint out_height)
 {
     gpointer scaled;
+
+    if (params->priv)
+        g_free (params->priv);
+    if (params->out_data)
+        g_free (params->out_data);
 
     scaled = g_new (guint32, out_width * out_height);
     smol_scale_simple (params->in_data,
@@ -233,7 +263,8 @@ scale_do_smol (ScaleParams *params, guint out_width, guint out_height)
                        scaled,
                        out_width, out_height,
                        out_width * sizeof (guint32));
-    g_free (scaled);
+
+    params->out_data = scaled;
 }
 
 /* --- Smolscale, threaded --- */
@@ -249,6 +280,10 @@ scale_init_smol_threaded (ScaleParams *params, gpointer in_raw, guint in_width, 
 static void
 scale_fini_smol_threaded (G_GNUC_UNUSED ScaleParams *params)
 {
+    if (params->priv)
+        g_free (params->priv);
+    if (params->out_data)
+        g_free (params->out_data);
 }
 
 static void
@@ -270,6 +305,11 @@ scale_do_smol_threaded (ScaleParams *params, guint out_width, guint out_height)
     guint32 n_threads;
     guint32 batch_n_rows;
     guint32 i;
+
+    if (params->priv)
+        g_free (params->priv);
+    if (params->out_data)
+        g_free (params->out_data);
 
     scaled = g_new (guint32, out_width * out_height);
 
@@ -297,7 +337,8 @@ scale_do_smol_threaded (ScaleParams *params, guint out_width, guint out_height)
 
     g_thread_pool_free (thread_pool, FALSE, TRUE);
     smol_scale_finalize (&scale_ctx);
-    g_free (scaled);
+
+    params->out_data = scaled;
 }
 
 /* --- Main --- */
@@ -316,8 +357,8 @@ run_benchmark (gpointer raw_data,
     gfloat width_step_size, height_step_size;
     guint width_step, height_step;
     guint rep;
-    ScaleParams params;
     gdouble *results;
+    ScaleParams params = { 0 };
 
     if (n_width_steps > 1)
         width_step_size = (out_width_max - out_width_min) / ((gfloat) n_width_steps - 1.0);
@@ -402,7 +443,7 @@ run_benchmark_proportional (gpointer raw_data,
     gfloat width_step_size, height_step_size;
     guint step;
     guint rep;
-    ScaleParams params;
+    ScaleParams params = { 0 };
     gdouble *results;
 
     if (n_steps > 1)
@@ -466,9 +507,86 @@ run_benchmark_proportional (gpointer raw_data,
 }
 
 static void
+remove_extension (gchar *filename)
+{
+    gchar *p0 = strrchr (filename, '.');
+    if (!p0)
+        return;
+
+    *p0 = '\0';
+}
+
+static void
+run_generate (const gchar *filename,
+              gdouble scale_min,
+              gdouble scale_max,
+              guint n_steps,
+              ScaleInitFunc init_func,
+              ScaleFiniFunc fini_func,
+              ScaleDoFunc do_func)
+{
+    gpointer raw_data;
+    guint in_width, in_height;
+    guint out_width_min, out_width_max;
+    guint out_height_min, out_height_max;
+    gfloat width_step_size, height_step_size;
+    ScaleParams params = { 0 };
+    gchar *fname_out_prefix;
+    guint step;
+
+    if (!smol_load_image (filename, &in_width, &in_height, &raw_data))
+    {
+        g_printerr ("Failed to read image '%s'.\n", filename);
+        return;
+    }
+
+    out_width_min = MAX (in_width * scale_min, 1);
+    out_width_max = MIN (in_width * scale_max, 65535);
+    out_height_min = MAX (in_height * scale_min, 1);
+    out_height_max = MIN (in_height * scale_max, 65535);
+
+    if (n_steps > 1)
+    {
+        width_step_size = (out_width_max - out_width_min) / ((gfloat) n_steps - 1.0);
+        height_step_size = (out_height_max - out_height_min) / ((gfloat) n_steps - 1.0);
+    }
+    else
+    {
+        width_step_size = 99999.0;
+        height_step_size = 99999.0;
+    }
+
+    fname_out_prefix = g_strdup (filename);
+    remove_extension (fname_out_prefix);
+
+    (*init_func) (&params, raw_data, in_width, in_height);
+
+    for (step = 0; step < n_steps; step++)
+    {
+        guint out_width, out_height;
+
+        out_width = out_width_min + step * width_step_size;
+        out_height = out_height_min + step * height_step_size;
+
+        (*do_func) (&params, out_width, out_height);
+
+        smol_save_image (fname_out_prefix, params.out_data, out_width, out_height);
+
+        g_printerr ("*");
+        fflush (stderr);
+    }
+
+    (*fini_func) (&params);
+}              
+
+
+static void
 print_usage (void)
 {
     g_printerr ("Usage: benchmark <smol|pixman|gdk_pixbuf>\n"
+                "                 [ generate\n"
+                "                   <min_scale> <max_scale> <n_steps>\n"
+                "                   <filename> ] |\n"
                 "                 [ proportional\n"
                 "                   <in_width> <in_height>\n"
                 "                   <min_scale> <max_scale> <n_steps> ] |\n"
@@ -495,13 +613,13 @@ main (int argc, char *argv [])
     guint in_width, in_height;
     guint out_width_min, out_width_max, out_width_steps;
     guint out_height_min, out_height_max, out_height_steps;
-    gboolean proportional = FALSE;
     gdouble scale_min, scale_max;
     guint scale_steps;
-    gpointer raw_data;
     ScaleInitFunc init_func;
     ScaleFiniFunc fini_func;
     ScaleDoFunc do_func;
+    ScaleOperation scale_op = SCALE_OP_BENCHMARK;
+    gchar *filename;
     gint i;
 
     if (argc < 2)
@@ -553,28 +671,12 @@ main (int argc, char *argv [])
     if (argc > 2)
     {
         if (!strcasecmp (argv [2], "proportional"))
-            proportional = TRUE;
+            scale_op = SCALE_OP_BENCHMARK_PROP;
+        else if (!strcasecmp (argv [2], "generate"))
+            scale_op = SCALE_OP_GENERATE;
     }
 
-    if (proportional)
-    {
-        if (argc < 9)
-        {
-            g_printerr ("Missing arguments for proportional scaling.");
-            print_usage ();
-            return 1;
-        }
-
-        i = 3;
-
-        n_repetitions = strtoul (argv [i++], NULL, 10);
-        in_width = strtoul (argv [i++], NULL, 10);
-        in_height = strtoul (argv [i++], NULL, 10);
-        scale_min = strtod (argv [i++], NULL);
-        scale_max = strtod (argv [i++], NULL);
-        scale_steps = strtoul (argv [i++], NULL, 10);
-    }
-    else
+    if (scale_op == SCALE_OP_BENCHMARK)
     {
         if (argc < 11)
         {
@@ -595,18 +697,45 @@ main (int argc, char *argv [])
         out_height_max = strtoul (argv [i++], NULL, 10);
         out_height_steps = strtoul (argv [i++], NULL, 10);
     }
+    else if (scale_op == SCALE_OP_BENCHMARK_PROP)
+    {
+        if (argc < 9)
+        {
+            g_printerr ("Missing arguments for proportional scaling.");
+            print_usage ();
+            return 1;
+        }
 
-    raw_data = gen_color_canvas (in_width, in_height, 0x55555555);
+        i = 3;
 
-    if (proportional)
-        run_benchmark_proportional (raw_data,
-                                    n_repetitions,
-                                    in_width, in_height,
-                                    in_width * scale_min, in_width * scale_max,
-                                    in_height * scale_min, in_height * scale_max,
-                                    scale_steps,
-                                    init_func, fini_func, do_func);
-    else
+        n_repetitions = strtoul (argv [i++], NULL, 10);
+        in_width = strtoul (argv [i++], NULL, 10);
+        in_height = strtoul (argv [i++], NULL, 10);
+        scale_min = strtod (argv [i++], NULL);
+        scale_max = strtod (argv [i++], NULL);
+        scale_steps = strtoul (argv [i++], NULL, 10);
+    }
+    else if (scale_op == SCALE_OP_GENERATE)
+    {
+        if (argc < 7)
+        {
+            g_printerr ("Missing arguments for generate.");
+            print_usage ();
+            return 1;
+        }
+
+        i = 3;
+
+        scale_min = strtod (argv [i++], NULL);
+        scale_max = strtod (argv [i++], NULL);
+        scale_steps = strtoul (argv [i++], NULL, 10);
+        filename = g_strdup (argv [i++]);
+    }
+
+
+    if (scale_op == SCALE_OP_BENCHMARK)
+    {
+        gpointer raw_data = gen_color_canvas (in_width, in_height, 0x55555555);
         run_benchmark (raw_data,
                        n_repetitions,
                        in_width, in_height,
@@ -614,7 +743,28 @@ main (int argc, char *argv [])
                        out_height_min, out_height_max,
                        out_width_steps, out_height_steps,
                        init_func, fini_func, do_func);
+        g_free (raw_data);
+    }
+    else if (scale_op == SCALE_OP_BENCHMARK_PROP)
+    {
+        gpointer raw_data = gen_color_canvas (in_width, in_height, 0x55555555);
+        run_benchmark_proportional (raw_data,
+                                    n_repetitions,
+                                    in_width, in_height,
+                                    in_width * scale_min, in_width * scale_max,
+                                    in_height * scale_min, in_height * scale_max,
+                                    scale_steps,
+                                    init_func, fini_func, do_func);
+        g_free (raw_data);
+    }
+    else if (scale_op == SCALE_OP_GENERATE)
+    {
+        run_generate (filename,
+                      scale_min,
+                      scale_max,
+                      scale_steps,
+                      init_func, fini_func, do_func);
+    }
 
-    g_free (raw_data);
     return 0;
 }
