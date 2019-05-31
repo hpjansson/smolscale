@@ -9,6 +9,16 @@
 #include "smolscale.h"
 #include "png.h"
 
+#define CORRECTNESS_WIDTH_MIN 1
+#define CORRECTNESS_WIDTH_MAX 65535
+#define CORRECTNESS_WIDTH_STEPS 100
+#define CORRECTNESS_HEIGHT_MIN 1
+#define CORRECTNESS_HEIGHT_MAX 65535
+#define CORRECTNESS_HEIGHT_STEPS 10
+
+#define CORRECTNESS_WIDTH_STEP_SIZE (((CORRECTNESS_WIDTH_MAX) - (CORRECTNESS_WIDTH_MIN)) / (CORRECTNESS_WIDTH_STEPS))
+#define CORRECTNESS_HEIGHT_STEP_SIZE (((CORRECTNESS_HEIGHT_MAX) - (CORRECTNESS_HEIGHT_MIN)) / (CORRECTNESS_HEIGHT_STEPS))
+
 /* --- Common --- */
 
 typedef struct
@@ -23,11 +33,12 @@ typedef enum
 {
     SCALE_OP_BENCHMARK,
     SCALE_OP_BENCHMARK_PROP,
+    SCALE_OP_CHECK,
     SCALE_OP_GENERATE
 }
 ScaleOperation;
 
-typedef void (*ScaleInitFunc) (ScaleParams *, gpointer, guint, guint);
+typedef void (*ScaleInitFunc) (ScaleParams *, gconstpointer, guint, guint);
 typedef void (*ScaleFiniFunc) (ScaleParams *);
 typedef void (*ScaleDoFunc) (ScaleParams *, guint, guint);
 
@@ -88,10 +99,10 @@ compute_extents (pixman_f_transform_t *trans, double *sx, double *sy)
     double min_x, max_x, min_y, max_y;
     pixman_f_vector_t v[4] =
     {
-	{ { 1, 1, 1 } },
-	{ { -1, 1, 1 } },
-	{ { -1, -1, 1 } },
-	{ { 1, -1, 1 } },
+        { { 1, 1, 1 } },
+        { { -1, 1, 1 } },
+        { { -1, -1, 1 } },
+        { { 1, -1, 1 } },
     };
 
     pixman_f_transform_point (trans, &v[0]);
@@ -109,13 +120,13 @@ compute_extents (pixman_f_transform_t *trans, double *sx, double *sy)
 }
 
 static void
-scale_init_pixman (ScaleParams *params, gpointer in_raw, guint in_width, guint in_height)
+scale_init_pixman (ScaleParams *params, gconstpointer in_raw, guint in_width, guint in_height)
 {
     params->in_width = in_width;
     params->in_height = in_height;
     params->in_data = pixman_image_create_bits (PIXMAN_r8g8b8a8,
                                                 in_width, in_height,
-                                                in_raw,
+                                                (void *) in_raw,
                                                 in_width * sizeof (guint32));
 }
 
@@ -163,8 +174,8 @@ scale_do_pixman (ScaleParams *params, guint out_width, guint out_height)
         pixman_double_to_fixed (fscale_y),
         PIXMAN_KERNEL_IMPULSE,
         PIXMAN_KERNEL_IMPULSE,
-        PIXMAN_KERNEL_LINEAR,
-        PIXMAN_KERNEL_LINEAR,
+        PIXMAN_KERNEL_BOX,
+        PIXMAN_KERNEL_BOX,
         1,
         1);
 
@@ -201,7 +212,7 @@ scale_do_pixman (ScaleParams *params, guint out_width, guint out_height)
 /* --- GDK-Pixbuf --- */
 
 static void
-scale_init_gdk_pixbuf (ScaleParams *params, gpointer in_raw, guint in_width, guint in_height)
+scale_init_gdk_pixbuf (ScaleParams *params, gconstpointer in_raw, guint in_width, guint in_height)
 {
     params->in_data = gdk_pixbuf_new_from_data (in_raw, GDK_COLORSPACE_RGB, TRUE,
                                                 8, in_width, in_height, in_width * sizeof (guint32),
@@ -230,11 +241,11 @@ scale_do_gdk_pixbuf (ScaleParams *params, guint out_width, guint out_height)
 /* --- Smolscale --- */
 
 static void
-scale_init_smol (ScaleParams *params, gpointer in_raw, guint in_width, guint in_height)
+scale_init_smol (ScaleParams *params, gconstpointer in_raw, guint in_width, guint in_height)
 {
     params->in_width = in_width;
     params->in_height = in_height;
-    params->in_data = in_raw;
+    params->in_data = (gpointer) in_raw;
 }
 
 static void
@@ -270,11 +281,11 @@ scale_do_smol (ScaleParams *params, guint out_width, guint out_height)
 /* --- Smolscale, threaded --- */
 
 static void
-scale_init_smol_threaded (ScaleParams *params, gpointer in_raw, guint in_width, guint in_height)
+scale_init_smol_threaded (ScaleParams *params, gconstpointer in_raw, guint in_width, guint in_height)
 {
     params->in_width = in_width;
     params->in_height = in_height;
-    params->in_data = in_raw;
+    params->in_data = (gpointer) in_raw;
 }
 
 static void
@@ -341,7 +352,7 @@ scale_do_smol_threaded (ScaleParams *params, guint out_width, guint out_height)
     params->out_data = scaled;
 }
 
-/* --- Main --- */
+/* --- Benchmarks --- */
 
 static void
 run_benchmark (gpointer raw_data,
@@ -516,6 +527,138 @@ remove_extension (gchar *filename)
     *p0 = '\0';
 }
 
+/* --- Correctness check --- */
+
+typedef enum
+{
+    DIM_HORIZONTAL,
+    DIM_VERTICAL
+}
+Dimension;
+
+static gboolean
+check_color_canvas (const guint32 *canvas_in,
+                    guint width_in, guint height_in,
+                    const guint32 *canvas_out,
+                    guint width_out, guint height_out,
+                    Dimension dim)
+{
+    guint32 color = canvas_in [0];
+    guint x, y;
+
+    /* Quick check */
+
+    if (!memcmp (canvas_in, canvas_out, width_out * height_out * sizeof (guint32)))
+        return TRUE;
+
+    /* Something's wrong: Find the first errant pixel */
+
+    for (y = 0; y < height_out; y++)
+    {
+        const guint32 *row = canvas_out + y * width_out;
+
+        for (x = 0; x < width_out; x++)
+        {
+            if (*row != color)
+            {
+                g_print ("%s %u -> %u: [%5u,%5u] Color is %08x (want %08x).\n",
+                         dim == DIM_HORIZONTAL ? "Width" : "Height",
+                         dim == DIM_HORIZONTAL ? width_in : height_in,
+                         dim == DIM_HORIZONTAL ? width_out : height_out,
+                         x, y, *row, color);
+                return FALSE;
+            }
+
+            row++;
+        }
+    }
+
+    return TRUE;
+}
+
+static void
+check_all_levels (const guint32 * const *canvas_array,
+                  ScaleInitFunc init_func,
+                  ScaleFiniFunc fini_func,
+                  ScaleDoFunc do_func,
+                  guint32 width_in, guint32 height_in,
+                  guint32 width_out, guint32 height_out,
+                  Dimension dim)
+{
+    ScaleParams params = { 0 };
+    guint c;
+
+    for (c = 0; c < 256 / 4; c++)
+    {
+        (*init_func) (&params, canvas_array [c], width_in, height_in);
+        (*do_func) (&params, width_out, height_out);
+        check_color_canvas (canvas_array [c],
+                            width_in, height_in,
+                            params.out_data,
+                            width_out, height_out,
+                            dim);
+        (*fini_func) (&params);
+        memset (&params, 0, sizeof (params));
+    }
+}
+
+static void
+run_check (ScaleInitFunc init_func,
+           ScaleFiniFunc fini_func,
+           ScaleDoFunc do_func)
+{
+    guint32 *canvas_array [256 / 4];
+    guint i, j;
+
+    for (i = 0; i < 256; i += 4)
+    {
+        guint32 pixel = (i << 24) | ((i + 1) << 16) | ((i + 2) << 8) | (i + 3);
+
+        canvas_array [i / 4] = g_malloc (65536 * 2 * sizeof (guint32));
+
+        for (j = 0; j < 65536 * 2; j++)
+            canvas_array [i / 4] [j] = pixel;
+    }
+
+    i = CORRECTNESS_WIDTH_MIN;
+    for (;;)
+    {
+        for (j = 1; j < MIN (i + 1, 65536); j++)
+        {
+            g_printerr ("Width %u -> %u:        \r", i, j);
+            check_all_levels ((const guint32 * const *) canvas_array,
+                              init_func,
+                              fini_func,
+                              do_func,
+                              i, 1, j, 1,
+                              DIM_HORIZONTAL);
+        }
+
+        for (j = 1; j < MIN (i + 1, 65536); j++)
+        {
+            g_printerr ("Height %u -> %u:        \r", i, j);
+            check_all_levels ((const guint32 * const *) canvas_array,
+                              init_func,
+                              fini_func,
+                              do_func,
+                              1, i, 1, j,
+                              DIM_VERTICAL);
+        }
+
+        if (i >= CORRECTNESS_WIDTH_MAX)
+            break;
+        i += CORRECTNESS_WIDTH_STEP_SIZE;
+        i = MIN (i, CORRECTNESS_WIDTH_MAX);
+    }
+
+    for (i = 0; i < 256 / 4; i++)
+    {
+        g_free (canvas_array [i]);
+    }
+}
+
+/* --- Image generation --- */
+
 static void
 run_generate (const gchar *filename,
               gdouble scale_min,
@@ -579,6 +722,7 @@ run_generate (const gchar *filename,
     (*fini_func) (&params);
 }              
 
+/* --- Main --- */
 
 static void
 print_usage (void)
@@ -587,6 +731,7 @@ print_usage (void)
                 "                 [ generate\n"
                 "                   <min_scale> <max_scale> <n_steps>\n"
                 "                   <filename> ] |\n"
+                "                 [ check ]\n"
                 "                 [ proportional\n"
                 "                   <in_width> <in_height>\n"
                 "                   <min_scale> <max_scale> <n_steps> ] |\n"
@@ -674,6 +819,8 @@ main (int argc, char *argv [])
             scale_op = SCALE_OP_BENCHMARK_PROP;
         else if (!strcasecmp (argv [2], "generate"))
             scale_op = SCALE_OP_GENERATE;
+        else if (!strcasecmp (argv [2], "check"))
+            scale_op = SCALE_OP_CHECK;
     }
 
     if (scale_op == SCALE_OP_BENCHMARK)
@@ -732,7 +879,6 @@ main (int argc, char *argv [])
         filename = g_strdup (argv [i++]);
     }
 
-
     if (scale_op == SCALE_OP_BENCHMARK)
     {
         gpointer raw_data = gen_color_canvas (in_width, in_height, 0x55555555);
@@ -764,6 +910,10 @@ main (int argc, char *argv [])
                       scale_max,
                       scale_steps,
                       init_func, fini_func, do_func);
+    }
+    else if (scale_op == SCALE_OP_CHECK)
+    {
+        run_check (init_func, fini_func, do_func);
     }
 
     return 0;
