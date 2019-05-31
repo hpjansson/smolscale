@@ -47,31 +47,31 @@ VerticalCtx;
 
 /* --- Pixel and parts manipulation --- */
 
-static SMOL_PURE SMOL_INLINE const uint32_t *
+static SMOL_INLINE const uint32_t *
 inrow_ofs_to_pointer (const SmolScaleCtx *scale_ctx, uint32_t inrow_ofs)
 {
     return scale_ctx->pixels_in + scale_ctx->rowstride_in * inrow_ofs;
 }
 
-static SMOL_PURE SMOL_INLINE uint32_t *
+static SMOL_INLINE uint32_t *
 outrow_ofs_to_pointer (const SmolScaleCtx *scale_ctx, uint32_t outrow_ofs)
 {
     return scale_ctx->pixels_out + scale_ctx->rowstride_out * outrow_ofs;
 }
 
-static SMOL_CONST SMOL_INLINE uint32_t
+static SMOL_INLINE uint32_t
 pack_pixel_256 (uint64_t in)
 {
     return in | (in >> 24);
 }
 
-static SMOL_CONST SMOL_INLINE uint64_t
+static SMOL_INLINE uint64_t
 unpack_pixel_256 (uint32_t p)
 {
     return (((uint64_t) p & 0xff00ff00) << 24) | (p & 0x00ff00ff);
 }
 
-static inline uint32_t
+static SMOL_INLINE uint32_t
 pack_pixel_65536 (uint64_t *in)
 {
     /* FIXME: Are masks needed? */
@@ -81,27 +81,27 @@ pack_pixel_65536 (uint64_t *in)
            | (in [1] & 0x000000ff);
 }
 
-static inline void
+static SMOL_INLINE void
 unpack_pixel_65536 (uint32_t p, uint64_t *out)
 {
     out [0] = (((uint64_t) p & 0xff000000) << 8) | (((uint64_t) p & 0x00ff0000) >> 16);
     out [1] = (((uint64_t) p & 0x0000ff00) << 24) | (p & 0x000000ff);
 }
 
-static inline uint64_t
+static SMOL_INLINE uint64_t
 weight_pixel_256 (uint64_t p, uint16_t w)
 {
     return ((p * w) >> 8) & 0x00ff00ff00ff00ff;
 }
 
-static inline void
+static SMOL_INLINE void
 weight_pixel_65536 (uint64_t *p, uint64_t *out, uint16_t w)
 {
     out [0] = ((p [0] * w) >> 8) & 0x00ffffff00ffffffULL;
     out [1] = ((p [1] * w) >> 8) & 0x00ffffff00ffffffULL;
 }
 
-static void
+static SMOL_INLINE void
 pack_row_256 (const uint64_t *row_in, uint32_t *row_out, uint32_t n)
 {
     uint32_t *row_out_max = row_out + n;
@@ -115,7 +115,7 @@ pack_row_256 (const uint64_t *row_in, uint32_t *row_out, uint32_t n)
 /* AVX2 has a useful instruction for this: __m256i _mm256_cvtepu8_epi16 (__m128i a);
  * It results in a different channel ordering, so it'd be important to match with
  * the right kind of re-pack. */
-static void
+static SMOL_INLINE void
 unpack_row_256 (const uint32_t *row_in, uint64_t *row_out, uint32_t n)
 {
     uint64_t *row_out_max = row_out + n;
@@ -126,7 +126,7 @@ unpack_row_256 (const uint32_t *row_in, uint64_t *row_out, uint32_t n)
     }
 }
 
-static inline void
+static SMOL_INLINE void
 sum_pixels_256 (const uint32_t **pp, uint64_t *accum, uint32_t n)
 {
     const uint32_t *pp_end;
@@ -137,7 +137,7 @@ sum_pixels_256 (const uint32_t **pp, uint64_t *accum, uint32_t n)
     }
 }
 
-static inline void
+static SMOL_INLINE void
 sum_pixels_65536 (const uint32_t **pp, uint64_t *accum, uint32_t n)
 {
     const uint32_t *pp_end;
@@ -151,7 +151,7 @@ sum_pixels_65536 (const uint32_t **pp, uint64_t *accum, uint32_t n)
     }
 }
 
-static inline uint64_t
+static SMOL_INLINE uint64_t
 scale_256 (uint64_t accum, uint64_t multiplier)
 {
     uint64_t a, b;
@@ -166,7 +166,7 @@ scale_256 (uint64_t accum, uint64_t multiplier)
     return (a & 0x000000ff000000ffULL) | ((b & 0x000000ff000000ffULL) << 16);
 }
 
-static inline uint64_t
+static SMOL_INLINE uint64_t
 scale_65536_half (uint64_t accum, uint64_t multiplier)
 {
     uint64_t a, b;
@@ -181,7 +181,7 @@ scale_65536_half (uint64_t accum, uint64_t multiplier)
            | ((b & 0x00000000000000ffULL) << 32);
 }
 
-static inline void
+static SMOL_INLINE void
 scale_and_store_65536 (uint64_t *accum, uint64_t multiplier, uint64_t **row_parts_out)
 {
     *(*row_parts_out)++ = scale_65536_half (accum [0], multiplier);
