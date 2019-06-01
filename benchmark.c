@@ -248,10 +248,15 @@ scale_init_sdl (ScaleParams *params, gconstpointer in_raw, guint in_width, guint
     SDL_PixelFormat pf = { 0 };
     SDL_Surface *surface;
 
+#if 0
+    /* No need to initialize SDL subsystems when we're just scaling images
+     * on the CPU */
     if (!sdl_is_initialized)
     {
         SDL_Init (SDL_INIT_VIDEO);
+        sdl_is_initialized = TRUE;
     }
+#endif
 
     params->in_width = in_width;
     params->in_height = in_height;
