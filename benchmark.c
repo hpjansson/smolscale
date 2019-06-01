@@ -813,7 +813,7 @@ run_generate (const gchar *filename,
     }
 
     (*fini_func) (&params);
-}              
+}
 
 /* --- Main --- */
 
