@@ -747,10 +747,10 @@ run_generate (const gchar *filename,
         return;
     }
 
-    out_width_min = MAX (in_width * scale_min, 1);
-    out_width_max = MIN (in_width * scale_max, 65535);
-    out_height_min = MAX (in_height * scale_min, 1);
-    out_height_max = MIN (in_height * scale_max, 65535);
+    out_width_min = CLAMP (in_width * scale_min, 1, 65535);
+    out_width_max = CLAMP (in_width * scale_max, 1, 65535);
+    out_height_min = CLAMP (in_height * scale_min, 1, 65535);
+    out_height_max = CLAMP (in_height * scale_max, 1, 65535);
 
     if (n_steps > 1)
     {
@@ -772,8 +772,8 @@ run_generate (const gchar *filename,
     {
         guint out_width, out_height;
 
-        out_width = out_width_min + step * width_step_size;
-        out_height = out_height_min + step * height_step_size;
+        out_width = CLAMP (out_width_min + step * width_step_size, 1, 65535);
+        out_height = CLAMP (out_height_min + step * height_step_size, 1, 65535);
 
         (*do_func) (&params, out_width, out_height);
 
