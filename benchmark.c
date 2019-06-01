@@ -298,13 +298,37 @@ scale_fini_sdl (ScaleParams *params)
 static void
 scale_do_sdl (ScaleParams *params, guint out_width, guint out_height)
 {
-    SDL_Surface *scaled_surface;
+    SDL_Surface *scaled_surface [2];
+    guint x_factor, y_factor;
 
-    params->priv = scaled_surface = zoomSurface (params->in_data,
-                                                 out_width / (gdouble) params->in_width,
-                                                 out_height / (gdouble) params->in_height,
-                                                 SMOOTHING_ON);
-    params->out_data = scaled_surface->pixels;
+    x_factor = params->in_width / out_width;
+    y_factor = params->in_height / out_height;
+
+    if (x_factor < 2)
+        x_factor = 1;
+    else
+        out_width *= x_factor;
+
+    if (y_factor < 2)
+        y_factor = 1;
+    else
+        out_height *= y_factor;
+
+
+    scaled_surface [0] = scaled_surface [1] =
+        zoomSurface (params->in_data,
+                     out_width / (gdouble) params->in_width,
+                     out_height / (gdouble) params->in_height,
+                     SMOOTHING_ON);
+
+    if (x_factor > 1 || y_factor > 1)
+    {
+        scaled_surface [1] = shrinkSurface (scaled_surface [0], x_factor, y_factor);
+        SDL_FreeSurface (scaled_surface [0]);
+    }
+
+    params->priv = scaled_surface [1];
+    params->out_data = scaled_surface [1]->pixels;
 }
 
 /* --- Smolscale --- */
