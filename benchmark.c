@@ -5,6 +5,7 @@
 #include <glib.h>
 #include <pixman.h>
 #include <gdk-pixbuf/gdk-pixbuf.h>
+#include <SDL/SDL_rotozoom.h> /* zoomSurface() from SDL_gfx */
 #include <stdlib.h> /* strtoul, strtod */
 #include "smolscale.h"
 #include "png.h"
@@ -236,6 +237,69 @@ scale_do_gdk_pixbuf (ScaleParams *params, guint out_width, guint out_height)
     params->priv = gdk_pixbuf_scale_simple (params->in_data, out_width, out_height,
                                             GDK_INTERP_BILINEAR);
     params->out_data = gdk_pixbuf_get_pixels (params->priv);
+}
+
+/* --- SDL --- */
+
+static void
+scale_init_sdl (ScaleParams *params, gconstpointer in_raw, guint in_width, guint in_height)
+{
+    static int sdl_is_initialized = FALSE;  /* Not MT safe */
+    SDL_PixelFormat pf = { 0 };
+    SDL_Surface *surface;
+
+    if (!sdl_is_initialized)
+    {
+        SDL_Init (SDL_INIT_VIDEO);
+    }
+
+    params->in_width = in_width;
+    params->in_height = in_height;
+
+    pf.palette = 0;
+    pf.BitsPerPixel = 32;
+    pf.BytesPerPixel = 4;
+    pf.alpha = 255;
+    pf.Rshift = pf.Rloss = pf.Gloss = pf.Bloss = pf.Aloss = pf.colorkey = 0;
+    pf.Rmask = 0x000000ff;
+    pf.Gshift = 8;
+    pf.Gmask = 0x0000ff00;
+    pf.Bshift = 16;
+    pf.Bmask = 0x00ff0000;
+    pf.Ashift = 24;
+    pf.Amask = 0xff000000;
+
+    surface = SDL_CreateRGBSurfaceFrom ((void *) in_raw,
+                                        in_width,
+                                        in_height,
+                                        32,
+                                        in_width * sizeof (guint32),
+                                        0x000000ff,
+                                        0x0000ff00,
+                                        0x00ff0000,
+                                        0xff000000);
+    params->in_data = surface;
+}
+
+static void
+scale_fini_sdl (ScaleParams *params)
+{
+    if (params->in_data)
+        SDL_FreeSurface (params->in_data);
+    if (params->priv)
+        SDL_FreeSurface (params->priv);
+}
+
+static void
+scale_do_sdl (ScaleParams *params, guint out_width, guint out_height)
+{
+    SDL_Surface *scaled_surface;
+
+    params->priv = scaled_surface = zoomSurface (params->in_data,
+                                                 out_width / (gdouble) params->in_width,
+                                                 out_height / (gdouble) params->in_height,
+                                                 SMOOTHING_ON);
+    params->out_data = scaled_surface->pixels;
 }
 
 /* --- Smolscale --- */
@@ -806,6 +870,12 @@ main (int argc, char *argv [])
         init_func = scale_init_gdk_pixbuf;
         fini_func = scale_fini_gdk_pixbuf;
         do_func = scale_do_gdk_pixbuf;
+    }
+    else if (!strcasecmp (argv [1], "sdl"))
+    {
+        init_func = scale_init_sdl;
+        fini_func = scale_fini_sdl;
+        do_func = scale_do_sdl;
     }
     else
     {
