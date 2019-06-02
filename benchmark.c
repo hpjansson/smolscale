@@ -226,13 +226,22 @@ scale_fini_gdk_pixbuf (ScaleParams *params)
     g_object_unref (params->in_data);
 
     if (params->priv)
+    {
         g_object_unref (params->priv);
+        params->priv = NULL;
+    }
 }
 
 static void
 scale_do_gdk_pixbuf (ScaleParams *params, guint out_width, guint out_height)
 {
     GdkPixbuf *scaled;
+
+    if (params->priv)
+    {
+        g_object_unref (params->priv);
+        params->priv = NULL;
+    }
 
     params->priv = gdk_pixbuf_scale_simple (params->in_data, out_width, out_height,
                                             GDK_INTERP_BILINEAR);
