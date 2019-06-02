@@ -299,9 +299,16 @@ static void
 scale_fini_sdl (ScaleParams *params)
 {
     if (params->in_data)
+    {
         SDL_FreeSurface (params->in_data);
+        params->in_data = NULL;
+    }
+
     if (params->priv)
+    {
         SDL_FreeSurface (params->priv);
+        params->priv = NULL;
+    }
 }
 
 static void
@@ -309,6 +316,12 @@ scale_do_sdl (ScaleParams *params, guint out_width, guint out_height)
 {
     SDL_Surface *scaled_surface [2];
     guint x_factor, y_factor;
+
+    if (params->priv)
+    {
+        SDL_FreeSurface (params->priv);
+        params->priv = NULL;
+    }
 
     x_factor = params->in_width / out_width;
     y_factor = params->in_height / out_height;
