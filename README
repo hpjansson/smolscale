@@ -1,0 +1,47 @@
+Smolscale
+=========
+
+Smolscale is a smol piece of C code for quickly scaling images to a reasonable
+level of quality using CPU resources only (no GPU). It operates on 4-channel
+data with 32 bits per pixel, i.e. packed RGBA, ARGB, BGRA, etc. It is byte
+ordering agnostic.
+
+The design goals are:
+
+* High speed: Optimized code, within reason. Easily parallelizable.
+
+* Low memory overhead: Mostly on the stack.
+
+* Decent quality: No "jaggies" as produced by nearest-neighbor scaling.
+
+* Simplicity: A C99 environment is the only dependency.
+
+* Ease of use: One-shot and iterative APIs.
+
+Usage
+-----
+
+First, read COPYING. If your project meets the requirements, you should be
+able to copy smolscale.c and smolscale.h into it and add it to your build
+with minimal fuss.
+
+The API documentation lives in smolscale.h along with the public delarations.
+
+Tests
+-----
+
+There is a testing and benchmarking program included. It lives in test.c.
+You should be able to build it by simply issuing 'make'. It also allows you
+to test a few non-smol image scaling implementations.
+
+You need the development files for the following dependencies installed first
+(these are for test.c only and are not needed for Smolscale proper):
+
+* gdx-pixbuf
+
+* libpng
+
+* pixman
+
+* SDL_gfx
+
