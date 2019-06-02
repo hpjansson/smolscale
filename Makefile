@@ -1,13 +1,13 @@
-all: test benchmark
+all: test
 
 clean:
-	rm -f test benchmark benchmark-simd
+	rm -f test test-simd
 
 test: Makefile smolscale.c smolscale.h png.c test.c
-	gcc -Wall -Wextra -O2 -g `pkg-config --libs --cflags glib-2.0 libpng pixman-1 gdk-pixbuf-2.0` smolscale.c png.c test.c -o test
+	gcc -Wall -Wextra -O2 -g `pkg-config --libs --cflags glib-2.0 libpng pixman-1 gdk-pixbuf-2.0 SDL_gfx` smolscale.c png.c test.c -o test
 
-benchmark: Makefile smolscale.c smolscale.h benchmark.c
-	gcc -Wall -Wextra -O2 -g `pkg-config --libs --cflags glib-2.0 libpng pixman-1 gdk-pixbuf-2.0 SDL_gfx` smolscale.c png.c benchmark.c -o benchmark
+test-simd: Makefile smolscale.c smolscale.h test.c
+	gcc -Wall -Wextra -fverbose-asm -Ofast -mfma -flto -fstrict-aliasing -ftree-vectorize -mcpu=native -march=native -mtune=native -mmmx -msse4 -msse4.2 -msse4.1 -msse2 -msse3 -msse -mavx -mavx2 -g `pkg-config --libs --cflags glib-2.0 libpng pixman-1 gdk-pixbuf-2.0 SDL_gfx` smolscale.c png.c test.c -o test-simd
+#	gcc -Wall -Wextra -Ofast -mfma -flto -ftracer -fstrict-aliasing -fsimd-cost-model=unlimited -funroll-all-loops -fpeel-loops -ftree-vectorize -mcpu=haswell -mmmx -msse4 -msse4.2 -msse4.1 -msse2 -msse3 -msse -mavx -mavx2 -g `pkg-config --libs --cflags glib-2.0 libpng pixman-1 gdk-pixbuf-2.0 SDL_gfx` scale.c png.c test.c -o test-simd -fopt-info-vec-optimized -fopt-info-vec-missed -save-temps -fno-inline
 
-benchmark-simd: Makefile scale.c scale.h benchmark.c
-	gcc -Wall -Wextra -O3 -fstrict-aliasing -fsimd-cost-model=unlimited -funroll-loops -ftree-vectorize -fopt-info-vec-optimized -fopt-info-vec-missed -mcpu=haswell -mmmx -msse4 -msse4.2 -msse4.1 -msse2 -msse3 -msse2 -mavx -mavx2 -g `pkg-config --libs --cflags glib-2.0 libpng pixman-1 gdk-pixbuf-2.0` scale.c png.c benchmark.c -o benchmark-simd
+# -fopt-info-vec-optimized -fopt-info-vec-missed
