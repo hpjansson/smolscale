@@ -25,7 +25,7 @@ First, read COPYING. If your project meets the requirements, you should be
 able to copy smolscale.c and smolscale.h into it and add it to your build
 with minimal fuss.
 
-The API documentation lives in smolscale.h along with the public delarations.
+The API documentation lives in smolscale.h along with the public declarations.
 
 Tests
 -----
