@@ -315,7 +315,8 @@ static void
 scale_do_sdl (ScaleParams *params, guint out_width, guint out_height)
 {
     SDL_Surface *scaled_surface [2];
-    guint x_factor, y_factor;
+    guint x_shrink_factor, y_shrink_factor;
+    gdouble x_zoom_factor, y_zoom_factor;
 
     if (params->priv)
     {
@@ -323,19 +324,22 @@ scale_do_sdl (ScaleParams *params, guint out_width, guint out_height)
         params->priv = NULL;
     }
 
-    x_factor = params->in_width / out_width;
-    y_factor = params->in_height / out_height;
+    /* Find intermediate size and integer divisors for shrinkSurface */
 
-    if (x_factor < 2)
-        x_factor = 1;
+    x_shrink_factor = params->in_width / out_width;
+    y_shrink_factor = params->in_height / out_height;
+
+    if (x_shrink_factor < 2)
+        x_shrink_factor = 1;
     else
-        out_width *= x_factor;
+        out_width *= x_shrink_factor;
 
-    if (y_factor < 2)
-        y_factor = 1;
+    if (y_shrink_factor < 2)
+        y_shrink_factor = 1;
     else
-        out_height *= y_factor;
+        out_height *= y_shrink_factor;
 
+    /* NOTE: zoomSurface() seems to fail with dimensions greater than 16384 */
 
     scaled_surface [0] = scaled_surface [1] =
         zoomSurface (params->in_data,
@@ -343,10 +347,27 @@ scale_do_sdl (ScaleParams *params, guint out_width, guint out_height)
                      out_height / (gdouble) params->in_height,
                      SMOOTHING_ON);
 
-    if (x_factor > 1 || y_factor > 1)
+    if (!scaled_surface [0])
     {
-        scaled_surface [1] = shrinkSurface (scaled_surface [0], x_factor, y_factor);
+        g_printerr ("\n  zoomSurface failed: %ux%u -> %ux%u\n",
+                    params->in_width, params->in_height,
+                    out_width, out_height);
+        return;
+    }
+
+    if (x_shrink_factor > 1 || y_shrink_factor > 1)
+    {
+        scaled_surface [1] = shrinkSurface (scaled_surface [0], x_shrink_factor, y_shrink_factor);
         SDL_FreeSurface (scaled_surface [0]);
+
+        if (!scaled_surface [1])
+        {
+            g_printerr ("\n  shrinkSurface failed: %ux%u -> %ux%u, shrink factors %u/%u\n",
+                        params->in_width, params->in_height,
+                        out_width, out_height,
+                        x_shrink_factor, y_shrink_factor);
+            return;
+        }
     }
 
     params->priv = scaled_surface [1];
