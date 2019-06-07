@@ -28,6 +28,7 @@
 #define SMOL_ALIGNED_8 __attribute__((aligned(8)))
 #define SMOL_ALIGNED_16 __attribute__((aligned(16)))
 #define SMOL_ALIGNED_32 __attribute__((aligned(32)))
+#define SMOL_ALIGNED_64 __attribute__((aligned(64)))
 
 #define SMALL_MUL 256U
 #define BIG_MUL 65536U
