@@ -33,7 +33,7 @@
 #define SMALL_MUL 256U
 #define BIG_MUL 65536U
 #define BOXES_MULTIPLIER ((uint64_t) BIG_MUL * SMALL_MUL)
-#define FUDGE_FACTOR (SMALL_MUL + SMALL_MUL / 2 + SMALL_MUL / 4)
+#define BILIN_MULTIPLIER ((uint64_t) BIG_MUL * BIG_MUL)
 
 #define aligned_alloca(s, a) \
   ({ void *p = alloca ((s) + (a)); p = (void *) (((uintptr_t) (p) + (a)) & ~((a) - 1)); (p); })
@@ -302,17 +302,17 @@ precalc_bilinear_array (uint16_t *array,
                         uint32_t dim_out,
                         unsigned int make_absolute_offsets)
 {
-    uint32_t ofs_stepF, fracF, frac_stepF;
+    uint64_t ofs_stepF, fracF, frac_stepF;
     uint16_t *pu16 = array;
     uint16_t last_ofs = 0;
 
     /* Works when dim_in >= dim_out, 1=1 is perfect */
-    frac_stepF = ofs_stepF = ((dim_in - 1) * BIG_MUL + FUDGE_FACTOR) / (dim_out > 1 ? (dim_out - 1) : 1);
+    frac_stepF = ofs_stepF = ((dim_in - 1) * BILIN_MULTIPLIER) / (dim_out > 1 ? (dim_out - 1) : 1);
     fracF = 0;
 
     do
     {
-        uint16_t ofs = fracF / BIG_MUL;
+        uint16_t ofs = fracF / BILIN_MULTIPLIER;
 
         /* We sample ofs and its neighbor -- prevent out of bounds access
          * for the latter. */
@@ -320,7 +320,7 @@ precalc_bilinear_array (uint16_t *array,
             break;
 
         *(pu16++) = make_absolute_offsets ? ofs : ofs - last_ofs;
-        *(pu16++) = SMALL_MUL - ((fracF / (BIG_MUL / SMALL_MUL)) % SMALL_MUL);
+        *(pu16++) = SMALL_MUL - ((fracF / (BILIN_MULTIPLIER / SMALL_MUL)) % SMALL_MUL);
         fracF += frac_stepF;
 
         last_ofs = ofs;
