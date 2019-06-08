@@ -1219,8 +1219,7 @@ do_rows (const SmolScaleCtx *scale_ctx,
          uint32_t row_out_index,
          uint32_t n_rows)
 {
-    VerticalCtx vertical_ctx;
-    uint64_t *parts_storage;
+    VerticalCtx vertical_ctx = { 0 };
     uint32_t n_parts_per_pixel = 1;
     uint32_t n_stored_rows = 3;
     uint32_t i;
@@ -1231,18 +1230,14 @@ do_rows (const SmolScaleCtx *scale_ctx,
     if (scale_ctx->algo_v == ALGORITHM_ONE)
         n_stored_rows = 1;
 
-    parts_storage = alloca (scale_ctx->width_out * sizeof (uint64_t)
-                            * n_parts_per_pixel * n_stored_rows);
-
     /* Must be one less, or this test in update_vertical_ctx() will wrap around:
      * if (new_in_ofs == vertical_ctx->in_ofs + 1) { ... } */
     vertical_ctx.in_ofs = UINT_MAX - 1;
-    vertical_ctx.parts_row [0] = parts_storage;
-    vertical_ctx.parts_row [1] = vertical_ctx.parts_row [0] + scale_ctx->width_out * n_parts_per_pixel;
-    if (n_stored_rows == 3)
-        vertical_ctx.parts_row [2] = vertical_ctx.parts_row [1] + scale_ctx->width_out * n_parts_per_pixel;
-    else
-        vertical_ctx.parts_row [2] = NULL;
+
+    for (i = 0; i < n_stored_rows; i++)
+    {
+        vertical_ctx.parts_row [i] = aligned_alloca (scale_ctx->width_out * n_parts_per_pixel * sizeof (uint64_t), 64);
+    }
 
     for (i = row_out_index; i < row_out_index + n_rows; i++)
     {
