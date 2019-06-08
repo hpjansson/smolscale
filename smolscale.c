@@ -8,11 +8,6 @@
 #include <limits.h>
 #include "smolscale.h"
 
-#if 0
-/* To be used in separate compilation unit */
-#include <immintrin.h>  /* AVX2 */
-#endif
-
 #ifndef TRUE
 # define TRUE 1
 #endif
