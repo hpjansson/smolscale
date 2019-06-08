@@ -215,7 +215,7 @@ convert_parts_256_to_65536 (uint64_t *row,
     uint64_t *temp;
     uint32_t i, j;
 
-    temp = alloca (n * sizeof (uint64_t) * 2);
+    temp = aligned_alloca (n * sizeof (uint64_t) * 2, 64);
 
     for (i = 0, j = 0; i < n; )
     {
@@ -420,7 +420,7 @@ interp_horizontal_bilinear_##n_halvings (const SmolScaleCtx *scale_ctx, \
     uint64_t * SMOL_RESTRICT unpacked_in;                               \
     int i;                                                              \
                                                                         \
-    unpacked_in = alloca (scale_ctx->width_in * sizeof (uint64_t));     \
+    unpacked_in = aligned_alloca (scale_ctx->width_in * sizeof (uint64_t), 64); \
     unpack_row_256 (row_in, unpacked_in, scale_ctx->width_in);          \
                                                                         \
     do                                                                  \
@@ -453,7 +453,7 @@ interp_horizontal_bilinear_0 (const SmolScaleCtx *scale_ctx,
     uint64_t * SMOL_RESTRICT row_parts_out_max = row_parts_out + scale_ctx->width_out;
     uint64_t * SMOL_RESTRICT unpacked_in;
 
-    unpacked_in = alloca (scale_ctx->width_in * sizeof (uint64_t));
+    unpacked_in = aligned_alloca (scale_ctx->width_in * sizeof (uint64_t), 64);
     unpack_row_256 (row_in, unpacked_in, scale_ctx->width_in);
 
     do
