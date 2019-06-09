@@ -7,6 +7,10 @@
 #ifndef _SMOLSCALE_H_
 #define _SMOLSCALE_H_
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum
 {
     ALGORITHM_ONE,
@@ -63,5 +67,9 @@ void smol_scale_init (SmolScaleCtx *scale_ctx,
 void smol_scale_finalize (SmolScaleCtx *scale_ctx);
 
 void smol_scale_batch (const SmolScaleCtx *scale_ctx, uint32_t first_row, uint32_t n_rows);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
