@@ -301,9 +301,18 @@ precalc_bilinear_array (uint16_t *array,
     uint16_t *pu16 = array;
     uint16_t last_ofs = 0;
 
-    /* Works when dim_in >= dim_out, 1=1 is perfect */
-    frac_stepF = ofs_stepF = ((dim_in - 1) * BILIN_MULTIPLIER) / (dim_out > 1 ? (dim_out - 1) : 1);
-    fracF = 0;
+    if (dim_in > dim_out)
+    {
+        /* Minification */
+        frac_stepF = ofs_stepF = (dim_in * BILIN_MULTIPLIER) / dim_out;
+        fracF = (frac_stepF - BILIN_MULTIPLIER) / 2;
+    }
+    else
+    {
+        /* Magnification */
+        frac_stepF = ofs_stepF = ((dim_in - 1) * BILIN_MULTIPLIER) / (dim_out > 1 ? (dim_out - 1) : 1);
+        fracF = 0;
+    }
 
     do
     {
