@@ -8,11 +8,11 @@
 #include <limits.h>
 #include "smolscale.h"
 
-#ifndef TRUE
-# define TRUE 1
-#endif
 #ifndef FALSE
-# define FALSE 0
+# define FALSE (0)
+#endif
+#ifndef TRUE
+# define TRUE (!FALSE)
 #endif
 
 #define SMOL_RESTRICT __restrict
