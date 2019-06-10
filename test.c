@@ -374,6 +374,48 @@ scale_do_sdl (ScaleParams *params, guint out_width, guint out_height)
     params->out_data = scaled_surface [1]->pixels;
 }
 
+/* --- Skia --- */
+
+#ifdef WITH_SKIA
+
+static void
+scale_init_skia (ScaleParams *params, gconstpointer in_raw, guint in_width, guint in_height)
+{
+    params->in_width = in_width;
+    params->in_height = in_height;
+    params->in_data = (gpointer) in_raw;
+}
+
+static void
+scale_fini_skia (G_GNUC_UNUSED ScaleParams *params)
+{
+    if (params->priv)
+        g_free (params->priv);
+    if (params->out_data)
+        g_free (params->out_data);
+}
+
+static void
+scale_do_skia (ScaleParams *params, guint out_width, guint out_height)
+{
+    gpointer scaled;
+
+    if (params->priv)
+        g_free (params->priv);
+    if (params->out_data)
+        g_free (params->out_data);
+
+    scaled = g_new (guint32, out_width * out_height);
+    skia_scale_raw (params->in_data,
+                    params->in_width, params->in_height,
+                    scaled,
+                    out_width, out_height);
+
+    params->out_data = scaled;
+}
+
+#endif
+
 /* --- Smolscale --- */
 
 static void
@@ -863,7 +905,7 @@ run_generate (const gchar *filename,
 static void
 print_usage (void)
 {
-    g_printerr ("Usage: benchmark <smol|pixman|gdk_pixbuf>\n"
+    g_printerr ("Usage: benchmark <smol|pixman|gdk_pixbuf|sdl|skia>\n"
                 "                 [ generate\n"
                 "                   <min_scale> <max_scale> <n_steps>\n"
                 "                   <filename> ] |\n"
@@ -948,6 +990,17 @@ main (int argc, char *argv [])
         init_func = scale_init_sdl;
         fini_func = scale_fini_sdl;
         do_func = scale_do_sdl;
+    }
+    else if (!strcasecmp (argv [1], "skia"))
+    {
+#ifdef WITH_SKIA
+        init_func = scale_init_skia;
+        fini_func = scale_fini_skia;
+        do_func = scale_do_skia;
+#else
+        g_printerr ("No Skia support built in; see Makefile.\n");
+        return 1;
+#endif
     }
     else
     {
