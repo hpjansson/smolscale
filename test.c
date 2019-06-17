@@ -125,7 +125,7 @@ scale_init_pixman (ScaleParams *params, gconstpointer in_raw, guint in_width, gu
 {
     params->in_width = in_width;
     params->in_height = in_height;
-    params->in_data = pixman_image_create_bits (PIXMAN_r8g8b8a8,
+    params->in_data = pixman_image_create_bits (PIXMAN_a8r8g8b8,
                                                 in_width, in_height,
                                                 (void *) in_raw,
                                                 in_width * sizeof (guint32));
@@ -196,7 +196,7 @@ scale_do_pixman (ScaleParams *params, guint out_width, guint out_height)
     /* Scale */
 
     pixels = calloc (1, out_width * out_height * sizeof (guint32));
-    tmp = pixman_image_create_bits (PIXMAN_r8g8b8a8,
+    tmp = pixman_image_create_bits (PIXMAN_a8r8g8b8,
                                     out_width, out_height,
                                     pixels,
                                     out_width * 4);
