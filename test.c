@@ -655,11 +655,13 @@ run_benchmark_proportional (gpointer raw_data,
         for (step = 0; step < n_steps; step++)
         {
             struct timespec before, after;
+            guint out_width, out_height;
+
+            out_width = CLAMP (out_width_min + step * width_step_size, 1, 65535);
+            out_height = CLAMP (out_height_min + step * height_step_size, 1, 65535);
 
             clock_gettime (CLOCK_MONOTONIC_RAW, &before);
-            (*do_func) (&params,
-                        out_width_min + step * width_step_size,
-                        out_height_min +step * height_step_size);
+            (*do_func) (&params, out_width, out_height);
             clock_gettime (CLOCK_MONOTONIC_RAW, &after);
             results [step * n_repetitions + rep] = compute_elapsed (&before, &after);
         }
