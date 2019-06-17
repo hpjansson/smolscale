@@ -611,7 +611,7 @@ run_benchmark (gpointer raw_data,
             out_width = out_width_min + width_step * width_step_size;
             out_height = out_height_min + height_step * height_step_size;
 
-            g_print ("%u %u %.4lf %.3lf\n",
+            g_print ("%u %u %.6lf %.3lf\n",
                      out_width, out_height, best_time,
                      (out_width * out_height + in_width * in_height) / (best_time * 1000000.0));
         }
@@ -689,7 +689,7 @@ run_benchmark_proportional (gpointer raw_data,
         out_width = out_width_min + step * width_step_size;
         out_height = out_height_min + step * height_step_size;
 
-        g_print ("%u %u %.4lf %.3lf\n",
+        g_print ("%u %u %.6lf %.3lf\n",
                  out_width, out_height, best_time,
                  (out_width * out_height + in_width * in_height) / (best_time * 1000000.0));
     }
