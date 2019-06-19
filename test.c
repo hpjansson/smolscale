@@ -72,6 +72,64 @@ compute_elapsed (struct timespec *before, struct timespec *after)
     return diff / (gdouble) 1000000.0;
 }
 
+static void
+premultiply_alpha (guint32 *pixels, guint width, guint height)
+{
+    guint i;
+
+    for (i = 0; i < width * height; i++)
+    {
+        guint32 p = pixels [i];
+        guint32 ch [4];
+
+        ch [0] = (p >> 24) & 0xff;
+        ch [1] = (p >> 16) & 0xff;
+        ch [2] = (p >> 8) & 0xff;
+        ch [3] = p & 0xff;
+
+        ch [1] = (ch [1] * ch [0] * ((65536 * 256 + 255) / 255)) >> 24; /* * 65794 */
+        ch [2] = (ch [2] * ch [0] * ((65536 * 256 + 255) / 255)) >> 24; /* * 65794 */
+        ch [3] = (ch [3] * ch [0] * ((65536 * 256 + 255) / 255)) >> 24; /* * 65794 */
+
+        pixels [i] = (ch [0] << 24) | (ch [1] << 16) | (ch [2] << 8) | (ch [3]);
+    }
+}
+
+static guint8
+unpremultiply_channel (guint8 x, guint8 a)
+{
+    if (a == 0)
+        return 0;
+
+    if (x > a)
+        x = a;
+
+    return ((guint32) x * 255 + (a / 2)) / a;
+}
+
+static void
+unpremultiply_alpha (guint32 *pixels, guint width, guint height)
+{
+    guint i;
+
+    for (i = 0; i < width * height; i++)
+    {
+        guint32 p = pixels [i];
+        guint32 ch [4];
+
+        ch [0] = (p >> 24) & 0xff;
+        ch [1] = (p >> 16) & 0xff;
+        ch [2] = (p >> 8) & 0xff;
+        ch [3] = p & 0xff;
+
+        ch [1] = unpremultiply_channel (ch [1], ch [0]);
+        ch [2] = unpremultiply_channel (ch [2], ch [0]);
+        ch [3] = unpremultiply_channel (ch [3], ch [0]);
+
+        pixels [i] = (ch [0] << 24) | (ch [1] << 16) | (ch [2] << 8) | (ch [3]);
+    }
+}
+
 /* --- Pixman --- */
 
 static double
@@ -863,6 +921,10 @@ run_generate (const gchar *filename,
         return;
     }
 
+#if 0
+    premultiply_alpha (raw_data, in_width, in_height);
+#endif
+
     out_width_min = CLAMP (in_width * scale_min, 1, 65535);
     out_width_max = CLAMP (in_width * scale_max, 1, 65535);
     out_height_min = CLAMP (in_height * scale_min, 1, 65535);
@@ -892,6 +954,10 @@ run_generate (const gchar *filename,
         out_height = CLAMP (out_height_min + step * height_step_size, 1, 65535);
 
         (*do_func) (&params, out_width, out_height);
+
+#if 0
+        unpremultiply_alpha (params.out_data, out_width, out_height);
+#endif
 
         smol_save_image (fname_out_prefix, params.out_data, out_width, out_height);
 
