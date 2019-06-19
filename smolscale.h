@@ -13,19 +13,60 @@ extern "C" {
 
 typedef enum
 {
-    ALGORITHM_ONE,
-    ALGORITHM_BILINEAR,
-    ALGORITHM_BOX_256,
-    ALGORITHM_BOX_65536
+    ALGORITHM_ONE_64BPP,
+    ALGORITHM_BILINEAR_0H_64BPP,
+    ALGORITHM_BILINEAR_1H_64BPP,
+    ALGORITHM_BILINEAR_2H_64BPP,
+    ALGORITHM_BILINEAR_3H_64BPP,
+    ALGORITHM_BILINEAR_4H_64BPP,
+    ALGORITHM_BILINEAR_5H_64BPP,
+    ALGORITHM_BILINEAR_6H_64BPP,
+    ALGORITHM_BOX_64BPP,
+
+    ALGORITHM_64BPP_LAST = ALGORITHM_BOX_64BPP,
+
+    ALGORITHM_ONE_128BPP,
+    ALGORITHM_BILINEAR_0H_128BPP,
+    ALGORITHM_BILINEAR_1H_128BPP,
+    ALGORITHM_BILINEAR_2H_128BPP,
+    ALGORITHM_BILINEAR_3H_128BPP,
+    ALGORITHM_BILINEAR_4H_128BPP,
+    ALGORITHM_BILINEAR_5H_128BPP,
+    ALGORITHM_BILINEAR_6H_128BPP,
+    ALGORITHM_BOX_128BPP,
+
+    ALGORITHM_128BPP_LAST = ALGORITHM_BOX_128BPP
 }
 SmolAlgorithm;
 
-typedef struct SmolScaleCtx SmolScaleCtx;
+/* For reusing rows that have already undergone horizontal scaling */
+typedef struct
+{
+    uint32_t in_ofs;
+    uint64_t *parts_row [3];
+}
+SmolVerticalCtx;
 
 /* Defining struct SmolScaleCtx here allows client code to allocate it on
  * the stack. I could've made it opaque with dummy variables, but keeping
  * the private and public structs in sync would be messy and error-prone,
  * and we're not guaranteeing any kind of API or ABI stability anyway. */
+
+typedef struct SmolScaleCtx SmolScaleCtx;
+
+typedef void (SmolUnpackRowFunc) (const uint32_t *row_in,
+                                  uint64_t *row_out,
+                                  uint32_t n_pixels);
+typedef void (SmolPackRowFunc) (const uint64_t *row_in,
+                                uint32_t *row_out,
+                                uint32_t n_pixels);
+typedef void (SmolHFilterFunc) (const SmolScaleCtx *scale_ctx,
+                                const uint64_t *row_limbs_in,
+                                uint64_t *row_limbs_out);
+typedef void (SmolVFilterFunc) (const SmolScaleCtx *scale_ctx,
+                                SmolVerticalCtx *vertical_ctx,
+                                uint32_t outrow_index,
+                                uint32_t *row_out);
 
 struct SmolScaleCtx
 {
@@ -37,6 +78,10 @@ struct SmolScaleCtx
     uint32_t width_out, height_out, rowstride_out;
 
     SmolAlgorithm algo_h, algo_v;
+    SmolUnpackRowFunc *unpack_row_func;
+    SmolPackRowFunc *pack_row_func;
+    SmolHFilterFunc *hfilter_func;
+    SmolVFilterFunc *vfilter_func;
 
     /* Each offset is split in two uint16s: { pixel index, fraction }. These
      * are relative to the image after halvings have taken place. */
