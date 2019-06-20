@@ -730,28 +730,15 @@ update_vertical_ctx_bilinear (const SmolScaleCtx *scale_ctx,
 }
 
 static void
-interp_vertical_bilinear_store (uint64_t F,
-                                const uint64_t * SMOL_RESTRICT SMOL_ALIGNED_64 top_row_parts_in,
-                                const uint64_t * SMOL_RESTRICT SMOL_ALIGNED_64 bottom_row_parts_in,
-                                uint64_t * SMOL_RESTRICT SMOL_ALIGNED_64 parts_out,
-                                uint32_t width)
+interp_vertical_bilinear_store_64bpp (uint64_t F,
+                                      const uint64_t * SMOL_RESTRICT SMOL_ALIGNED_64 top_row_parts_in,
+                                      const uint64_t * SMOL_RESTRICT SMOL_ALIGNED_64 bottom_row_parts_in,
+                                      uint64_t * SMOL_RESTRICT SMOL_ALIGNED_64 parts_out,
+                                      uint32_t width)
 {
-    uint32_t i, j;
+    uint64_t *parts_out_last = parts_out + width;
 
-    for (i = 0; i + 16 <= width; i += 16)
-    {
-        for (j = 0; j < 16; j++)
-        {
-            uint64_t p, q;
-
-            p = *(top_row_parts_in++);
-            q = *(bottom_row_parts_in++);
-
-            *(parts_out++) = ((((p - q) * F) >> 8) + q) & 0x00ff00ff00ff00ffULL;
-        }
-    }
-
-    for ( ; i < width; i++)
+    do
     {
         uint64_t p, q;
 
@@ -760,14 +747,15 @@ interp_vertical_bilinear_store (uint64_t F,
 
         *(parts_out++) = ((((p - q) * F) >> 8) + q) & 0x00ff00ff00ff00ffULL;
     }
+    while (parts_out != parts_out_last);
 }
 
 static void
-interp_vertical_bilinear_add (uint64_t F,
-                              const uint64_t * SMOL_RESTRICT top_row_parts_in,
-                              const uint64_t * SMOL_RESTRICT bottom_row_parts_in,
-                              uint64_t * SMOL_RESTRICT accum_out,
-                              uint32_t width)
+interp_vertical_bilinear_add_64bpp (uint64_t F,
+                                    const uint64_t * SMOL_RESTRICT top_row_parts_in,
+                                    const uint64_t * SMOL_RESTRICT bottom_row_parts_in,
+                                    uint64_t * SMOL_RESTRICT accum_out,
+                                    uint32_t width)
 {
     uint64_t *accum_out_last = accum_out + width;
 
@@ -783,13 +771,55 @@ interp_vertical_bilinear_add (uint64_t F,
     while (accum_out != accum_out_last);
 }
 
+static void
+interp_vertical_bilinear_store_128bpp (uint64_t F,
+                                       const uint64_t * SMOL_RESTRICT SMOL_ALIGNED_64 top_row_parts_in,
+                                       const uint64_t * SMOL_RESTRICT SMOL_ALIGNED_64 bottom_row_parts_in,
+                                       uint64_t * SMOL_RESTRICT SMOL_ALIGNED_64 parts_out,
+                                       uint32_t width)
+{
+    uint64_t *parts_out_last = parts_out + width;
+
+    do
+    {
+        uint64_t p, q;
+
+        p = *(top_row_parts_in++);
+        q = *(bottom_row_parts_in++);
+
+        *(parts_out++) = ((((p - q) * F) >> 8) + q) & 0x00ffffff00ffffffULL;
+    }
+    while (parts_out != parts_out_last);
+}
+
+static void
+interp_vertical_bilinear_add_128bpp (uint64_t F,
+                                     const uint64_t * SMOL_RESTRICT top_row_parts_in,
+                                     const uint64_t * SMOL_RESTRICT bottom_row_parts_in,
+                                     uint64_t * SMOL_RESTRICT accum_out,
+                                     uint32_t width)
+{
+    uint64_t *accum_out_last = accum_out + width;
+
+    do
+    {
+        uint64_t p, q;
+
+        p = *(top_row_parts_in++);
+        q = *(bottom_row_parts_in++);
+
+        *(accum_out++) += ((((p - q) * F) >> 8) + q) & 0x00ffffff00ffffffULL;
+    }
+    while (accum_out != accum_out_last);
+}
+
 #define DEF_INTERP_VERTICAL_BILINEAR_FINAL(n_halvings)                  \
 static void                                                             \
-interp_vertical_bilinear_final_##n_halvings##h (uint64_t F,                \
-                                                const uint64_t * SMOL_RESTRICT top_row_parts_in, \
-                                                const uint64_t * SMOL_RESTRICT bottom_row_parts_in, \
-                                                uint64_t * SMOL_RESTRICT accum_inout, \
-                                                uint32_t width)         \
+interp_vertical_bilinear_final_##n_halvings##h_64bpp (uint64_t F,                \
+                                                      const uint64_t * SMOL_RESTRICT top_row_parts_in, \
+                                                      const uint64_t * SMOL_RESTRICT bottom_row_parts_in, \
+                                                      uint64_t * SMOL_RESTRICT accum_inout, \
+                                                      uint32_t width)   \
 {                                                                       \
     uint64_t *accum_inout_last = accum_inout + width;                   \
                                                                         \
@@ -802,6 +832,30 @@ interp_vertical_bilinear_final_##n_halvings##h (uint64_t F,                \
                                                                         \
         p = ((((p - q) * F) >> 8) + q) & 0x00ff00ff00ff00ffULL;         \
         p = ((p + *accum_inout) >> n_halvings) & 0x00ff00ff00ff00ffULL; \
+                                                                        \
+        *(accum_inout++) = p;                                           \
+    }                                                                   \
+    while (accum_inout != accum_inout_last);                            \
+}                                                                       \
+                                                                        \
+static void                                                             \
+interp_vertical_bilinear_final_##n_halvings##h_128bpp (uint64_t F,      \
+                                                       const uint64_t * SMOL_RESTRICT top_row_parts_in, \
+                                                       const uint64_t * SMOL_RESTRICT bottom_row_parts_in, \
+                                                       uint64_t * SMOL_RESTRICT accum_inout, \
+                                                       uint32_t width)  \
+{                                                                       \
+    uint64_t *accum_inout_last = accum_inout + width;                   \
+                                                                        \
+    do                                                                  \
+    {                                                                   \
+        uint64_t p, q;                                                  \
+                                                                        \
+        p = *(top_row_parts_in++);                                      \
+        q = *(bottom_row_parts_in++);                                   \
+                                                                        \
+        p = ((((p - q) * F) >> 8) + q) & 0x00ffffff00ffffffULL;         \
+        p = ((p + *accum_inout) >> n_halvings) & 0x00ffffff00ffffffULL; \
                                                                         \
         *(accum_inout++) = p;                                           \
     }                                                                   \
@@ -819,30 +873,30 @@ scale_outrow_bilinear_##n_halvings##h_64bpp (const SmolScaleCtx *scale_ctx, \
     unsigned int i;                                                     \
                                                                         \
     update_vertical_ctx_bilinear (scale_ctx, vertical_ctx, bilin_index); \
-    interp_vertical_bilinear_store (scale_ctx->offsets_y [bilin_index * 2 + 1], \
-                                    vertical_ctx->parts_row [0],        \
-                                    vertical_ctx->parts_row [1],        \
-                                    vertical_ctx->parts_row [2],        \
-                                    scale_ctx->width_out);              \
+    interp_vertical_bilinear_store_64bpp (scale_ctx->offsets_y [bilin_index * 2 + 1], \
+                                          vertical_ctx->parts_row [0],  \
+                                          vertical_ctx->parts_row [1],  \
+                                          vertical_ctx->parts_row [2],  \
+                                          scale_ctx->width_out);        \
     bilin_index++;                                                      \
                                                                         \
     for (i = 0; i < (1 << (n_halvings)) - 2; i++)                       \
     {                                                                   \
         update_vertical_ctx_bilinear (scale_ctx, vertical_ctx, bilin_index); \
-        interp_vertical_bilinear_add (scale_ctx->offsets_y [bilin_index * 2 + 1], \
-                                      vertical_ctx->parts_row [0],      \
-                                      vertical_ctx->parts_row [1],      \
-                                      vertical_ctx->parts_row [2],      \
-                                      scale_ctx->width_out);            \
+        interp_vertical_bilinear_add_64bpp (scale_ctx->offsets_y [bilin_index * 2 + 1], \
+                                            vertical_ctx->parts_row [0], \
+                                            vertical_ctx->parts_row [1], \
+                                            vertical_ctx->parts_row [2], \
+                                            scale_ctx->width_out);      \
         bilin_index++;                                                  \
     }                                                                   \
                                                                         \
     update_vertical_ctx_bilinear (scale_ctx, vertical_ctx, bilin_index); \
-    interp_vertical_bilinear_final_##n_halvings##h (scale_ctx->offsets_y [bilin_index * 2 + 1], \
-                                                    vertical_ctx->parts_row [0], \
-                                                    vertical_ctx->parts_row [1], \
-                                                    vertical_ctx->parts_row [2], \
-                                                    scale_ctx->width_out); \
+    interp_vertical_bilinear_final_##n_halvings##h_64bpp (scale_ctx->offsets_y [bilin_index * 2 + 1], \
+                                                          vertical_ctx->parts_row [0], \
+                                                          vertical_ctx->parts_row [1], \
+                                                          vertical_ctx->parts_row [2], \
+                                                          scale_ctx->width_out); \
                                                                         \
     scale_ctx->pack_row_func (vertical_ctx->parts_row [2], row_out, scale_ctx->width_out); \
 }                                                                       \
@@ -857,30 +911,30 @@ scale_outrow_bilinear_##n_halvings##h_128bpp (const SmolScaleCtx *scale_ctx, \
     unsigned int i;                                                     \
                                                                         \
     update_vertical_ctx_bilinear (scale_ctx, vertical_ctx, bilin_index); \
-    interp_vertical_bilinear_store (scale_ctx->offsets_y [bilin_index * 2 + 1], \
-                                    vertical_ctx->parts_row [0],        \
-                                    vertical_ctx->parts_row [1],        \
-                                    vertical_ctx->parts_row [2],        \
-                                    scale_ctx->width_out * 2);          \
+    interp_vertical_bilinear_store_128bpp (scale_ctx->offsets_y [bilin_index * 2 + 1], \
+                                           vertical_ctx->parts_row [0], \
+                                           vertical_ctx->parts_row [1], \
+                                           vertical_ctx->parts_row [2], \
+                                           scale_ctx->width_out * 2);   \
     bilin_index++;                                                      \
                                                                         \
     for (i = 0; i < (1 << (n_halvings)) - 2; i++)                       \
     {                                                                   \
         update_vertical_ctx_bilinear (scale_ctx, vertical_ctx, bilin_index); \
-        interp_vertical_bilinear_add (scale_ctx->offsets_y [bilin_index * 2 + 1], \
-                                      vertical_ctx->parts_row [0],      \
-                                      vertical_ctx->parts_row [1],      \
-                                      vertical_ctx->parts_row [2],      \
-                                      scale_ctx->width_out * 2);        \
+        interp_vertical_bilinear_add_128bpp (scale_ctx->offsets_y [bilin_index * 2 + 1], \
+                                             vertical_ctx->parts_row [0], \
+                                             vertical_ctx->parts_row [1], \
+                                             vertical_ctx->parts_row [2], \
+                                             scale_ctx->width_out * 2); \
         bilin_index++;                                                  \
     }                                                                   \
                                                                         \
     update_vertical_ctx_bilinear (scale_ctx, vertical_ctx, bilin_index); \
-    interp_vertical_bilinear_final_##n_halvings##h (scale_ctx->offsets_y [bilin_index * 2 + 1], \
-                                                    vertical_ctx->parts_row [0], \
-                                                    vertical_ctx->parts_row [1], \
-                                                    vertical_ctx->parts_row [2], \
-                                                    scale_ctx->width_out * 2); \
+    interp_vertical_bilinear_final_##n_halvings##h_128bpp (scale_ctx->offsets_y [bilin_index * 2 + 1], \
+                                                           vertical_ctx->parts_row [0], \
+                                                           vertical_ctx->parts_row [1], \
+                                                           vertical_ctx->parts_row [2], \
+                                                           scale_ctx->width_out * 2); \
                                                                         \
     scale_ctx->pack_row_func (vertical_ctx->parts_row [2], row_out, scale_ctx->width_out); \
 }
@@ -892,11 +946,11 @@ scale_outrow_bilinear_0h_64bpp (const SmolScaleCtx *scale_ctx,
                                 uint32_t *row_out)
 {
     update_vertical_ctx_bilinear (scale_ctx, vertical_ctx, outrow_index);
-    interp_vertical_bilinear_store (scale_ctx->offsets_y [outrow_index * 2 + 1],
-                                    vertical_ctx->parts_row [0],
-                                    vertical_ctx->parts_row [1],
-                                    vertical_ctx->parts_row [2],
-                                    scale_ctx->width_out);
+    interp_vertical_bilinear_store_64bpp (scale_ctx->offsets_y [outrow_index * 2 + 1],
+                                          vertical_ctx->parts_row [0],
+                                          vertical_ctx->parts_row [1],
+                                          vertical_ctx->parts_row [2],
+                                          scale_ctx->width_out);
     scale_ctx->pack_row_func (vertical_ctx->parts_row [2], row_out, scale_ctx->width_out);
 }
 
@@ -907,11 +961,11 @@ scale_outrow_bilinear_0h_128bpp (const SmolScaleCtx *scale_ctx,
                                  uint32_t *row_out)
 {
     update_vertical_ctx_bilinear (scale_ctx, vertical_ctx, outrow_index);
-    interp_vertical_bilinear_store (scale_ctx->offsets_y [outrow_index * 2 + 1],
-                                    vertical_ctx->parts_row [0],
-                                    vertical_ctx->parts_row [1],
-                                    vertical_ctx->parts_row [2],
-                                    scale_ctx->width_out * 2);
+    interp_vertical_bilinear_store_128bpp (scale_ctx->offsets_y [outrow_index * 2 + 1],
+                                           vertical_ctx->parts_row [0],
+                                           vertical_ctx->parts_row [1],
+                                           vertical_ctx->parts_row [2],
+                                           scale_ctx->width_out * 2);
     scale_ctx->pack_row_func (vertical_ctx->parts_row [2], row_out, scale_ctx->width_out);
 }
 
@@ -926,18 +980,18 @@ scale_outrow_bilinear_1h_64bpp (const SmolScaleCtx *scale_ctx,
     uint32_t bilin_index = outrow_index << 1;
 
     update_vertical_ctx_bilinear (scale_ctx, vertical_ctx, bilin_index);
-    interp_vertical_bilinear_store (scale_ctx->offsets_y [bilin_index * 2 + 1],
-                                    vertical_ctx->parts_row [0],
-                                    vertical_ctx->parts_row [1],
-                                    vertical_ctx->parts_row [2],
-                                    scale_ctx->width_out);
+    interp_vertical_bilinear_store_64bpp (scale_ctx->offsets_y [bilin_index * 2 + 1],
+                                          vertical_ctx->parts_row [0],
+                                          vertical_ctx->parts_row [1],
+                                          vertical_ctx->parts_row [2],
+                                          scale_ctx->width_out);
     bilin_index++;
     update_vertical_ctx_bilinear (scale_ctx, vertical_ctx, bilin_index);
-    interp_vertical_bilinear_final_1h (scale_ctx->offsets_y [bilin_index * 2 + 1],
-                                       vertical_ctx->parts_row [0],
-                                       vertical_ctx->parts_row [1],
-                                       vertical_ctx->parts_row [2],
-                                       scale_ctx->width_out);
+    interp_vertical_bilinear_final_1h_64bpp (scale_ctx->offsets_y [bilin_index * 2 + 1],
+                                             vertical_ctx->parts_row [0],
+                                             vertical_ctx->parts_row [1],
+                                             vertical_ctx->parts_row [2],
+                                             scale_ctx->width_out);
     scale_ctx->pack_row_func (vertical_ctx->parts_row [2], row_out, scale_ctx->width_out);
 }
 
@@ -950,18 +1004,18 @@ scale_outrow_bilinear_1h_128bpp (const SmolScaleCtx *scale_ctx,
     uint32_t bilin_index = outrow_index << 1;
 
     update_vertical_ctx_bilinear (scale_ctx, vertical_ctx, bilin_index);
-    interp_vertical_bilinear_store (scale_ctx->offsets_y [bilin_index * 2 + 1],
-                                    vertical_ctx->parts_row [0],
-                                    vertical_ctx->parts_row [1],
-                                    vertical_ctx->parts_row [2],
-                                    scale_ctx->width_out * 2);
+    interp_vertical_bilinear_store_128bpp (scale_ctx->offsets_y [bilin_index * 2 + 1],
+                                           vertical_ctx->parts_row [0],
+                                           vertical_ctx->parts_row [1],
+                                           vertical_ctx->parts_row [2],
+                                           scale_ctx->width_out * 2);
     bilin_index++;
     update_vertical_ctx_bilinear (scale_ctx, vertical_ctx, bilin_index);
-    interp_vertical_bilinear_final_1h (scale_ctx->offsets_y [bilin_index * 2 + 1],
-                                       vertical_ctx->parts_row [0],
-                                       vertical_ctx->parts_row [1],
-                                       vertical_ctx->parts_row [2],
-                                       scale_ctx->width_out * 2);
+    interp_vertical_bilinear_final_1h_128bpp (scale_ctx->offsets_y [bilin_index * 2 + 1],
+                                              vertical_ctx->parts_row [0],
+                                              vertical_ctx->parts_row [1],
+                                              vertical_ctx->parts_row [2],
+                                              scale_ctx->width_out * 2);
     scale_ctx->pack_row_func (vertical_ctx->parts_row [2], row_out, scale_ctx->width_out);
 }
 
@@ -978,25 +1032,22 @@ DEF_SCALE_OUTROW_BILINEAR(6)
 
 static void
 finalize_vertical_64bpp (const uint64_t * SMOL_RESTRICT accums,
-                       uint64_t multiplier,
-                       uint32_t * SMOL_RESTRICT row_out,
-                       uint32_t n)
+                         uint64_t multiplier,
+                         uint64_t * SMOL_RESTRICT parts_out,
+                         uint32_t n)
 {
-    uint32_t *row_out_max = row_out + n;
+    uint64_t *parts_out_max = parts_out + n;
 
-    while (row_out != row_out_max)
+    while (parts_out != parts_out_max)
     {
-        uint64_t p;
-
-        p = scale_64bpp (*(accums++), multiplier);
-        *(row_out++) = pack_pixel_64bpp (p);
+        *(parts_out++) = scale_64bpp (*(accums++), multiplier);
     }
 }
 
 static void
 weight_edge_row_64bpp (uint64_t *row,
-                     uint16_t w,
-                     uint32_t n)
+                       uint16_t w,
+                       uint32_t n)
 {
     uint64_t *row_max = row + n;
 
@@ -1115,34 +1166,31 @@ scale_outrow_box_64bpp (const SmolScaleCtx *scale_ctx,
     }
 
     finalize_vertical_64bpp (vertical_ctx->parts_row [2],
-                           scale_ctx->span_mul_y,
-                           row_out,
-                           scale_ctx->width_out);
+                             scale_ctx->span_mul_y,
+                             vertical_ctx->parts_row [0],
+                             scale_ctx->width_out);
+    scale_ctx->pack_row_func (vertical_ctx->parts_row [0], row_out, scale_ctx->width_out);
 }
 
 static void
 finalize_vertical_128bpp (const uint64_t * SMOL_RESTRICT accums,
-                         uint64_t multiplier,
-                         uint32_t * SMOL_RESTRICT row_out,
-                         uint32_t n)
+                          uint64_t multiplier,
+                          uint64_t * SMOL_RESTRICT parts_out,
+                          uint32_t n)
 {
-    uint32_t *row_out_max = row_out + n;
+    uint64_t *parts_out_max = parts_out + n * 2;
 
-    while (row_out != row_out_max)
+    while (parts_out != parts_out_max)
     {
-        uint64_t p [2];
-
-        p [0] = scale_128bpp_half (*(accums++), multiplier);
-        p [1] = scale_128bpp_half (*(accums++), multiplier);
-
-        *(row_out++) = pack_pixel_128bpp (p);
+        *(parts_out++) = scale_128bpp_half (*(accums++), multiplier);
+        *(parts_out++) = scale_128bpp_half (*(accums++), multiplier);
     }
 }
 
 static void
 weight_row_128bpp (uint64_t *row,
-                  uint16_t w,
-                  uint32_t n)
+                   uint16_t w,
+                   uint32_t n)
 {
     uint64_t *row_max = row + (n * 2);
 
@@ -1208,8 +1256,11 @@ scale_outrow_box_128bpp (const SmolScaleCtx *scale_ctx,
                    scale_ctx->width_out * 2);
     }
 
-    finalize_vertical_128bpp (vertical_ctx->parts_row [0], scale_ctx->span_mul_y,
-                             row_out, scale_ctx->width_out);
+    finalize_vertical_128bpp (vertical_ctx->parts_row [0],
+                              scale_ctx->span_mul_y,
+                              vertical_ctx->parts_row [1],
+                              scale_ctx->width_out);
+    scale_ctx->pack_row_func (vertical_ctx->parts_row [1], row_out, scale_ctx->width_out);
 }
 
 static void
