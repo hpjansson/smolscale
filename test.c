@@ -546,7 +546,7 @@ scale_smol_thread_worker (gpointer data, SmolScaleCtx *scale_ctx)
 static void
 scale_do_smol_threaded (ScaleParams *params, guint out_width, guint out_height)
 {
-    SmolScaleCtx scale_ctx;
+    SmolScaleCtx *scale_ctx;
     GThreadPool *thread_pool;
     gpointer scaled;
     guint32 n_threads;
@@ -560,11 +560,10 @@ scale_do_smol_threaded (ScaleParams *params, guint out_width, guint out_height)
 
     scaled = g_new (guint32, out_width * out_height);
 
-    smol_scale_init (&scale_ctx,
-                     params->in_data,
-                     params->in_width, params->in_height, params->in_width * sizeof (guint32),
-                     scaled,
-                     out_width, out_height, out_width * sizeof (guint32));
+    scale_ctx = smol_scale_new (params->in_data,
+                                params->in_width, params->in_height, params->in_width * sizeof (guint32),
+                                scaled,
+                                out_width, out_height, out_width * sizeof (guint32));
 
     n_threads = g_get_num_processors ();
     thread_pool = g_thread_pool_new ((GFunc) scale_smol_thread_worker,
@@ -583,7 +582,7 @@ scale_do_smol_threaded (ScaleParams *params, guint out_width, guint out_height)
     }
 
     g_thread_pool_free (thread_pool, FALSE, TRUE);
-    smol_scale_finalize (&scale_ctx);
+    smol_scale_destroy (scale_ctx);
 
     params->out_data = scaled;
 }

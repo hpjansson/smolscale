@@ -12,6 +12,7 @@ else
 endif
 
 TEST_SYSDEPS_FLAGS=`pkg-config --libs --cflags glib-2.0 libpng pixman-1 gdk-pixbuf-2.0 SDL_gfx`
+TEST_HEADERS=smolscale.h smolscale-private.h
 TEST_SRC=smolscale.c png.c test.c
 TEST_FLAGS=-Wall -Wextra -O2 -g
 TEST_DEBUG_FLAGS=-Wall -Wextra -O2 -g -fno-inline -fno-omit-frame-pointer
@@ -22,13 +23,13 @@ all: test
 clean: FORCE
 	rm -f test test-simd test-debug skia.o
 
-test: Makefile smolscale.h $(TEST_SRC) $(SKIA_OBJ)
+test: Makefile $(TEST_HEADERS) $(TEST_SRC) $(SKIA_OBJ)
 	gcc $(TEST_FLAGS) $(TEST_SYSDEPS_FLAGS) $(SKIA_CFLAGS) $(SKIA_LDFLAGS) $(TEST_SRC) -o test
 
-test-debug: Makefile smolscale.h $(TEST_SRC) $(SKIA_OBJ)
+test-debug: Makefile $(TEST_HEADERS) $(TEST_SRC) $(SKIA_OBJ)
 	gcc $(TEST_DEBUG_FLAGS) $(TEST_SYSDEPS_FLAGS) $(SKIA_CFLAGS) $(SKIA_LDFLAGS) $(TEST_SRC) -o test-debug
 
-test-simd: Makefile smolscale.h $(TEST_SRC) $(SKIA_OBJ)
+test-simd: Makefile $(TEST_HEADERS) $(TEST_SRC) $(SKIA_OBJ)
 	gcc $(TEST_SIMD_FLAGS) $(TEST_SYSDEPS_FLAGS) $(SKIA_CFLAGS) $(SKIA_LDFLAGS) $(TEST_SRC) -o test-simd
 # -fopt-info-vec-optimized -fopt-info-vec-missed
 

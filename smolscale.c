@@ -6,32 +6,7 @@
 #include <string.h> /* memset */
 #include <alloca.h> /* alloca */
 #include <limits.h>
-#include "smolscale.h"
-
-#ifndef FALSE
-# define FALSE (0)
-#endif
-#ifndef TRUE
-# define TRUE (!FALSE)
-#endif
-
-#define SMOL_RESTRICT __restrict
-#define SMOL_INLINE __attribute__((always_inline)) inline
-#define SMOL_CONST __attribute__((const))
-#define SMOL_PURE __attribute__((pure))
-#define SMOL_ALIGNED_4 __attribute__((aligned(4)))
-#define SMOL_ALIGNED_8 __attribute__((aligned(8)))
-#define SMOL_ALIGNED_16 __attribute__((aligned(16)))
-#define SMOL_ALIGNED_32 __attribute__((aligned(32)))
-#define SMOL_ALIGNED_64 __attribute__((aligned(64)))
-
-#define SMALL_MUL 256U
-#define BIG_MUL 65536U
-#define BOXES_MULTIPLIER ((uint64_t) BIG_MUL * SMALL_MUL)
-#define BILIN_MULTIPLIER ((uint64_t) BIG_MUL * BIG_MUL)
-
-#define aligned_alloca(s, a) \
-  ({ void *p = alloca ((s) + (a)); p = (void *) (((uintptr_t) (p) + (a)) & ~((a) - 1)); (p); })
+#include "smolscale-private.h"
 
 /* --- Pixel and parts manipulation --- */
 
@@ -1509,7 +1484,7 @@ static SmolVFilterFunc *vfilter_funcs [] =
     scale_outrow_box_128bpp,
 };
 
-void
+static void
 smol_scale_init (SmolScaleCtx *scale_ctx,
                  const uint32_t *pixels_in,
                  uint32_t width_in,
@@ -1592,10 +1567,42 @@ smol_scale_init (SmolScaleCtx *scale_ctx,
     scale_ctx->vfilter_func = vfilter_funcs [scale_ctx->algo_v + scale_ctx->height_halvings];
 }
 
-void
+static void
 smol_scale_finalize (SmolScaleCtx *scale_ctx)
 {
     free (scale_ctx->offsets_x);
+}
+
+SmolScaleCtx *
+smol_scale_new (const uint32_t *pixels_in,
+                uint32_t width_in,
+                uint32_t height_in,
+                uint32_t rowstride_in,
+                uint32_t *pixels_out,
+                uint32_t width_out,
+                uint32_t height_out,
+                uint32_t rowstride_out)
+{
+    SmolScaleCtx *scale_ctx;
+
+    scale_ctx = calloc (sizeof (SmolScaleCtx), 1);
+    smol_scale_init (scale_ctx,
+                     pixels_in,
+                     width_in,
+                     height_in,
+                     rowstride_in,
+                     pixels_out,
+                     width_out,
+                     height_out,
+                     rowstride_out);
+    return scale_ctx;
+}
+
+void
+smol_scale_destroy (SmolScaleCtx *scale_ctx)
+{
+    smol_scale_finalize (scale_ctx);
+    free (scale_ctx);
 }
 
 void
