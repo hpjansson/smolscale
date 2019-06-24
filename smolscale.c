@@ -35,6 +35,59 @@
 
 /* --- Pixel and parts manipulation --- */
 
+#define INVERTED_DIV_SHIFT 18
+#define INVERTED_DIV_ROUNDING (1U << (INVERTED_DIV_SHIFT - 1))
+#define INVERTED_DIV_ROUNDING_128BPP \
+    (((uint64_t) INVERTED_DIV_ROUNDING << 32) | INVERTED_DIV_ROUNDING)
+
+/* This table is used to divide by an integer [1..255] using only a lookup,
+ * multiplication and a shift. This is faster than plain division on most
+ * architectures.
+ *
+ * Each entry represents the integer 262144 (1 << 18) divided by the index of
+ * the entry. Consequently,
+ *
+ * (v / i) ~= (v * inverted_div_table [i] + (1 << 17)) >> 18
+ *
+ * (1 << 17) is added for nearest rounding. It would've been nice to keep
+ * this table in uint16_t, but alas, we need the extra bits to get sufficient
+ * precision. */
+static const uint32_t inverted_div_table [256] =
+{
+        0, 262144, 131072,  87381,  65536,  52429,  43691,  37449,
+    32768,  29127,  26214,  23831,  21845,  20165,  18725,  17476,
+    16384,  15420,  14564,  13797,  13107,  12483,  11916,  11398,
+    10923,  10486,  10082,   9709,   9362,   9039,   8738,   8456,
+     8192,   7944,   7710,   7490,   7282,   7085,   6899,   6722,
+     6554,   6394,   6242,   6096,   5958,   5825,   5699,   5578,
+     5461,   5350,   5243,   5140,   5041,   4946,   4855,   4766,
+     4681,   4599,   4520,   4443,   4369,   4297,   4228,   4161,
+     4096,   4033,   3972,   3913,   3855,   3799,   3745,   3692,
+     3641,   3591,   3542,   3495,   3449,   3404,   3361,   3318,
+     3277,   3236,   3197,   3158,   3121,   3084,   3048,   3013,
+     2979,   2945,   2913,   2881,   2849,   2819,   2789,   2759,
+     2731,   2703,   2675,   2648,   2621,   2595,   2570,   2545,
+     2521,   2497,   2473,   2450,   2427,   2405,   2383,   2362,
+     2341,   2320,   2300,   2280,   2260,   2241,   2222,   2203,
+     2185,   2166,   2149,   2131,   2114,   2097,   2081,   2064,
+     2048,   2032,   2016,   2001,   1986,   1971,   1956,   1942,
+     1928,   1913,   1900,   1886,   1872,   1859,   1846,   1833,
+     1820,   1808,   1796,   1783,   1771,   1759,   1748,   1736,
+     1725,   1713,   1702,   1691,   1680,   1670,   1659,   1649,
+     1638,   1628,   1618,   1608,   1598,   1589,   1579,   1570,
+     1560,   1551,   1542,   1533,   1524,   1515,   1507,   1498,
+     1489,   1481,   1473,   1464,   1456,   1448,   1440,   1432,
+     1425,   1417,   1409,   1402,   1394,   1387,   1380,   1372,
+     1365,   1358,   1351,   1344,   1337,   1331,   1324,   1317,
+     1311,   1304,   1298,   1291,   1285,   1279,   1273,   1266,
+     1260,   1254,   1248,   1242,   1237,   1231,   1225,   1219,
+     1214,   1208,   1202,   1197,   1192,   1186,   1181,   1176,
+     1170,   1165,   1160,   1155,   1150,   1145,   1140,   1135,
+     1130,   1125,   1120,   1116,   1111,   1106,   1101,   1097,
+     1092,   1088,   1083,   1079,   1074,   1070,   1066,   1061,
+     1057,   1053,   1049,   1044,   1040,   1036,   1032,   1028
+};
+
 static SMOL_INLINE const uint32_t *
 inrow_ofs_to_pointer (const SmolScaleCtx *scale_ctx,
                       uint32_t inrow_ofs)
@@ -78,6 +131,44 @@ unpack_pixel_128bpp (uint32_t p,
     uint64_t p64 = p;
     out [0] = ((p64 & 0xff000000) << 8) | ((p64 & 0x00ff0000) >> 16);
     out [1] = ((p64 & 0x0000ff00) << 24) | (p64 & 0x000000ff);
+}
+
+/* Masking and shifting out the results is left to the caller. In
+ * and out may not overlap. */
+static SMOL_INLINE void
+unpremul_128bpp (const uint64_t * SMOL_RESTRICT in,
+                 uint64_t * SMOL_RESTRICT out,
+                 uint8_t alpha)
+{
+    out [0] = ((in [0] * (uint64_t) inverted_div_table [alpha]
+                + INVERTED_DIV_ROUNDING_128BPP) >> INVERTED_DIV_SHIFT);
+    out [1] = ((in [1] * (uint64_t) inverted_div_table [alpha]
+                + INVERTED_DIV_ROUNDING_128BPP) >> INVERTED_DIV_SHIFT);
+}
+
+static SMOL_INLINE uint32_t
+pack_pixel_unassoc_xxxa_128bpp (const uint64_t * SMOL_RESTRICT in)
+{
+    uint8_t alpha = in [1] & 0xff;
+    uint64_t t [2];
+
+    unpremul_128bpp (in, t, alpha);
+
+    return ((t [0] >> 8) & 0xff000000)
+           | ((t [0] << 16) & 0x00ff0000)
+           | ((t [1] >> 24) & 0x0000ff00)
+           | alpha;
+}
+
+static SMOL_INLINE void
+unpack_pixel_unassoc_xxxa_128bpp (uint32_t p,
+                                  uint64_t *out)
+{
+    uint64_t p64 = p;
+    uint64_t alpha = p64 & 0xff;
+
+    out [0] = (((((p64 & 0xff000000) << 8) | ((p64 & 0x00ff0000) >> 16)) * alpha));
+    out [1] = (((((p64 & 0x0000ff00) << 24) * alpha))) | alpha;
 }
 
 static SMOL_INLINE uint64_t
@@ -150,6 +241,34 @@ unpack_row_128bpp (const uint32_t * SMOL_RESTRICT row_in,
     while (row_out != row_out_max)
     {
         unpack_pixel_128bpp (*(row_in++), row_out);
+        row_out += 2;
+    }
+}
+
+static SMOL_INLINE void
+pack_row_unassoc_xxxa_128bpp (const uint64_t * SMOL_RESTRICT row_in,
+                              uint32_t * SMOL_RESTRICT row_out,
+                              uint32_t n_pixels)
+{
+    uint32_t *row_out_max = row_out + n_pixels;
+
+    while (row_out != row_out_max)
+    {
+        *(row_out++) = pack_pixel_unassoc_xxxa_128bpp (row_in);
+        row_in += 2;
+    }
+}
+
+static SMOL_INLINE void
+unpack_row_unassoc_xxxa_128bpp (const uint32_t * SMOL_RESTRICT row_in,
+                                uint64_t * SMOL_RESTRICT row_out,
+                                uint32_t n_pixels)
+{
+    uint64_t *row_out_max = row_out + n_pixels * 2;
+
+    while (row_out != row_out_max)
+    {
+        unpack_pixel_unassoc_xxxa_128bpp (*(row_in++), row_out);
         row_out += 2;
     }
 }
