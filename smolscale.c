@@ -63,18 +63,17 @@ static const uint32_t inverted_div_table [256] =
       8456,   8422,   8389,   8355,   8322,   8289,   8257,   8224,
 };
 
-static SMOL_INLINE const uint32_t *
-inrow_ofs_to_pointer (const SmolScaleCtx *scale_ctx,
-                      uint32_t inrow_ofs)
+/* Masking and shifting out the results is left to the caller. In
+ * and out may not overlap. */
+static SMOL_INLINE void
+unpremul_128bpp (const uint64_t * SMOL_RESTRICT in,
+                 uint64_t * SMOL_RESTRICT out,
+                 uint8_t alpha)
 {
-    return scale_ctx->pixels_in + scale_ctx->rowstride_in * inrow_ofs;
-}
-
-static SMOL_INLINE uint32_t *
-outrow_ofs_to_pointer (const SmolScaleCtx *scale_ctx,
-                       uint32_t outrow_ofs)
-{
-    return scale_ctx->pixels_out + scale_ctx->rowstride_out * outrow_ofs;
+    out [0] = ((in [0] * (uint64_t) inverted_div_table [alpha]
+                + INVERTED_DIV_ROUNDING_128BPP) >> INVERTED_DIV_SHIFT);
+    out [1] = ((in [1] * (uint64_t) inverted_div_table [alpha]
+                + INVERTED_DIV_ROUNDING_128BPP) >> INVERTED_DIV_SHIFT);
 }
 
 static SMOL_INLINE uint32_t
@@ -108,19 +107,6 @@ unpack_pixel_128bpp (uint32_t p,
     out [1] = ((p64 & 0x0000ff00) << 24) | (p64 & 0x000000ff);
 }
 
-/* Masking and shifting out the results is left to the caller. In
- * and out may not overlap. */
-static SMOL_INLINE void
-unpremul_128bpp (const uint64_t * SMOL_RESTRICT in,
-                 uint64_t * SMOL_RESTRICT out,
-                 uint8_t alpha)
-{
-    out [0] = ((in [0] * (uint64_t) inverted_div_table [alpha]
-                + INVERTED_DIV_ROUNDING_128BPP) >> INVERTED_DIV_SHIFT);
-    out [1] = ((in [1] * (uint64_t) inverted_div_table [alpha]
-                + INVERTED_DIV_ROUNDING_128BPP) >> INVERTED_DIV_SHIFT);
-}
-
 static SMOL_INLINE uint32_t
 pack_pixel_unassoc_xxxa_128bpp (const uint64_t * SMOL_RESTRICT in)
 {
@@ -144,23 +130,6 @@ unpack_pixel_unassoc_xxxa_128bpp (uint32_t p,
 
     out [0] = (((((p64 & 0xff000000) << 8) | ((p64 & 0x00ff0000) >> 16)) * alpha));
     out [1] = (((((p64 & 0x0000ff00) << 24) * alpha))) | alpha;
-}
-
-static SMOL_INLINE uint64_t
-weight_pixel_64bpp (uint64_t p,
-                    uint16_t w)
-{
-    return ((p * w) >> 8) & 0x00ff00ff00ff00ff;
-}
-
-/* p and out may be the same address */
-static SMOL_INLINE void
-weight_pixel_128bpp (uint64_t *p,
-                     uint64_t *out,
-                     uint16_t w)
-{
-    out [0] = ((p [0] * w) >> 8) & 0x00ffffff00ffffffULL;
-    out [1] = ((p [1] * w) >> 8) & 0x00ffffff00ffffffULL;
 }
 
 static SMOL_INLINE void
@@ -246,6 +215,39 @@ unpack_row_unassoc_xxxa_128bpp (const uint32_t * SMOL_RESTRICT row_in,
         unpack_pixel_unassoc_xxxa_128bpp (*(row_in++), row_out);
         row_out += 2;
     }
+}
+
+/* --- Filter helpers --- */
+
+static SMOL_INLINE const uint32_t *
+inrow_ofs_to_pointer (const SmolScaleCtx *scale_ctx,
+                      uint32_t inrow_ofs)
+{
+    return scale_ctx->pixels_in + scale_ctx->rowstride_in * inrow_ofs;
+}
+
+static SMOL_INLINE uint32_t *
+outrow_ofs_to_pointer (const SmolScaleCtx *scale_ctx,
+                       uint32_t outrow_ofs)
+{
+    return scale_ctx->pixels_out + scale_ctx->rowstride_out * outrow_ofs;
+}
+
+static SMOL_INLINE uint64_t
+weight_pixel_64bpp (uint64_t p,
+                    uint16_t w)
+{
+    return ((p * w) >> 8) & 0x00ff00ff00ff00ff;
+}
+
+/* p and out may be the same address */
+static SMOL_INLINE void
+weight_pixel_128bpp (uint64_t *p,
+                     uint64_t *out,
+                     uint16_t w)
+{
+    out [0] = ((p [0] * w) >> 8) & 0x00ffffff00ffffffULL;
+    out [1] = ((p [1] * w) >> 8) & 0x00ffffff00ffffffULL;
 }
 
 static SMOL_INLINE void
