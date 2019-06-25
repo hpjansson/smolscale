@@ -857,6 +857,57 @@ run_check (ScaleInitFunc init_func,
             canvas_array [i / 4] [j] = pixel;
     }
 
+    /* Downscale to minimum width and height; we do this first as it's
+     * more likely to reveal issues early on */
+
+    for (i = 1; i < 65536; i++)
+    {
+        g_printerr ("Width %u -> %u:        \r", i, 1);
+        check_all_levels ((const guint32 * const *) canvas_array,
+                          init_func,
+                          fini_func,
+                          do_func,
+                          i, 1, 1, 1,
+                          DIM_HORIZONTAL);
+    }
+
+    for (i = 1; i < 65536; i++)
+    {
+        g_printerr ("Height %u -> %u:        \r", i, 1);
+        check_all_levels ((const guint32 * const *) canvas_array,
+                          init_func,
+                          fini_func,
+                          do_func,
+                          1, i, 1, 1,
+                          DIM_VERTICAL);
+    }
+
+    /* Downscale from maximum width and height */
+
+    for (i = 1; i < 65536; i++)
+    {
+        g_printerr ("Width %u -> %u:        \r", 65535, i);
+        check_all_levels ((const guint32 * const *) canvas_array,
+                          init_func,
+                          fini_func,
+                          do_func,
+                          65535, 1, i, 1,
+                          DIM_HORIZONTAL);
+    }
+
+    for (i = 1; i < 65536; i++)
+    {
+        g_printerr ("Height %u -> %u:        \r", 65535, i);
+        check_all_levels ((const guint32 * const *) canvas_array,
+                          init_func,
+                          fini_func,
+                          do_func,
+                          1, 65535, 1, i,
+                          DIM_VERTICAL);
+    }
+
+    /* Long test */
+
     i = CORRECTNESS_WIDTH_MIN;
     for (;;)
     {
