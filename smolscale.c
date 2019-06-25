@@ -334,7 +334,7 @@ calc_size_steps (uint32_t dim_in,
                  uint32_t dim_out,
                  unsigned int *n_halvings,
                  uint32_t *dim_bilin_out,
-                 SmolAlgorithm *algo)
+                 SmolFilterType *filter)
 {
     *n_halvings = 0;
     *dim_bilin_out = dim_out;
@@ -345,21 +345,21 @@ calc_size_steps (uint32_t dim_in,
 
     if (dim_in > dim_out * 255)
     {
-        *algo = ALGORITHM_BOX_128BPP;
+        *filter = SMOL_FILTER_BOX_128BPP;
     }
     else if (dim_in > dim_out * 8)
     {
-        *algo = ALGORITHM_BOX_64BPP;
+        *filter = SMOL_FILTER_BOX_64BPP;
     }
     else if (dim_in == 1)
     {
-        *algo = ALGORITHM_ONE_64BPP;
+        *filter = SMOL_FILTER_ONE_64BPP;
     }
     else
     {
         uint32_t d = dim_out;
 
-        *algo = ALGORITHM_BILINEAR_0H_64BPP;
+        *filter = SMOL_FILTER_BILINEAR_0H_64BPP;
 
         for (;;)
         {
@@ -1417,10 +1417,10 @@ do_rows (const SmolScaleCtx *scale_ctx,
     uint32_t n_stored_rows = 3;
     uint32_t i;
 
-    if (scale_ctx->algo_h > ALGORITHM_64BPP_LAST || scale_ctx->algo_v > ALGORITHM_64BPP_LAST)
+    if (scale_ctx->filter_h > SMOL_FILTER_64BPP_LAST || scale_ctx->filter_v > SMOL_FILTER_64BPP_LAST)
         n_parts_per_pixel = 2;
 
-    if (scale_ctx->algo_v == ALGORITHM_ONE_64BPP || scale_ctx->algo_v == ALGORITHM_ONE_128BPP)
+    if (scale_ctx->filter_v == SMOL_FILTER_ONE_64BPP || scale_ctx->filter_v == SMOL_FILTER_ONE_128BPP)
         n_stored_rows = 1;
 
     /* Must be one less, or this test in update_vertical_ctx() will wrap around:
@@ -1704,40 +1704,40 @@ smol_scale_init (SmolScaleCtx *scale_ctx,
     calc_size_steps (width_in, width_out,
                      &scale_ctx->width_halvings,
                      &scale_ctx->width_bilin_out,
-                     &scale_ctx->algo_h);
+                     &scale_ctx->filter_h);
     calc_size_steps (height_in, height_out,
                      &scale_ctx->height_halvings,
                      &scale_ctx->height_bilin_out,
-                     &scale_ctx->algo_v);
+                     &scale_ctx->filter_v);
 
     scale_ctx->offsets_x = malloc (((scale_ctx->width_bilin_out + 1) * 2
                                     + (scale_ctx->height_bilin_out + 1) * 2) * sizeof (uint16_t));
     scale_ctx->offsets_y = scale_ctx->offsets_x + (scale_ctx->width_bilin_out + 1) * 2;
 
-    if (scale_ctx->algo_h == ALGORITHM_BILINEAR_0H_64BPP)
+    if (scale_ctx->filter_h == SMOL_FILTER_BILINEAR_0H_64BPP)
     {
         precalc_bilinear_array (scale_ctx->offsets_x,
                                 width_in, scale_ctx->width_bilin_out, FALSE);
     }
-    else if (scale_ctx->algo_h != ALGORITHM_ONE_64BPP)
+    else if (scale_ctx->filter_h != SMOL_FILTER_ONE_64BPP)
     {
         precalc_boxes_array (scale_ctx->offsets_x, &scale_ctx->span_mul_x,
                              width_in, scale_ctx->width_out, FALSE);
     }
 
-    if (scale_ctx->algo_v == ALGORITHM_BILINEAR_0H_64BPP)
+    if (scale_ctx->filter_v == SMOL_FILTER_BILINEAR_0H_64BPP)
     {
         precalc_bilinear_array (scale_ctx->offsets_y,
                                 height_in, scale_ctx->height_bilin_out, TRUE);
     }
-    else if (scale_ctx->algo_v != ALGORITHM_ONE_64BPP)
+    else if (scale_ctx->filter_v != SMOL_FILTER_ONE_64BPP)
     {
         precalc_boxes_array (scale_ctx->offsets_y, &scale_ctx->span_mul_y,
                              height_in, scale_ctx->height_out, TRUE);
     }
 
-    if (scale_ctx->algo_h == ALGORITHM_BOX_128BPP
-        || scale_ctx->algo_v == ALGORITHM_BOX_128BPP)
+    if (scale_ctx->filter_h == SMOL_FILTER_BOX_128BPP
+        || scale_ctx->filter_v == SMOL_FILTER_BOX_128BPP)
     {
         bpp = 128;
     }
@@ -1752,14 +1752,14 @@ smol_scale_init (SmolScaleCtx *scale_ctx,
         scale_ctx->unpack_row_func = unpack_row_128bpp;
         scale_ctx->pack_row_func = pack_row_128bpp;
 
-        if (scale_ctx->algo_h <= ALGORITHM_64BPP_LAST)
-            scale_ctx->algo_h += ALGORITHM_64BPP_LAST + 1;
-        if (scale_ctx->algo_v <= ALGORITHM_64BPP_LAST)
-            scale_ctx->algo_v += ALGORITHM_64BPP_LAST + 1;
+        if (scale_ctx->filter_h <= SMOL_FILTER_64BPP_LAST)
+            scale_ctx->filter_h += SMOL_FILTER_64BPP_LAST + 1;
+        if (scale_ctx->filter_v <= SMOL_FILTER_64BPP_LAST)
+            scale_ctx->filter_v += SMOL_FILTER_64BPP_LAST + 1;
     }
 
-    scale_ctx->hfilter_func = hfilter_funcs [scale_ctx->algo_h + scale_ctx->width_halvings];
-    scale_ctx->vfilter_func = vfilter_funcs [scale_ctx->algo_v + scale_ctx->height_halvings];
+    scale_ctx->hfilter_func = hfilter_funcs [scale_ctx->filter_h + scale_ctx->width_halvings];
+    scale_ctx->vfilter_func = vfilter_funcs [scale_ctx->filter_v + scale_ctx->height_halvings];
 }
 
 static void

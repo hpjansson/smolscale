@@ -17,13 +17,17 @@ typedef enum
     SMOL_PIXEL_BGRA8,
     SMOL_PIXEL_ARGB8,
     SMOL_PIXEL_ABGR8,
+
+    SMOL_PIXEL_MAX
 }
 SmolPixelType;
 
 typedef enum
 {
+    SMOL_ALPHA_PREMULTIPLIED,
     SMOL_ALPHA_UNASSOCIATED,
-    SMOL_ALPHA_PREMULTIPLIED
+
+    SMOL_ALPHA_MAX
 }
 SmolAlphaType;
 
