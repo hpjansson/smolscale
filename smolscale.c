@@ -8,7 +8,7 @@
 #include <limits.h>
 #include "smolscale-private.h"
 
-/* --- Pixel and parts manipulation --- */
+/* --- Premultiplication --- */
 
 #define INVERTED_DIV_SHIFT 21
 #define INVERTED_DIV_ROUNDING (1U << (INVERTED_DIV_SHIFT - 1))
@@ -76,20 +76,151 @@ unpremul_128bpp (const uint64_t * SMOL_RESTRICT in,
                 + INVERTED_DIV_ROUNDING_128BPP) >> INVERTED_DIV_SHIFT);
 }
 
-static SMOL_INLINE uint32_t
-pack_pixel_64bpp (uint64_t in)
+static SMOL_INLINE uint64_t
+unpremul_64bpp (const uint64_t in,
+                uint8_t alpha)
 {
-    return in | (in >> 24);
+    uint64_t in_128bpp [2];
+    uint64_t out_128bpp [2];
+
+    /* FIXME: Could rounding mess this up? We're passing in
+     * 255*256, not 255*255 */
+
+    in_128bpp [0] = (in & 0x000000ff000000ff) << 8;
+    in_128bpp [1] = (in & 0x00ff000000ff0000) >> 8;
+    unpremul_128bpp (in_128bpp, out_128bpp, alpha);
+
+    return (out_128bpp [0] & 0x000000ff000000ff)
+           | ((out_128bpp [1] & 0x000000ff000000ff) << 16);
 }
 
+/* --- Packing --- */
+
+/* It's nice to be able to shift by a negative amount */
+#define SHIFT_S(in, s) ((s >= 0) ? (in) << (s) : (in) >> -(s))
+
+/* This is kind of bulky (~13 x86 insns), but it's about the same as using
+ * unions, and we don't have to care about endianness. */
+#define PACK_FROM_1234_64BPP(in, a, b, c, d)                  \
+     ((SHIFT_S ((in), ((a) - 1) * 16 + 8 - 32) & 0xff000000)  \
+    | (SHIFT_S ((in), ((b) - 1) * 16 + 8 - 40) & 0x00ff0000)  \
+    | (SHIFT_S ((in), ((c) - 1) * 16 + 8 - 48) & 0x0000ff00)  \
+    | (SHIFT_S ((in), ((d) - 1) * 16 + 8 - 56) & 0x000000ff))
+
+#define PACK_FROM_1234_128BPP(in, a, b, c, d)                                         \
+     ((SHIFT_S ((in [((a) - 1) >> 1]), (((a) - 1) & 1) * 32 + 24 - 32) & 0xff000000)  \
+    | (SHIFT_S ((in [((b) - 1) >> 1]), (((b) - 1) & 1) * 32 + 24 - 40) & 0x00ff0000)  \
+    | (SHIFT_S ((in [((c) - 1) >> 1]), (((c) - 1) & 1) * 32 + 24 - 48) & 0x0000ff00)  \
+    | (SHIFT_S ((in [((d) - 1) >> 1]), (((d) - 1) & 1) * 32 + 24 - 56) & 0x000000ff))
+
+#define SWAP_2_AND_3(n) ((n) == 2 ? 3 : (n) == 3 ? 2 : n)
+
+#define PACK_FROM_1324_64BPP(in, a, b, c, d)                               \
+     ((SHIFT_S ((in), (SWAP_2_AND_3 (a) - 1) * 16 + 8 - 32) & 0xff000000)  \
+    | (SHIFT_S ((in), (SWAP_2_AND_3 (b) - 1) * 16 + 8 - 40) & 0x00ff0000)  \
+    | (SHIFT_S ((in), (SWAP_2_AND_3 (c) - 1) * 16 + 8 - 48) & 0x0000ff00)  \
+    | (SHIFT_S ((in), (SWAP_2_AND_3 (d) - 1) * 16 + 8 - 56) & 0x000000ff))
+
+/* Note: May not be needed */
+#define PACK_FROM_1324_128BPP(in, a, b, c, d)                               \
+     ((SHIFT_S ((in [(SWAP_2_AND_3 (a) - 1) >> 1]),                         \
+                ((SWAP_2_AND_3 (a) - 1) & 1) * 32 + 24 - 32) & 0xff000000)  \
+    | (SHIFT_S ((in [(SWAP_2_AND_3 (b) - 1) >> 1]),                         \
+                ((SWAP_2_AND_3 (b) - 1) & 1) * 32 + 24 - 40) & 0x00ff0000)  \
+    | (SHIFT_S ((in [(SWAP_2_AND_3 (c) - 1) >> 1]),                         \
+                ((SWAP_2_AND_3 (c) - 1) & 1) * 32 + 24 - 48) & 0x0000ff00)  \
+    | (SHIFT_S ((in [(SWAP_2_AND_3 (d) - 1) >> 1]),                         \
+                ((SWAP_2_AND_3 (d) - 1) & 1) * 32 + 24 - 56) & 0x000000ff))
+
+#define DEF_PACK_FROM_1324_P_TO_P_64BPP(a, b, c, d)                     \
+static SMOL_INLINE uint32_t                                             \
+pack_pixel_1324_p_to_##a##b##c##d##_p_64bpp (uint64_t in)               \
+{                                                                       \
+    return PACK_FROM_1324_64BPP (in, a, b, c, d);                       \
+}                                                                       \
+                                                                        \
+static void                                                             \
+pack_row_1324_p_to_##a##b##c##d##_p_64bpp (const uint64_t * SMOL_RESTRICT row_in, \
+                                           uint32_t * SMOL_RESTRICT row_out, \
+                                           uint32_t n_pixels)           \
+{                                                                       \
+    uint32_t *row_out_max = row_out + n_pixels;                         \
+    while (row_out != row_out_max)                                      \
+        *(row_out++) = pack_pixel_1324_p_to_##a##b##c##d##_p_64bpp (*(row_in++)); \
+}
+
+DEF_PACK_FROM_1324_P_TO_P_64BPP (1, 4, 3, 2)
+DEF_PACK_FROM_1324_P_TO_P_64BPP (2, 3, 4, 1)
+DEF_PACK_FROM_1324_P_TO_P_64BPP (3, 2, 1, 4)
+DEF_PACK_FROM_1324_P_TO_P_64BPP (4, 1, 2, 3)
+DEF_PACK_FROM_1324_P_TO_P_64BPP (4, 3, 2, 1)
+
 static SMOL_INLINE uint64_t
-unpack_pixel_64bpp (uint32_t p)
+unpack_pixel_1234_p_to_1324_p_64bpp (uint32_t p)
 {
     return (((uint64_t) p & 0xff00ff00) << 24) | (p & 0x00ff00ff);
 }
 
+/* AVX2 has a useful instruction for this: __m256i _mm256_cvtepu8_epi16 (__m128i a);
+ * It results in a different channel ordering, so it'd be important to match with
+ * the right kind of re-pack. */
+static void
+unpack_row_1234_p_to_1324_p_64bpp (const uint32_t * SMOL_RESTRICT row_in,
+                                   uint64_t * SMOL_RESTRICT row_out,
+                                   uint32_t n_pixels)
+{
+    uint64_t *row_out_max = row_out + n_pixels;
+
+    while (row_out != row_out_max)
+    {
+        *(row_out++) = unpack_pixel_1234_p_to_1324_p_64bpp (*(row_in++));
+    }
+}
+
 static SMOL_INLINE uint32_t
-pack_pixel_128bpp (const uint64_t *in)
+pack_pixel_1324_p_to_1234_p_64bpp (uint64_t in)
+{
+    return in | (in >> 24);
+}
+
+static void
+pack_row_1324_p_to_1234_p_64bpp (const uint64_t * SMOL_RESTRICT row_in,
+                                 uint32_t * SMOL_RESTRICT row_out,
+                                 uint32_t n_pixels)
+{
+    uint32_t *row_out_max = row_out + n_pixels;
+
+    while (row_out != row_out_max)
+    {
+        *(row_out++) = pack_pixel_1324_p_to_1234_p_64bpp (*(row_in++));
+    }
+}
+
+static SMOL_INLINE void
+unpack_pixel_1234_p_to_1234_p_128bpp (uint32_t p,
+                                      uint64_t *out)
+{
+    uint64_t p64 = p;
+    out [0] = ((p64 & 0xff000000) << 8) | ((p64 & 0x00ff0000) >> 16);
+    out [1] = ((p64 & 0x0000ff00) << 24) | (p64 & 0x000000ff);
+}
+
+static void
+unpack_row_1234_p_to_1234_p_128bpp (const uint32_t * SMOL_RESTRICT row_in,
+                                    uint64_t * SMOL_RESTRICT row_out,
+                                    uint32_t n_pixels)
+{
+    uint64_t *row_out_max = row_out + n_pixels * 2;
+
+    while (row_out != row_out_max)
+    {
+        unpack_pixel_1234_p_to_1234_p_128bpp (*(row_in++), row_out);
+        row_out += 2;
+    }
+}
+
+static SMOL_INLINE uint32_t
+pack_pixel_1234_p_to_1234_p_128bpp (const uint64_t *in)
 {
     /* FIXME: Are masks needed? */
     return ((in [0] >> 8) & 0xff000000)
@@ -98,17 +229,47 @@ pack_pixel_128bpp (const uint64_t *in)
            | (in [1] & 0x000000ff);
 }
 
+static void
+pack_row_1234_p_to_1234_p_128bpp (const uint64_t * SMOL_RESTRICT row_in,
+                                  uint32_t * SMOL_RESTRICT row_out,
+                                  uint32_t n_pixels)
+{
+    uint32_t *row_out_max = row_out + n_pixels;
+
+    while (row_out != row_out_max)
+    {
+        *(row_out++) = pack_pixel_1234_p_to_1234_p_128bpp (row_in);
+        row_in += 2;
+    }
+}
+
 static SMOL_INLINE void
-unpack_pixel_128bpp (uint32_t p,
-                     uint64_t *out)
+unpack_pixel_123a_u_to_123a_i_128bpp (uint32_t p,
+                                      uint64_t *out)
 {
     uint64_t p64 = p;
-    out [0] = ((p64 & 0xff000000) << 8) | ((p64 & 0x00ff0000) >> 16);
-    out [1] = ((p64 & 0x0000ff00) << 24) | (p64 & 0x000000ff);
+    uint64_t alpha = p64 & 0xff;
+
+    out [0] = (((((p64 & 0xff000000) << 8) | ((p64 & 0x00ff0000) >> 16)) * alpha));
+    out [1] = (((((p64 & 0x0000ff00) << 24) * alpha))) | alpha;
+}
+
+static void
+unpack_row_123a_u_to_123a_i_128bpp (const uint32_t * SMOL_RESTRICT row_in,
+                                    uint64_t * SMOL_RESTRICT row_out,
+                                    uint32_t n_pixels)
+{
+    uint64_t *row_out_max = row_out + n_pixels * 2;
+
+    while (row_out != row_out_max)
+    {
+        unpack_pixel_123a_u_to_123a_i_128bpp (*(row_in++), row_out);
+        row_out += 2;
+    }
 }
 
 static SMOL_INLINE uint32_t
-pack_pixel_unassoc_xxxa_128bpp (const uint64_t * SMOL_RESTRICT in)
+pack_pixel_123a_i_to_123a_u_128bpp (const uint64_t * SMOL_RESTRICT in)
 {
     uint8_t alpha = in [1] & 0xff;
     uint64_t t [2];
@@ -121,99 +282,17 @@ pack_pixel_unassoc_xxxa_128bpp (const uint64_t * SMOL_RESTRICT in)
            | alpha;
 }
 
-static SMOL_INLINE void
-unpack_pixel_unassoc_xxxa_128bpp (uint32_t p,
-                                  uint64_t *out)
-{
-    uint64_t p64 = p;
-    uint64_t alpha = p64 & 0xff;
-
-    out [0] = (((((p64 & 0xff000000) << 8) | ((p64 & 0x00ff0000) >> 16)) * alpha));
-    out [1] = (((((p64 & 0x0000ff00) << 24) * alpha))) | alpha;
-}
-
-static SMOL_INLINE void
-pack_row_64bpp (const uint64_t * SMOL_RESTRICT row_in,
-                uint32_t * SMOL_RESTRICT row_out,
-                uint32_t n_pixels)
+static void
+pack_row_123a_i_to_123a_u_128bpp (const uint64_t * SMOL_RESTRICT row_in,
+                                  uint32_t * SMOL_RESTRICT row_out,
+                                  uint32_t n_pixels)
 {
     uint32_t *row_out_max = row_out + n_pixels;
 
     while (row_out != row_out_max)
     {
-        *(row_out++) = pack_pixel_64bpp (*(row_in++));
-    }
-}
-
-/* AVX2 has a useful instruction for this: __m256i _mm256_cvtepu8_epi16 (__m128i a);
- * It results in a different channel ordering, so it'd be important to match with
- * the right kind of re-pack. */
-static SMOL_INLINE void
-unpack_row_64bpp (const uint32_t * SMOL_RESTRICT row_in,
-                  uint64_t * SMOL_RESTRICT row_out,
-                  uint32_t n_pixels)
-{
-    uint64_t *row_out_max = row_out + n_pixels;
-
-    while (row_out != row_out_max)
-    {
-        *(row_out++) = unpack_pixel_64bpp (*(row_in++));
-    }
-}
-
-static SMOL_INLINE void
-pack_row_128bpp (const uint64_t * SMOL_RESTRICT row_in,
-                 uint32_t * SMOL_RESTRICT row_out,
-                 uint32_t n_pixels)
-{
-    uint32_t *row_out_max = row_out + n_pixels;
-
-    while (row_out != row_out_max)
-    {
-        *(row_out++) = pack_pixel_128bpp (row_in);
+        *(row_out++) = pack_pixel_123a_i_to_123a_u_128bpp (row_in);
         row_in += 2;
-    }
-}
-
-static SMOL_INLINE void
-unpack_row_128bpp (const uint32_t * SMOL_RESTRICT row_in,
-                   uint64_t * SMOL_RESTRICT row_out,
-                   uint32_t n_pixels)
-{
-    uint64_t *row_out_max = row_out + n_pixels * 2;
-
-    while (row_out != row_out_max)
-    {
-        unpack_pixel_128bpp (*(row_in++), row_out);
-        row_out += 2;
-    }
-}
-
-static SMOL_INLINE void
-pack_row_unassoc_xxxa_128bpp (const uint64_t * SMOL_RESTRICT row_in,
-                              uint32_t * SMOL_RESTRICT row_out,
-                              uint32_t n_pixels)
-{
-    uint32_t *row_out_max = row_out + n_pixels;
-
-    while (row_out != row_out_max)
-    {
-        *(row_out++) = pack_pixel_unassoc_xxxa_128bpp (row_in);
-        row_in += 2;
-    }
-}
-
-static SMOL_INLINE void
-unpack_row_unassoc_xxxa_128bpp (const uint32_t * SMOL_RESTRICT row_in,
-                                uint64_t * SMOL_RESTRICT row_out,
-                                uint32_t n_pixels)
-{
-    uint64_t *row_out_max = row_out + n_pixels * 2;
-
-    while (row_out != row_out_max)
-    {
-        unpack_pixel_unassoc_xxxa_128bpp (*(row_in++), row_out);
-        row_out += 2;
     }
 }
 
