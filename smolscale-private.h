@@ -39,6 +39,14 @@ extern "C" {
 
 typedef enum
 {
+    SMOL_STORAGE_64BPP,
+    SMOL_STORAGE_128BPP,
+    SMOL_STORAGE_MAX
+}
+SmolStorageType;
+
+typedef enum
+{
     SMOL_FILTER_ONE_64BPP,
     SMOL_FILTER_BILINEAR_0H_64BPP,
     SMOL_FILTER_BILINEAR_1H_64BPP,
