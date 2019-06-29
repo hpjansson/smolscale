@@ -94,13 +94,21 @@ unpremul_64bpp (const uint64_t in,
            | ((out_128bpp [1] & 0x000000ff000000ff) << 16);
 }
 
+static SMOL_INLINE uint64_t
+premul_u_to_p_64bpp (const uint64_t in,
+                     uint8_t alpha)
+{
+    /* FIXME: Verify this */
+    return ((in * ((uint16_t) alpha + 1)) >> 8) & 0x00ff00ff00ff00ff;
+}
+
 /* --- Packing --- */
 
 /* It's nice to be able to shift by a negative amount */
 #define SHIFT_S(in, s) ((s >= 0) ? (in) << (s) : (in) >> -(s))
 
 /* This is kind of bulky (~13 x86 insns), but it's about the same as using
- * unions, and we don't have to care about endianness. */
+ * unions, and we don't have to worry about endianness. */
 #define PACK_FROM_1234_64BPP(in, a, b, c, d)                  \
      ((SHIFT_S ((in), ((a) - 1) * 16 + 8 - 32) & 0xff000000)  \
     | (SHIFT_S ((in), ((b) - 1) * 16 + 8 - 40) & 0x00ff0000)  \
@@ -132,6 +140,27 @@ unpremul_64bpp (const uint64_t in,
     | (SHIFT_S ((in [(SWAP_2_AND_3 (d) - 1) >> 1]),                         \
                 ((SWAP_2_AND_3 (d) - 1) & 1) * 32 + 24 - 56) & 0x000000ff))
 
+/* Pack p -> p */
+
+static SMOL_INLINE uint32_t
+pack_pixel_1324_p_to_1234_p_64bpp (uint64_t in)
+{
+    return in | (in >> 24);
+}
+
+static void
+pack_row_1324_p_to_1234_p_64bpp (const uint64_t * SMOL_RESTRICT row_in,
+                                 uint32_t * SMOL_RESTRICT row_out,
+                                 uint32_t n_pixels)
+{
+    uint32_t *row_out_max = row_out + n_pixels;
+
+    while (row_out != row_out_max)
+    {
+        *(row_out++) = pack_pixel_1324_p_to_1234_p_64bpp (*(row_in++));
+    }
+}
+
 #define DEF_PACK_FROM_1324_P_TO_P_64BPP(a, b, c, d)                     \
 static SMOL_INLINE uint32_t                                             \
 pack_pixel_1324_p_to_##a##b##c##d##_p_64bpp (uint64_t in)               \
@@ -155,6 +184,266 @@ DEF_PACK_FROM_1324_P_TO_P_64BPP (3, 2, 1, 4)
 DEF_PACK_FROM_1324_P_TO_P_64BPP (4, 1, 2, 3)
 DEF_PACK_FROM_1324_P_TO_P_64BPP (4, 3, 2, 1)
 
+/* Pack p (alpha last) -> u */
+
+static SMOL_INLINE uint32_t
+pack_pixel_132a_p_to_1234_u_64bpp (uint64_t in)
+{
+    uint8_t alpha = in;
+    in = (unpremul_64bpp (in, alpha) & 0xffffffffffffff00) | alpha;
+    return in | (in >> 24);
+}
+
+static void
+pack_row_132a_p_to_1234_u_64bpp (const uint64_t * SMOL_RESTRICT row_in,
+                                 uint32_t * SMOL_RESTRICT row_out,
+                                 uint32_t n_pixels)
+{
+    uint32_t *row_out_max = row_out + n_pixels;
+
+    while (row_out != row_out_max)
+    {
+        *(row_out++) = pack_pixel_132a_p_to_1234_u_64bpp (*(row_in++));
+    }
+}
+
+#define DEF_PACK_FROM_132A_P_TO_U_64BPP(a, b, c, d)                     \
+static SMOL_INLINE uint32_t                                             \
+pack_pixel_132a_p_to_##a##b##c##d##_u_64bpp (uint64_t in)               \
+{                                                                       \
+    uint8_t alpha = in;                                                 \
+    in = (unpremul_64bpp (in, alpha) & 0xffffffffffffff00) | alpha;     \
+    return PACK_FROM_1324_64BPP (in, a, b, c, d);                       \
+}                                                                       \
+                                                                        \
+static void                                                             \
+pack_row_132a_p_to_##a##b##c##d##_u_64bpp (const uint64_t * SMOL_RESTRICT row_in, \
+                                           uint32_t * SMOL_RESTRICT row_out, \
+                                           uint32_t n_pixels)           \
+{                                                                       \
+    uint32_t *row_out_max = row_out + n_pixels;                         \
+    while (row_out != row_out_max)                                      \
+        *(row_out++) = pack_pixel_132a_p_to_##a##b##c##d##_u_64bpp (*(row_in++)); \
+}
+
+DEF_PACK_FROM_132A_P_TO_U_64BPP (3, 2, 1, 4)
+DEF_PACK_FROM_132A_P_TO_U_64BPP (4, 1, 2, 3)
+DEF_PACK_FROM_132A_P_TO_U_64BPP (4, 3, 2, 1)
+
+/* Pack p (alpha first) -> u */
+
+static SMOL_INLINE uint32_t
+pack_pixel_a324_p_to_1234_u_64bpp (uint64_t in)
+{
+    uint8_t alpha = (in >> 48) & 0xff;  /* FIXME: May not need mask */
+    in = (unpremul_64bpp (in, alpha) & 0x0000ffffffffffff) | ((uint64_t) alpha << 48);
+    return in | (in >> 24);
+}
+
+static void
+pack_row_a324_p_to_1234_u_64bpp (const uint64_t * SMOL_RESTRICT row_in,
+                                 uint32_t * SMOL_RESTRICT row_out,
+                                 uint32_t n_pixels)
+{
+    uint32_t *row_out_max = row_out + n_pixels;
+
+    while (row_out != row_out_max)
+    {
+        *(row_out++) = pack_pixel_a324_p_to_1234_u_64bpp (*(row_in++));
+    }
+}
+
+#define DEF_PACK_FROM_A324_P_TO_U_64BPP(a, b, c, d)                     \
+static SMOL_INLINE uint32_t                                             \
+pack_pixel_a324_p_to_##a##b##c##d##_u_64bpp (uint64_t in)               \
+{                                                                       \
+    uint8_t alpha = (in >> 48) & 0xff;  /* FIXME: May not need mask */  \
+    in = (unpremul_64bpp (in, alpha) & 0x0000ffffffffffff) | ((uint64_t) alpha << 48); \
+    return PACK_FROM_1324_64BPP (in, a, b, c, d);                       \
+}                                                                       \
+                                                                        \
+static void                                                             \
+pack_row_a324_p_to_##a##b##c##d##_u_64bpp (const uint64_t * SMOL_RESTRICT row_in, \
+                                           uint32_t * SMOL_RESTRICT row_out, \
+                                           uint32_t n_pixels)           \
+{                                                                       \
+    uint32_t *row_out_max = row_out + n_pixels;                         \
+    while (row_out != row_out_max)                                      \
+        *(row_out++) = pack_pixel_a324_p_to_##a##b##c##d##_u_64bpp (*(row_in++)); \
+}
+
+DEF_PACK_FROM_A324_P_TO_U_64BPP (1, 4, 3, 2)
+DEF_PACK_FROM_A324_P_TO_U_64BPP (2, 3, 4, 1)
+DEF_PACK_FROM_A324_P_TO_U_64BPP (4, 3, 2, 1)
+
+/* Pack i (alpha last) to u */
+
+static SMOL_INLINE uint32_t
+pack_pixel_123a_i_to_1234_u_128bpp (const uint64_t * SMOL_RESTRICT in)
+{
+    uint8_t alpha = in [1] & 0xff;
+    uint64_t t [2];
+
+    unpremul_128bpp (in, t, alpha);
+
+    return ((t [0] >> 8) & 0xff000000)
+           | ((t [0] << 16) & 0x00ff0000)
+           | ((t [1] >> 24) & 0x0000ff00)
+           | alpha;
+}
+
+static void
+pack_row_123a_i_to_1234_u_128bpp (const uint64_t * SMOL_RESTRICT row_in,
+                                  uint32_t * SMOL_RESTRICT row_out,
+                                  uint32_t n_pixels)
+{
+    uint32_t *row_out_max = row_out + n_pixels;
+
+    while (row_out != row_out_max)
+    {
+        *(row_out++) = pack_pixel_123a_i_to_1234_u_128bpp (row_in);
+        row_in += 2;
+    }
+}
+
+#define DEF_PACK_FROM_123A_I_TO_U_128BPP(a, b, c, d)                    \
+static SMOL_INLINE uint32_t                                             \
+pack_pixel_123a_i_to_##a##b##c##d##_u_128bpp (const uint64_t * SMOL_RESTRICT in) \
+{                                                                       \
+    uint8_t alpha = in [1] & 0xff;                                      \
+    uint64_t t [2];                                                     \
+    unpremul_128bpp (in, t, alpha);                                     \
+    t [1] = (t [1] & 0xffffffff00000000ULL) | alpha;                    \
+    return PACK_FROM_1234_128BPP (t, a, b, c, d);                       \
+}                                                                       \
+                                                                        \
+static void                                                             \
+pack_row_123a_i_to_##a##b##c##d##_u_128bpp (const uint64_t * SMOL_RESTRICT row_in, \
+                                            uint32_t * SMOL_RESTRICT row_out, \
+                                            uint32_t n_pixels)          \
+{                                                                       \
+    uint32_t *row_out_max = row_out + n_pixels;                         \
+    while (row_out != row_out_max)                                      \
+    {                                                                   \
+        *(row_out++) = pack_pixel_123a_i_to_##a##b##c##d##_u_128bpp (row_in); \
+        row_in += 2;                                                    \
+    }                                                                   \
+}
+
+DEF_PACK_FROM_123A_I_TO_U_128BPP(3, 2, 1, 4)
+DEF_PACK_FROM_123A_I_TO_U_128BPP(4, 1, 2, 3)
+DEF_PACK_FROM_123A_I_TO_U_128BPP(4, 3, 2, 1)
+
+/* Unpack u (alpha first) -> p */
+
+static SMOL_INLINE uint64_t
+unpack_pixel_a234_u_to_a324_p_64bpp (uint32_t p)
+{
+    uint64_t p64 = (((uint64_t) p & 0x0000ff00) << 24) | (p & 0x00ff00ff);
+    uint8_t alpha = p >> 24;
+
+    return premul_u_to_p_64bpp (p64, alpha) | ((uint64_t) alpha << 48);
+}
+
+static void
+unpack_row_a234_u_to_a324_p_64bpp (const uint32_t * SMOL_RESTRICT row_in,
+                                   uint64_t * SMOL_RESTRICT row_out,
+                                   uint32_t n_pixels)
+{
+    uint64_t *row_out_max = row_out + n_pixels;
+
+    while (row_out != row_out_max)
+    {
+        *(row_out++) = unpack_pixel_a234_u_to_a324_p_64bpp (*(row_in++));
+    }
+}
+
+/* Unpack u (alpha first) -> i */
+
+static SMOL_INLINE void
+unpack_pixel_a234_u_to_234a_i_128bpp (uint32_t p,
+                                      uint64_t *out)
+{
+    uint64_t p64 = p;
+    uint64_t alpha = p >> 24;
+
+#if 0
+    /* Unpack to alpha first -- complicates things */
+    out [0] = (alpha << 32) | (((p64 & 0x00ff0000) >> 16) * alpha);
+    out [1] = ((((p64 & 0x0000ff00) << 24) | (p64 & 0x000000ff)) * alpha);
+#endif
+
+    out [0] = (((((p64 & 0x00ff0000) << 16) | ((p64 & 0x0000ff00) >> 8)) * alpha));
+    out [1] = (((((p64 & 0x000000ff) << 32) * alpha))) | alpha;
+}
+
+static void
+unpack_row_a234_u_to_234a_i_128bpp (const uint32_t * SMOL_RESTRICT row_in,
+                                    uint64_t * SMOL_RESTRICT row_out,
+                                    uint32_t n_pixels)
+{
+    uint64_t *row_out_max = row_out + n_pixels * 2;
+
+    while (row_out != row_out_max)
+    {
+        unpack_pixel_a234_u_to_234a_i_128bpp (*(row_in++), row_out);
+        row_out += 2;
+    }
+}
+
+/* Unpack u (alpha last) -> p */
+
+static SMOL_INLINE uint64_t
+unpack_pixel_123a_u_to_132a_p_64bpp (uint32_t p)
+{
+    uint64_t p64 = (((uint64_t) p & 0xff00ff00) << 24) | (p & 0x00ff0000);
+    uint8_t alpha = p & 0xff;
+
+    return premul_u_to_p_64bpp (p64, alpha) | ((uint64_t) alpha);
+}
+
+static void
+unpack_row_123a_u_to_132a_p_64bpp (const uint32_t * SMOL_RESTRICT row_in,
+                                   uint64_t * SMOL_RESTRICT row_out,
+                                   uint32_t n_pixels)
+{
+    uint64_t *row_out_max = row_out + n_pixels;
+
+    while (row_out != row_out_max)
+    {
+        *(row_out++) = unpack_pixel_123a_u_to_132a_p_64bpp (*(row_in++));
+    }
+}
+
+/* Unpack u (alpha last) -> i */
+
+static SMOL_INLINE void
+unpack_pixel_123a_u_to_123a_i_128bpp (uint32_t p,
+                                      uint64_t *out)
+{
+    uint64_t p64 = p;
+    uint64_t alpha = p & 0xff;
+
+    out [0] = (((((p64 & 0xff000000) << 8) | ((p64 & 0x00ff0000) >> 16)) * alpha));
+    out [1] = (((((p64 & 0x0000ff00) << 24) * alpha))) | alpha;
+}
+
+static void
+unpack_row_123a_u_to_123a_i_128bpp (const uint32_t * SMOL_RESTRICT row_in,
+                                    uint64_t * SMOL_RESTRICT row_out,
+                                    uint32_t n_pixels)
+{
+    uint64_t *row_out_max = row_out + n_pixels * 2;
+
+    while (row_out != row_out_max)
+    {
+        unpack_pixel_123a_u_to_123a_i_128bpp (*(row_in++), row_out);
+        row_out += 2;
+    }
+}
+
+/* */
+
 static SMOL_INLINE uint64_t
 unpack_pixel_1234_p_to_1324_p_64bpp (uint32_t p)
 {
@@ -174,25 +463,6 @@ unpack_row_1234_p_to_1324_p_64bpp (const uint32_t * SMOL_RESTRICT row_in,
     while (row_out != row_out_max)
     {
         *(row_out++) = unpack_pixel_1234_p_to_1324_p_64bpp (*(row_in++));
-    }
-}
-
-static SMOL_INLINE uint32_t
-pack_pixel_1324_p_to_1234_p_64bpp (uint64_t in)
-{
-    return in | (in >> 24);
-}
-
-static void
-pack_row_1324_p_to_1234_p_64bpp (const uint64_t * SMOL_RESTRICT row_in,
-                                 uint32_t * SMOL_RESTRICT row_out,
-                                 uint32_t n_pixels)
-{
-    uint32_t *row_out_max = row_out + n_pixels;
-
-    while (row_out != row_out_max)
-    {
-        *(row_out++) = pack_pixel_1324_p_to_1234_p_64bpp (*(row_in++));
     }
 }
 
@@ -239,59 +509,6 @@ pack_row_1234_p_to_1234_p_128bpp (const uint64_t * SMOL_RESTRICT row_in,
     while (row_out != row_out_max)
     {
         *(row_out++) = pack_pixel_1234_p_to_1234_p_128bpp (row_in);
-        row_in += 2;
-    }
-}
-
-static SMOL_INLINE void
-unpack_pixel_123a_u_to_123a_i_128bpp (uint32_t p,
-                                      uint64_t *out)
-{
-    uint64_t p64 = p;
-    uint64_t alpha = p64 & 0xff;
-
-    out [0] = (((((p64 & 0xff000000) << 8) | ((p64 & 0x00ff0000) >> 16)) * alpha));
-    out [1] = (((((p64 & 0x0000ff00) << 24) * alpha))) | alpha;
-}
-
-static void
-unpack_row_123a_u_to_123a_i_128bpp (const uint32_t * SMOL_RESTRICT row_in,
-                                    uint64_t * SMOL_RESTRICT row_out,
-                                    uint32_t n_pixels)
-{
-    uint64_t *row_out_max = row_out + n_pixels * 2;
-
-    while (row_out != row_out_max)
-    {
-        unpack_pixel_123a_u_to_123a_i_128bpp (*(row_in++), row_out);
-        row_out += 2;
-    }
-}
-
-static SMOL_INLINE uint32_t
-pack_pixel_123a_i_to_123a_u_128bpp (const uint64_t * SMOL_RESTRICT in)
-{
-    uint8_t alpha = in [1] & 0xff;
-    uint64_t t [2];
-
-    unpremul_128bpp (in, t, alpha);
-
-    return ((t [0] >> 8) & 0xff000000)
-           | ((t [0] << 16) & 0x00ff0000)
-           | ((t [1] >> 24) & 0x0000ff00)
-           | alpha;
-}
-
-static void
-pack_row_123a_i_to_123a_u_128bpp (const uint64_t * SMOL_RESTRICT row_in,
-                                  uint32_t * SMOL_RESTRICT row_out,
-                                  uint32_t n_pixels)
-{
-    uint32_t *row_out_max = row_out + n_pixels;
-
-    while (row_out != row_out_max)
-    {
-        *(row_out++) = pack_pixel_123a_i_to_123a_u_128bpp (row_in);
         row_in += 2;
     }
 }
@@ -1523,106 +1740,109 @@ do_rows (const SmolScaleCtx *scale_ctx,
 
 typedef struct
 {
-    SmolUnpackType unpack;
-    SmolPackType pack;
+    uint8_t n_bytes_per_pixel;
+    SmolUnpackRowFunc *unpack_row_func;
+    SmolPackRowFunc *pack_row_func;
 }
 SmolConversion;
 
-#define N_PIXEL_TYPES ((SMOL_PIXEL_MAX) * (SMOL_ALPHA_MAX))
+#define CONV(un_from_order, un_from_type, un_to_order, un_to_type, pk_from_order, pk_from_type, pk_to_order, pk_to_type, storage_bits) \
+{ storage_bits / 8, unpack_row_##un_from_order##_##un_from_type##_to_##un_to_order##_##un_to_type##_##storage_bits##bpp, \
+pack_row_##pk_from_order##_##pk_from_type##_to_##pk_to_order##_##pk_to_type##_##storage_bits##bpp },
 
-static const SmolConversion conversions_64bpp [N_PIXEL_TYPES] [N_PIXEL_TYPES] =
+static const SmolConversion conversions [SMOL_STORAGE_MAX] [SMOL_PIXEL_MAX] [SMOL_PIXEL_MAX] =
 {
     /* RGBA8 pre -> */
     {
-        /* RGBA8 pre */ { SMOL_UNPACK_XXXX_P_64BPP, SMOL_PACK_XXXX_P_64BPP },
-        /* BGRA8 pre */ { SMOL_UNPACK_1234_P_64BPP, SMOL_PACK_1234_P_TO_3214_P_64BPP },
-        /* ARGB8 pre */ { SMOL_UNPACK_1234_P_64BPP, SMOL_PACK_1234_P_TO_4123_P_64BPP },
-        /* ABGR8 pre */ { SMOL_UNPACK_1234_P_64BPP, SMOL_PACK_1234_P_TO_4321_P_64BPP },
-        /* RGBA8 un  */ { SMOL_UNPACK_1234_P_64BPP, SMOL_PACK_123A_P_TO_123A_U_64BPP },
-        /* BGRA8 un  */ { SMOL_UNPACK_1234_P_64BPP, SMOL_PACK_123A_P_TO_321A_U_64BPP },
-        /* ARGB8 un  */ { SMOL_UNPACK_1234_P_64BPP, SMOL_PACK_123A_P_TO_A123_U_64BPP },
-        /* ABGR8 un  */ { SMOL_UNPACK_1234_P_64BPP, SMOL_PACK_123A_P_TO_A321_U_64BPP },
+/* RGBA8 pre */ { 8, unpack_row_1234_p_to_1324_p_64bpp, pack_row_1324_p_to_1234_p_64bpp },
+/* BGRA8 pre */ { 8, unpack_row_1234_p_to_1324_p_64bpp, pack_row_1324_p_to_3214_p_64bpp },
+/* ARGB8 pre */ { 8, unpack_row_1234_p_to_1324_p_64bpp, pack_row_1324_p_to_4123_p_64bpp },
+/* ABGR8 pre */ { 8, unpack_row_1234_p_to_1324_p_64bpp, pack_row_1324_p_to_4321_p_64bpp },
+/* RGBA8 un  */ { 8, unpack_row_1234_p_to_1324_p_64bpp, pack_row_132a_p_to_1234_u_64bpp },
+/* BGRA8 un  */ { 8, unpack_row_1234_p_to_1324_p_64bpp, pack_row_132a_p_to_3214_u_64bpp },
+/* ARGB8 un  */ { 8, unpack_row_1234_p_to_1324_p_64bpp, pack_row_132a_p_to_4123_u_64bpp },
+/* ABGR8 un  */ { 8, unpack_row_1234_p_to_1324_p_64bpp, pack_row_132a_p_to_4321_u_64bpp },
     },
     /* BGRA8 pre -> */
     {
-        /* RGBA8 pre */ { SMOL_UNPACK_1234_P_64BPP, SMOL_PACK_1234_P_TO_3214_P_64BPP },
-        /* BGRA8 pre */ { SMOL_UNPACK_XXXX_P_64BPP, SMOL_PACK_XXXX_P_64BPP },
-        /* ARGB8 pre */ { SMOL_UNPACK_1234_P_64BPP, SMOL_PACK_1234_P_TO_4321_P_64BPP },
-        /* ABGR8 pre */ { SMOL_UNPACK_1234_P_64BPP, SMOL_PACK_1234_P_TO_4123_P_64BPP },
-        /* RGBA8 un  */ { SMOL_UNPACK_1234_P_64BPP, SMOL_PACK_123A_P_TO_321A_U_64BPP },
-        /* BGRA8 un  */ { SMOL_UNPACK_1234_P_64BPP, SMOL_PACK_123A_P_TO_123A_U_64BPP },
-        /* ARGB8 un  */ { SMOL_UNPACK_1234_P_64BPP, SMOL_PACK_123A_P_TO_A321_U_64BPP },
-        /* ABGR8 un  */ { SMOL_UNPACK_1234_P_64BPP, SMOL_PACK_123A_P_TO_A123_U_64BPP },
+/* RGBA8 pre */ { 8, unpack_row_1234_p_to_1324_p_64bpp, pack_row_1324_p_to_3214_p_64bpp },
+/* BGRA8 pre */ { 8, unpack_row_1234_p_to_1324_p_64bpp, pack_row_1324_p_to_1234_p_64bpp },
+/* ARGB8 pre */ { 8, unpack_row_1234_p_to_1324_p_64bpp, pack_row_1324_p_to_4321_p_64bpp },
+/* ABGR8 pre */ { 8, unpack_row_1234_p_to_1324_p_64bpp, pack_row_1324_p_to_4123_p_64bpp },
+/* RGBA8 un  */ { 8, unpack_row_1234_p_to_1324_p_64bpp, pack_row_132a_p_to_3214_u_64bpp },
+/* BGRA8 un  */ { 8, unpack_row_1234_p_to_1324_p_64bpp, pack_row_132a_p_to_1234_u_64bpp },
+/* ARGB8 un  */ { 8, unpack_row_1234_p_to_1324_p_64bpp, pack_row_132a_p_to_4321_u_64bpp },
+/* ABGR8 un  */ { 8, unpack_row_1234_p_to_1324_p_64bpp, pack_row_132a_p_to_4123_u_64bpp },
     },
     /* ARGB8 pre -> */
     {
-        /* RGBA8 pre */ { SMOL_UNPACK_1234_P_64BPP, SMOL_PACK_1234_P_TO_2341_P_64BPP },
-        /* BGRA8 pre */ { SMOL_UNPACK_1234_P_64BPP, SMOL_PACK_1234_P_TO_4321_P_64BPP },
-        /* ARGB8 pre */ { SMOL_UNPACK_XXXX_P_64BPP, SMOL_PACK_XXXX_P_64BPP },
-        /* ABGR8 pre */ { SMOL_UNPACK_1234_P_64BPP, SMOL_PACK_1234_P_TO_1432_P_64BPP },
-        /* RGBA8 un  */ { SMOL_UNPACK_1234_P_64BPP, SMOL_PACK_A123_P_TO_123A_U_64BPP },
-        /* BGRA8 un  */ { SMOL_UNPACK_1234_P_64BPP, SMOL_PACK_A123_P_TO_321A_U_64BPP },
-        /* ARGB8 un  */ { SMOL_UNPACK_1234_P_64BPP, SMOL_PACK_A123_P_TO_A123_U_64BPP },
-        /* ABGR8 un  */ { SMOL_UNPACK_1234_P_64BPP, SMOL_PACK_A123_P_TO_A321_U_64BPP },
+/* RGBA8 pre */ { 8, unpack_row_1234_p_to_1324_p_64bpp, pack_row_1324_p_to_2341_p_64bpp },
+/* BGRA8 pre */ { 8, unpack_row_1234_p_to_1324_p_64bpp, pack_row_1324_p_to_4321_p_64bpp },
+/* ARGB8 pre */ { 8, unpack_row_1234_p_to_1324_p_64bpp, pack_row_1324_p_to_1234_p_64bpp },
+/* ABGR8 pre */ { 8, unpack_row_1234_p_to_1324_p_64bpp, pack_row_1324_p_to_1432_p_64bpp },
+/* RGBA8 un  */ { 8, unpack_row_1234_p_to_1324_p_64bpp, pack_row_a324_p_to_2341_u_64bpp },
+/* BGRA8 un  */ { 8, unpack_row_1234_p_to_1324_p_64bpp, pack_row_a324_p_to_4321_u_64bpp },
+/* ARGB8 un  */ { 8, unpack_row_1234_p_to_1324_p_64bpp, pack_row_a324_p_to_1234_u_64bpp },
+/* ABGR8 un  */ { 8, unpack_row_1234_p_to_1324_p_64bpp, pack_row_a324_p_to_1432_u_64bpp },
     },
     /* ABGR8 pre -> */
     {
-        /* RGBA8 pre */ { SMOL_UNPACK_1234_P_64BPP, SMOL_PACK_1234_P_TO_4321_P_64BPP },
-        /* BGRA8 pre */ { SMOL_UNPACK_1234_P_64BPP, SMOL_PACK_1234_P_TO_2341_P_64BPP },
-        /* ARGB8 pre */ { SMOL_UNPACK_1234_P_64BPP, SMOL_PACK_1234_P_TO_1432_P_64BPP },
-        /* ABGR8 pre */ { SMOL_UNPACK_XXXX_P_64BPP, SMOL_PACK_XXXX_P_64BPP },
-        /* RGBA8 un  */ { SMOL_UNPACK_1234_P_64BPP, SMOL_PACK_A123_P_TO_321A_U_64BPP },
-        /* BGRA8 un  */ { SMOL_UNPACK_1234_P_64BPP, SMOL_PACK_A123_P_TO_123A_U_64BPP },
-        /* ARGB8 un  */ { SMOL_UNPACK_1234_P_64BPP, SMOL_PACK_A123_P_TO_A321_U_64BPP },
-        /* ABGR8 un  */ { SMOL_UNPACK_1234_P_64BPP, SMOL_PACK_A123_P_TO_A123_U_64BPP },
+/* RGBA8 pre */ { 8, unpack_row_1234_p_to_1324_p_64bpp, pack_row_1324_p_to_4321_p_64bpp },
+/* BGRA8 pre */ { 8, unpack_row_1234_p_to_1324_p_64bpp, pack_row_1324_p_to_2341_p_64bpp },
+/* ARGB8 pre */ { 8, unpack_row_1234_p_to_1324_p_64bpp, pack_row_1324_p_to_1432_p_64bpp },
+/* ABGR8 pre */ { 8, unpack_row_1234_p_to_1324_p_64bpp, pack_row_1324_p_to_1234_p_64bpp },
+/* RGBA8 un  */ { 8, unpack_row_1234_p_to_1324_p_64bpp, pack_row_a324_p_to_4321_u_64bpp },
+/* BGRA8 un  */ { 8, unpack_row_1234_p_to_1324_p_64bpp, pack_row_a324_p_to_2341_u_64bpp },
+/* ARGB8 un  */ { 8, unpack_row_1234_p_to_1324_p_64bpp, pack_row_a324_p_to_1432_u_64bpp },
+/* ABGR8 un  */ { 8, unpack_row_1234_p_to_1324_p_64bpp, pack_row_a324_p_to_1234_u_64bpp },
     },
     /* RGBA8 un -> */
     {
-        /* RGBA8 pre */ { SMOL_UNPACK_123A_U_TO_123A_P_64BPP, SMOL_PACK_1234_P_64BPP },
-        /* BGRA8 pre */ { SMOL_UNPACK_123A_U_TO_123A_P_64BPP, SMOL_PACK_1234_P_TO_3214_P_64BPP },
-        /* ARGB8 pre */ { SMOL_UNPACK_123A_U_TO_123A_P_64BPP, SMOL_PACK_1234_P_TO_4123_P_64BPP },
-        /* ABGR8 pre */ { SMOL_UNPACK_123A_U_TO_123A_P_64BPP, SMOL_PACK_1234_P_TO_4321_P_64BPP },
-        /* RGBA8 un  */ { SMOL_UNPACK_123A_U_TO_123A_I_128BPP, SMOL_PACK_123A_I_TO_123A_U_128BPP },
-        /* BGRA8 un  */ { SMOL_UNPACK_123A_U_TO_123A_I_128BPP, SMOL_PACK_123A_I_TO_321A_U_128BPP },
-        /* ARGB8 un  */ { SMOL_UNPACK_123A_U_TO_123A_I_128BPP, SMOL_PACK_123A_I_TO_A123_U_128BPP },
-        /* ABGR8 un  */ { SMOL_UNPACK_123A_U_TO_123A_I_128BPP, SMOL_PACK_123A_I_TO_A321_U_128BPP },
+/* RGBA8 pre */ { 8, unpack_row_123a_u_to_132a_p_64bpp, pack_row_1324_p_to_1234_p_64bpp },
+/* BGRA8 pre */ { 8, unpack_row_123a_u_to_132a_p_64bpp, pack_row_1324_p_to_3214_p_64bpp },
+/* ARGB8 pre */ { 8, unpack_row_123a_u_to_132a_p_64bpp, pack_row_1324_p_to_4123_p_64bpp },
+/* ABGR8 pre */ { 8, unpack_row_123a_u_to_132a_p_64bpp, pack_row_1324_p_to_4321_p_64bpp },
+/* RGBA8 un  */ { 16, unpack_row_123a_u_to_123a_i_128bpp, pack_row_123a_i_to_1234_u_128bpp },
+/* BGRA8 un  */ { 16, unpack_row_123a_u_to_123a_i_128bpp, pack_row_123a_i_to_3214_u_128bpp },
+/* ARGB8 un  */ { 16, unpack_row_123a_u_to_123a_i_128bpp, pack_row_123a_i_to_4123_u_128bpp },
+/* ABGR8 un  */ { 16, unpack_row_123a_u_to_123a_i_128bpp, pack_row_123a_i_to_4321_u_128bpp },
     },
     /* BGRA8 un -> */
     {
-        /* RGBA8 pre */ { SMOL_UNPACK_123A_U_TO_123A_P_64BPP, SMOL_PACK_1234_P_TO_3214_P_64BPP },
-        /* BGRA8 pre */ { SMOL_UNPACK_123A_U_TO_123A_P_64BPP, SMOL_PACK_1234_P_64BPP },
-        /* ARGB8 pre */ { SMOL_UNPACK_123A_U_TO_123A_P_64BPP, SMOL_PACK_1234_P_TO_4321_P_64BPP },
-        /* ABGR8 pre */ { SMOL_UNPACK_123A_U_TO_123A_P_64BPP, SMOL_PACK_1234_P_TO_4123_P_64BPP },
-        /* RGBA8 un  */ { SMOL_UNPACK_123A_U_TO_123A_I_128BPP, SMOL_PACK_123A_I_TO_321A_U_128BPP },
-        /* BGRA8 un  */ { SMOL_UNPACK_123A_U_TO_123A_I_128BPP, SMOL_PACK_123A_I_TO_123A_U_128BPP },
-        /* ARGB8 un  */ { SMOL_UNPACK_123A_U_TO_123A_I_128BPP, SMOL_PACK_123A_I_TO_A321_U_128BPP },
-        /* ABGR8 un  */ { SMOL_UNPACK_123A_U_TO_123A_I_128BPP, SMOL_PACK_123A_I_TO_A123_U_128BPP },
+/* RGBA8 pre */ { 8, unpack_row_123a_u_to_132a_p_64bpp, pack_row_1324_p_to_3214_p_64bpp },
+/* BGRA8 pre */ { 8, unpack_row_123a_u_to_132a_p_64bpp, pack_row_1324_p_to_1234_p_64bpp },
+/* ARGB8 pre */ { 8, unpack_row_123a_u_to_132a_p_64bpp, pack_row_1324_p_to_4321_p_64bpp },
+/* ABGR8 pre */ { 8, unpack_row_123a_u_to_132a_p_64bpp, pack_row_1324_p_to_4123_p_64bpp },
+/* RGBA8 un  */ { 16, unpack_row_123a_u_to_123a_i_128bpp, pack_row_123a_i_to_3214_u_128bpp },
+/* BGRA8 un  */ { 16, unpack_row_123a_u_to_123a_i_128bpp, pack_row_123a_i_to_1234_u_128bpp },
+/* ARGB8 un  */ { 16, unpack_row_123a_u_to_123a_i_128bpp, pack_row_123a_i_to_4321_u_128bpp },
+/* ABGR8 un  */ { 16, unpack_row_123a_u_to_123a_i_128bpp, pack_row_123a_i_to_4123_u_128bpp },
     },
     /* ARGB8 un -> */
     {
-        /* RGBA8 pre */ { SMOL_UNPACK_A123_U_TO_A123_P_64BPP, SMOL_PACK_1234_P_TO_2341_P_64BPP },
-        /* BGRA8 pre */ { SMOL_UNPACK_A123_U_TO_A123_P_64BPP, SMOL_PACK_1234_P_TO_4321_P_64BPP },
-        /* ARGB8 pre */ { SMOL_UNPACK_A123_U_TO_A123_P_64BPP, SMOL_PACK_1234_P_64BPP },
-        /* ABGR8 pre */ { SMOL_UNPACK_A123_U_TO_A123_P_64BPP, SMOL_PACK_1234_P_TO_1432_P_64BPP },
-        /* RGBA8 un  */ { SMOL_UNPACK_A123_U_TO_A123_I_128BPP, SMOL_PACK_A123_I_TO_123A_U_128BPP },
-        /* BGRA8 un  */ { SMOL_UNPACK_A123_U_TO_A123_I_128BPP, SMOL_PACK_A123_I_TO_321A_U_128BPP },
-        /* ARGB8 un  */ { SMOL_UNPACK_A123_U_TO_A123_I_128BPP, SMOL_PACK_A123_I_TO_A123_U_128BPP },
-        /* ABGR8 un  */ { SMOL_UNPACK_A123_U_TO_A123_I_128BPP, SMOL_PACK_A123_I_TO_A321_U_128BPP },
+/* RGBA8 pre */ { 8, unpack_row_a234_u_to_a324_p_64bpp, pack_row_1324_p_to_2341_p_64bpp },
+/* BGRA8 pre */ { 8, unpack_row_a234_u_to_a324_p_64bpp, pack_row_1324_p_to_4321_p_64bpp },
+/* ARGB8 pre */ { 8, unpack_row_a234_u_to_a324_p_64bpp, pack_row_1324_p_to_1234_p_64bpp },
+/* ABGR8 pre */ { 8, unpack_row_a234_u_to_a324_p_64bpp, pack_row_1324_p_to_1432_p_64bpp },
+/* RGBA8 un  */ { 16, unpack_row_a234_u_to_234a_i_128bpp, pack_row_123a_i_to_1234_u_128bpp },
+/* BGRA8 un  */ { 16, unpack_row_a234_u_to_234a_i_128bpp, pack_row_123a_i_to_3214_u_128bpp },
+/* ARGB8 un  */ { 16, unpack_row_a234_u_to_234a_i_128bpp, pack_row_123a_i_to_4123_u_128bpp },
+/* ABGR8 un  */ { 16, unpack_row_a234_u_to_234a_i_128bpp, pack_row_123a_i_to_4321_u_128bpp },
     },
     /* ABGR8 un -> */
     {
-        /* RGBA8 pre */ { SMOL_UNPACK_A123_U_TO_A123_P_64BPP, SMOL_PACK_1234_P_TO_4321_P_64BPP },
-        /* BGRA8 pre */ { SMOL_UNPACK_A123_U_TO_A123_P_64BPP, SMOL_PACK_1234_P_TO_2341_P_64BPP },
-        /* ARGB8 pre */ { SMOL_UNPACK_A123_U_TO_A123_P_64BPP, SMOL_PACK_1234_P_TO_1432_P_64BPP },
-        /* ABGR8 pre */ { SMOL_UNPACK_A123_U_TO_A123_P_64BPP, SMOL_PACK_1234_P_64BPP },
-        /* RGBA8 un  */ { SMOL_UNPACK_A123_U_TO_A123_I_128BPP, SMOL_PACK_A123_I_TO_321A_U_128BPP },
-        /* BGRA8 un  */ { SMOL_UNPACK_A123_U_TO_A123_I_128BPP, SMOL_PACK_A123_I_TO_123A_U_128BPP },
-        /* ARGB8 un  */ { SMOL_UNPACK_A123_U_TO_A123_I_128BPP, SMOL_PACK_A123_I_TO_A321_U_128BPP },
-        /* ABGR8 un  */ { SMOL_UNPACK_A123_U_TO_A123_I_128BPP, SMOL_PACK_A123_I_TO_A123_U_128BPP },
+/* RGBA8 pre */ { 8, unpack_row_a234_u_to_a324_p_64bpp, pack_row_1324_p_to_4321_p_64bpp },
+/* BGRA8 pre */ { 8, unpack_row_a234_u_to_a324_p_64bpp, pack_row_1324_p_to_2341_p_64bpp },
+/* ARGB8 pre */ { 8, unpack_row_a234_u_to_a324_p_64bpp, pack_row_1324_p_to_1432_p_64bpp },
+/* ABGR8 pre */ { 8, unpack_row_a234_u_to_a324_p_64bpp, pack_row_1324_p_to_1234_p_64bpp },
+/* RGBA8 un  */ { 16, unpack_row_a234_u_to_234a_i_128bpp, pack_row_123a_i_to_3214_u_128bpp },
+/* BGRA8 un  */ { 16, unpack_row_a234_u_to_234a_i_128bpp, pack_row_123a_i_to_1234_u_128bpp },
+/* ARGB8 un  */ { 16, unpack_row_a234_u_to_234a_i_128bpp, pack_row_123a_i_to_4321_u_128bpp },
+/* ABGR8 un  */ { 16, unpack_row_a234_u_to_234a_i_128bpp, pack_row_123a_i_to_4123_u_128bpp },
     }
 };
 
-static const SmolConversion conversions_128bpp [N_PIXEL_TYPES] [N_PIXEL_TYPES] =
+static const SmolConversion conversions_128bpp [SMOL_PIXEL_MAX] [SMOL_PIXEL_MAX] =
 {
     /* RGBA8 pre -> */
     {
