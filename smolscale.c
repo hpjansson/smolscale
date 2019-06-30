@@ -2164,7 +2164,7 @@ get_implementations (SmolScaleCtx *scale_ctx)
     scale_ctx->vfilter_func = generic_implementation.vfilter_funcs
         [scale_ctx->storage_type] [scale_ctx->filter_v];
 
-    /* TODO: Try to override with better unpack()/pack() filter implementations */
+    /* TODO: Try to override with better filter implementations */
 }
 
 static void
