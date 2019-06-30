@@ -504,9 +504,11 @@ scale_do_smol (ScaleParams *params, guint out_width, guint out_height)
         g_free (params->out_data);
 
     scaled = g_new (guint32, out_width * out_height);
-    smol_scale_simple (params->in_data,
+    smol_scale_simple (SMOL_PIXEL_RGBA8_PREMULTIPLIED,
+                       params->in_data,
                        params->in_width, params->in_height,
                        params->in_width * sizeof (guint32),
+                       SMOL_PIXEL_RGBA8_PREMULTIPLIED,
                        scaled,
                        out_width, out_height,
                        out_width * sizeof (guint32));
@@ -560,8 +562,10 @@ scale_do_smol_threaded (ScaleParams *params, guint out_width, guint out_height)
 
     scaled = g_new (guint32, out_width * out_height);
 
-    scale_ctx = smol_scale_new (params->in_data,
+    scale_ctx = smol_scale_new (SMOL_PIXEL_RGBA8_PREMULTIPLIED,
+                                params->in_data,
                                 params->in_width, params->in_height, params->in_width * sizeof (guint32),
+                                SMOL_PIXEL_RGBA8_PREMULTIPLIED,
                                 scaled,
                                 out_width, out_height, out_width * sizeof (guint32));
 

@@ -33,16 +33,16 @@ typedef struct SmolScaleCtx SmolScaleCtx;
  * the source memory and an existing allocation to receive the output data.
  * This interface can only be used from a single thread. */
 
-void smol_scale_simple (const uint32_t *pixels_in,
+void smol_scale_simple (SmolPixelType pixel_type_in, const uint32_t *pixels_in,
                         uint32_t width_in, uint32_t height_in, uint32_t rowstride_in,
-                        uint32_t *pixels_out,
+                        SmolPixelType pixel_type_out, uint32_t *pixels_out,
                         uint32_t width_out, uint32_t height_out, uint32_t rowstride_out);
 
 /* Batch API: Allows scaling a few rows at a time. Suitable for multithreading. */
 
-SmolScaleCtx *smol_scale_new (const uint32_t *pixels_in,
+SmolScaleCtx *smol_scale_new (SmolPixelType pixel_type_in, const uint32_t *pixels_in,
                               uint32_t width_in, uint32_t height_in, uint32_t rowstride_in,
-                              uint32_t *pixels_out,
+                              SmolPixelType pixel_type_out, uint32_t *pixels_out,
                               uint32_t width_out, uint32_t height_out, uint32_t rowstride_out);
 
 void smol_scale_destroy (SmolScaleCtx *scale_ctx);

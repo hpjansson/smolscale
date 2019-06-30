@@ -18,6 +18,12 @@ extern "C" {
 #ifndef TRUE
 # define TRUE (!FALSE)
 #endif
+#ifndef MIN
+# define MIN(a, b) ((a) < (b) ? (a) : (b))
+#endif
+#ifndef MAX
+# define MAX(a, b) ((a) > (b) ? (a) : (b))
+#endif
 
 #define SMOL_RESTRICT __restrict
 #define SMOL_INLINE __attribute__((always_inline)) inline
@@ -47,113 +53,19 @@ SmolStorageType;
 
 typedef enum
 {
-    SMOL_FILTER_ONE_64BPP,
-    SMOL_FILTER_BILINEAR_0H_64BPP,
-    SMOL_FILTER_BILINEAR_1H_64BPP,
-    SMOL_FILTER_BILINEAR_2H_64BPP,
-    SMOL_FILTER_BILINEAR_3H_64BPP,
-    SMOL_FILTER_BILINEAR_4H_64BPP,
-    SMOL_FILTER_BILINEAR_5H_64BPP,
-    SMOL_FILTER_BILINEAR_6H_64BPP,
-    SMOL_FILTER_BOX_64BPP,
-
-    SMOL_FILTER_64BPP_LAST = SMOL_FILTER_BOX_64BPP,
-
-    SMOL_FILTER_ONE_128BPP,
-    SMOL_FILTER_BILINEAR_0H_128BPP,
-    SMOL_FILTER_BILINEAR_1H_128BPP,
-    SMOL_FILTER_BILINEAR_2H_128BPP,
-    SMOL_FILTER_BILINEAR_3H_128BPP,
-    SMOL_FILTER_BILINEAR_4H_128BPP,
-    SMOL_FILTER_BILINEAR_5H_128BPP,
-    SMOL_FILTER_BILINEAR_6H_128BPP,
-    SMOL_FILTER_BOX_128BPP,
-
-    SMOL_FILTER_128BPP_LAST = SMOL_FILTER_BOX_128BPP,
+    SMOL_FILTER_ONE,
+    SMOL_FILTER_BILINEAR_0H,
+    SMOL_FILTER_BILINEAR_1H,
+    SMOL_FILTER_BILINEAR_2H,
+    SMOL_FILTER_BILINEAR_3H,
+    SMOL_FILTER_BILINEAR_4H,
+    SMOL_FILTER_BILINEAR_5H,
+    SMOL_FILTER_BILINEAR_6H,
+    SMOL_FILTER_BOX,
 
     SMOL_FILTER_MAX
 }
 SmolFilterType;
-
-/* 1234 = Arbitrary channels (e.g. R, G, B or A when premultiplied)
- * A = Alpha channel (when unassociated or internally premultiplied)
- *
- * P = Premultiplied
- * U = Unassociated
- * I = Internally premultiplied (16bpc) */
-
-typedef enum
-{
-    SMOL_UNPACK_XXXX_P_64BPP,
-    SMOL_UNPACK_XXXX_P_128BPP,
-
-    SMOL_UNPACK_1234_P_64BPP,
-    SMOL_UNPACK_1234_P_128BPP,
-
-    SMOL_UNPACK_A123_U_TO_A123_P_64BPP,
-    SMOL_UNPACK_A123_U_TO_A123_P_128BPP,
-    SMOL_UNPACK_123A_U_TO_123A_P_64BPP,
-    SMOL_UNPACK_123A_U_TO_123A_P_128BPP,
-
-    SMOL_UNPACK_A123_U_TO_A123_I_128BPP,
-    SMOL_UNPACK_123A_U_TO_123A_I_128BPP,
-
-    SMOL_UNPACK_UNSUPP,
-
-    SMOL_UNPACK_MAX
-}
-SmolUnpackType;
-
-typedef enum
-{
-    SMOL_PACK_XXXX_P_64BPP,
-    SMOL_PACK_XXXX_P_128BPP,
-
-    SMOL_PACK_1234_P_64BPP,
-    SMOL_PACK_1234_P_128BPP,
-
-    SMOL_PACK_1234_P_TO_1432_P_64BPP,
-    SMOL_PACK_1234_P_TO_1432_P_128BPP,
-    SMOL_PACK_1234_P_TO_3214_P_64BPP,
-    SMOL_PACK_1234_P_TO_3214_P_128BPP,
-    SMOL_PACK_1234_P_TO_4123_P_64BPP,
-    SMOL_PACK_1234_P_TO_4123_P_128BPP,
-    SMOL_PACK_1234_P_TO_2341_P_64BPP,
-    SMOL_PACK_1234_P_TO_2341_P_128BPP,
-    SMOL_PACK_1234_P_TO_4321_P_64BPP,
-    SMOL_PACK_1234_P_TO_4321_P_128BPP,
-
-    SMOL_PACK_A123_P_TO_A123_U_64BPP,
-    SMOL_PACK_A123_P_TO_A123_U_128BPP,
-    SMOL_PACK_123A_P_TO_123A_U_64BPP,
-    SMOL_PACK_123A_P_TO_123A_U_128BPP,
-    SMOL_PACK_A123_P_TO_123A_U_64BPP,
-    SMOL_PACK_A123_P_TO_123A_U_128BPP,
-    SMOL_PACK_A123_P_TO_A321_U_64BPP,
-    SMOL_PACK_A123_P_TO_A321_U_128BPP,
-    SMOL_PACK_A123_P_TO_321A_U_64BPP,
-    SMOL_PACK_A123_P_TO_321A_U_128BPP,
-    SMOL_PACK_123A_P_TO_A123_U_64BPP,
-    SMOL_PACK_123A_P_TO_A123_U_128BPP,
-    SMOL_PACK_123A_P_TO_A321_U_64BPP,
-    SMOL_PACK_123A_P_TO_A321_U_128BPP,
-    SMOL_PACK_123A_P_TO_321A_U_64BPP,
-    SMOL_PACK_123A_P_TO_321A_U_128BPP,
-
-    SMOL_PACK_A123_I_TO_A123_U_128BPP,
-    SMOL_PACK_123A_I_TO_123A_U_128BPP,
-    SMOL_PACK_A123_I_TO_123A_U_128BPP,
-    SMOL_PACK_A123_I_TO_A321_U_128BPP,
-    SMOL_PACK_A123_I_TO_321A_U_128BPP,
-    SMOL_PACK_123A_I_TO_A123_U_128BPP,
-    SMOL_PACK_123A_I_TO_A321_U_128BPP,
-    SMOL_PACK_123A_I_TO_321A_U_128BPP,
-
-    SMOL_PACK_UNSUPP,
-
-    SMOL_PACK_MAX
-}
-SmolPackType;
 
 /* For reusing rows that have already undergone horizontal scaling */
 typedef struct
@@ -177,12 +89,33 @@ typedef void (SmolVFilterFunc) (const SmolScaleCtx *scale_ctx,
                                 uint32_t outrow_index,
                                 uint32_t *row_out);
 
+#define SMOL_CONV_UNDEFINED { 0, NULL, NULL }
+#define SMOL_CONV(un_from_order, un_from_type, un_to_order, un_to_type, pk_from_order, pk_from_type, pk_to_order, pk_to_type, storage_bits) \
+{ storage_bits / 8, unpack_row_##un_from_order##_##un_from_type##_to_##un_to_order##_##un_to_type##_##storage_bits##bpp, \
+pack_row_##pk_from_order##_##pk_from_type##_to_##pk_to_order##_##pk_to_type##_##storage_bits##bpp }
+
 typedef struct
 {
-    SmolHFilterFunc *hfilter_funcs [SMOL_FILTER_MAX];
-    SmolVFilterFunc *vfilter_funcs [SMOL_FILTER_MAX];
-    SmolUnpackRowFunc *unpack_funcs [SMOL_UNPACK_MAX];
-    SmolPackRowFunc *pack_funcs [SMOL_PACK_MAX];
+    uint8_t n_bytes_per_pixel;
+    SmolUnpackRowFunc *unpack_row_func;
+    SmolPackRowFunc *pack_row_func;
+}
+SmolConversion;
+
+typedef struct
+{
+    SmolConversion conversions [SMOL_STORAGE_MAX] [SMOL_PIXEL_MAX] [SMOL_PIXEL_MAX];
+}
+SmolConversionTable;
+
+typedef struct
+{
+    SmolHFilterFunc *hfilter_funcs [SMOL_STORAGE_MAX] [SMOL_FILTER_MAX];
+    SmolVFilterFunc *vfilter_funcs [SMOL_STORAGE_MAX] [SMOL_FILTER_MAX];
+
+    /* Can be a NULL pointer if the implementation does not override any
+     * conversions. */
+    const SmolConversionTable *ctab;
 }
 SmolImplementation;
 
@@ -195,7 +128,10 @@ struct SmolScaleCtx
     uint32_t width_in, height_in, rowstride_in;
     uint32_t width_out, height_out, rowstride_out;
 
+    SmolPixelType pixel_type_in, pixel_type_out;
     SmolFilterType filter_h, filter_v;
+    SmolStorageType storage_type;
+
     SmolUnpackRowFunc *unpack_row_func;
     SmolPackRowFunc *pack_row_func;
     SmolHFilterFunc *hfilter_func;
