@@ -67,7 +67,7 @@ static const uint32_t inverted_div_table [256] =
 /* Masking and shifting out the results is left to the caller. In
  * and out may not overlap. */
 static SMOL_INLINE void
-unpremul_128bpp (const uint64_t * SMOL_RESTRICT in,
+unpremul_i_to_u_128bpp (const uint64_t * SMOL_RESTRICT in,
                  uint64_t * SMOL_RESTRICT out,
                  uint8_t alpha)
 {
@@ -77,19 +77,28 @@ unpremul_128bpp (const uint64_t * SMOL_RESTRICT in,
                 + INVERTED_DIV_ROUNDING_128BPP) >> INVERTED_DIV_SHIFT);
 }
 
+static SMOL_INLINE void
+unpremul_p_to_u_128bpp (const uint64_t * SMOL_RESTRICT in,
+                   uint64_t * SMOL_RESTRICT out,
+                   uint8_t alpha)
+{
+    out [0] = (((in [0] << 8) * (uint64_t) inverted_div_table [alpha])
+               >> INVERTED_DIV_SHIFT);
+    out [1] = (((in [1] << 8) * (uint64_t) inverted_div_table [alpha])
+               >> INVERTED_DIV_SHIFT);
+}
+
 static SMOL_INLINE uint64_t
-unpremul_64bpp (const uint64_t in,
+unpremul_p_to_u_64bpp (const uint64_t in,
                 uint8_t alpha)
 {
     uint64_t in_128bpp [2];
     uint64_t out_128bpp [2];
 
-    /* FIXME: Could rounding mess this up? We're passing in
-     * 255*256, not 255*255 */
+    in_128bpp [0] = (in & 0x000000ff000000ff);
+    in_128bpp [1] = (in & 0x00ff000000ff0000) >> 16;
 
-    in_128bpp [0] = (in & 0x000000ff000000ff) << 8;
-    in_128bpp [1] = (in & 0x00ff000000ff0000) >> 8;
-    unpremul_128bpp (in_128bpp, out_128bpp, alpha);
+    unpremul_p_to_u_128bpp (in_128bpp, out_128bpp, alpha);
 
     return (out_128bpp [0] & 0x000000ff000000ff)
            | ((out_128bpp [1] & 0x000000ff000000ff) << 16);
@@ -99,7 +108,6 @@ static SMOL_INLINE uint64_t
 premul_u_to_p_64bpp (const uint64_t in,
                      uint8_t alpha)
 {
-    /* FIXME: Verify this */
     return ((in * ((uint16_t) alpha + 1)) >> 8) & 0x00ff00ff00ff00ff;
 }
 
@@ -241,7 +249,7 @@ static SMOL_INLINE uint32_t
 pack_pixel_132a_p_to_1234_u_64bpp (uint64_t in)
 {
     uint8_t alpha = in;
-    in = (unpremul_64bpp (in, alpha) & 0xffffffffffffff00) | alpha;
+    in = (unpremul_p_to_u_64bpp (in, alpha) & 0xffffffffffffff00) | alpha;
     return in | (in >> 24);
 }
 
@@ -263,7 +271,7 @@ static SMOL_INLINE uint32_t                                             \
 pack_pixel_132a_p_to_##a##b##c##d##_u_64bpp (uint64_t in)               \
 {                                                                       \
     uint8_t alpha = in;                                                 \
-    in = (unpremul_64bpp (in, alpha) & 0xffffffffffffff00) | alpha;     \
+    in = (unpremul_p_to_u_64bpp (in, alpha) & 0xffffffffffffff00) | alpha; \
     return PACK_FROM_1324_64BPP (in, a, b, c, d);                       \
 }                                                                       \
                                                                         \
@@ -287,7 +295,7 @@ pack_pixel_123a_p_to_##a##b##c##d##_u_128bpp (const uint64_t * SMOL_RESTRICT in)
 {                                                                       \
     uint64_t t [2];                                                     \
     uint8_t alpha = in [1];                                             \
-    unpremul_128bpp (in, t, alpha);                                     \
+    unpremul_p_to_u_128bpp (in, t, alpha);                              \
     t [1] = (t [1] & 0xffffffff00000000) | alpha;                       \
     return PACK_FROM_1234_128BPP (t, a, b, c, d);                       \
 }                                                                       \
@@ -316,7 +324,7 @@ static SMOL_INLINE uint32_t
 pack_pixel_a324_p_to_1234_u_64bpp (uint64_t in)
 {
     uint8_t alpha = (in >> 48) & 0xff;  /* FIXME: May not need mask */
-    in = (unpremul_64bpp (in, alpha) & 0x0000ffffffffffff) | ((uint64_t) alpha << 48);
+    in = (unpremul_p_to_u_64bpp (in, alpha) & 0x0000ffffffffffff) | ((uint64_t) alpha << 48);
     return in | (in >> 24);
 }
 
@@ -338,7 +346,7 @@ static SMOL_INLINE uint32_t                                             \
 pack_pixel_a324_p_to_##a##b##c##d##_u_64bpp (uint64_t in)               \
 {                                                                       \
     uint8_t alpha = (in >> 48) & 0xff;  /* FIXME: May not need mask */  \
-    in = (unpremul_64bpp (in, alpha) & 0x0000ffffffffffff) | ((uint64_t) alpha << 48); \
+    in = (unpremul_p_to_u_64bpp (in, alpha) & 0x0000ffffffffffff) | ((uint64_t) alpha << 48); \
     return PACK_FROM_1324_64BPP (in, a, b, c, d);                       \
 }                                                                       \
                                                                         \
@@ -362,7 +370,7 @@ pack_pixel_a234_p_to_##a##b##c##d##_u_128bpp (const uint64_t * SMOL_RESTRICT in)
 {                                                                       \
     uint64_t t [2];                                                     \
     uint8_t alpha = in [0] >> 32;                                       \
-    unpremul_128bpp (in, t, alpha);                                     \
+    unpremul_p_to_u_128bpp (in, t, alpha);                              \
     t [0] = (t [0] & 0x00000000ffffffff) | ((uint64_t) alpha << 32);    \
     return PACK_FROM_1234_128BPP (t, a, b, c, d);                       \
 }                                                                       \
@@ -393,7 +401,7 @@ pack_pixel_123a_i_to_1234_u_128bpp (const uint64_t * SMOL_RESTRICT in)
     uint8_t alpha = in [1] & 0xff;
     uint64_t t [2];
 
-    unpremul_128bpp (in, t, alpha);
+    unpremul_i_to_u_128bpp (in, t, alpha);
 
     return ((t [0] >> 8) & 0xff000000)
            | ((t [0] << 16) & 0x00ff0000)
@@ -421,7 +429,7 @@ pack_pixel_123a_i_to_##a##b##c##d##_u_128bpp (const uint64_t * SMOL_RESTRICT in)
 {                                                                       \
     uint8_t alpha = in [1] & 0xff;                                      \
     uint64_t t [2];                                                     \
-    unpremul_128bpp (in, t, alpha);                                     \
+    unpremul_i_to_u_128bpp (in, t, alpha);                              \
     t [1] = (t [1] & 0xffffffff00000000ULL) | alpha;                    \
     return PACK_FROM_1234_128BPP (t, a, b, c, d);                       \
 }                                                                       \
