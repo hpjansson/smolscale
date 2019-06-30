@@ -530,7 +530,7 @@ unpack_row_a234_u_to_a234_p_128bpp (const uint32_t * SMOL_RESTRICT row_in,
                                     uint64_t * SMOL_RESTRICT row_out,
                                     uint32_t n_pixels)
 {
-    uint64_t *row_out_max = row_out + n_pixels;
+    uint64_t *row_out_max = row_out + n_pixels * 2;
 
     while (row_out != row_out_max)
     {
@@ -607,7 +607,7 @@ unpack_row_123a_u_to_123a_p_128bpp (const uint32_t * SMOL_RESTRICT row_in,
                                     uint64_t * SMOL_RESTRICT row_out,
                                     uint32_t n_pixels)
 {
-    uint64_t *row_out_max = row_out + n_pixels;
+    uint64_t *row_out_max = row_out + n_pixels * 2;
 
     while (row_out != row_out_max)
     {
