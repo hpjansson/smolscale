@@ -548,12 +548,6 @@ unpack_pixel_a234_u_to_234a_i_128bpp (uint32_t p,
     uint64_t p64 = p;
     uint64_t alpha = p >> 24;
 
-#if 0
-    /* Unpack to alpha first -- complicates things */
-    out [0] = (alpha << 32) | (((p64 & 0x00ff0000) >> 16) * alpha);
-    out [1] = ((((p64 & 0x0000ff00) << 24) | (p64 & 0x000000ff)) * alpha);
-#endif
-
     out [0] = (((((p64 & 0x00ff0000) << 16) | ((p64 & 0x0000ff00) >> 8)) * alpha));
     out [1] = (((((p64 & 0x000000ff) << 32) * alpha))) | alpha;
 }
