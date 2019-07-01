@@ -32,6 +32,10 @@ extern "C" {
 
 typedef unsigned int SmolBool;
 
+#define SMOL_TEMP_ALIGNMENT 64
+#define SMOL_ASSUME_ALIGNED(x, t, a) (x) = (t) __builtin_assume_aligned ((x), (a))
+#define SMOL_ASSUME_TEMP_ALIGNED(x, t) (x) = (t) __builtin_assume_aligned ((x), SMOL_TEMP_ALIGNMENT)
+
 #define SMOL_RESTRICT __restrict
 #define SMOL_INLINE __attribute__((always_inline)) inline
 #define SMOL_CONST __attribute__((const))
