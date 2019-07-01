@@ -12,6 +12,11 @@
 extern "C" {
 #endif
 
+/* Enum switches must handle every value */
+#ifdef __GNUC__
+# pragma GCC diagnostic error "-Wswitch"
+#endif
+
 #ifndef FALSE
 # define FALSE (0)
 #endif
