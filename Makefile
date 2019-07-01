@@ -16,7 +16,7 @@ TEST_HEADERS=smolscale.h smolscale-private.h
 TEST_SRC=smolscale.c png.c test.c
 TEST_FLAGS=-Wall -Wextra -O2 -g
 TEST_DEBUG_FLAGS=-Wall -Wextra -O2 -g -fno-inline -fno-omit-frame-pointer
-TEST_SIMD_FLAGS=-Wall -Wextra -Ofast -g -fverbose-asm -mfma -flto -fstrict-aliasing -ftree-vectorize -mcpu=native -march=native -mtune=native -mmmx -msse -msse2 -msse3 -msse4 -msse4.1 -msse4.2 -mavx -mavx2
+TEST_SIMD_FLAGS=-Wall -Wextra -O3 -g -fverbose-asm -flto -mavx2
 
 all: test
 
