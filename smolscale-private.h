@@ -25,6 +25,8 @@ extern "C" {
 # define MAX(a, b) ((a) > (b) ? (a) : (b))
 #endif
 
+typedef unsigned int SmolBool;
+
 #define SMOL_RESTRICT __restrict
 #define SMOL_INLINE __attribute__((always_inline)) inline
 #define SMOL_CONST __attribute__((const))
