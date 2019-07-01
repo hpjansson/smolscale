@@ -1,3 +1,6 @@
+CC=gcc
+CXX=g++
+
 # Set this to either 'yes' or 'no', without the quotes
 WITH_SKIA=yes
 
@@ -24,16 +27,16 @@ clean: FORCE
 	rm -f test test-simd test-debug skia.o
 
 test: Makefile $(TEST_HEADERS) $(TEST_SRC) $(SKIA_OBJ)
-	gcc $(TEST_FLAGS) $(TEST_SYSDEPS_FLAGS) $(SKIA_CFLAGS) $(SKIA_LDFLAGS) $(TEST_SRC) -o test
+	$(CC) $(TEST_FLAGS) $(TEST_SYSDEPS_FLAGS) $(SKIA_CFLAGS) $(SKIA_LDFLAGS) $(TEST_SRC) -o test
 
 test-debug: Makefile $(TEST_HEADERS) $(TEST_SRC) $(SKIA_OBJ)
-	gcc $(TEST_DEBUG_FLAGS) $(TEST_SYSDEPS_FLAGS) $(SKIA_CFLAGS) $(SKIA_LDFLAGS) $(TEST_SRC) -o test-debug
+	$(CC) $(TEST_DEBUG_FLAGS) $(TEST_SYSDEPS_FLAGS) $(SKIA_CFLAGS) $(SKIA_LDFLAGS) $(TEST_SRC) -o test-debug
 
 test-simd: Makefile $(TEST_HEADERS) $(TEST_SRC) $(SKIA_OBJ)
-	gcc $(TEST_SIMD_FLAGS) $(TEST_SYSDEPS_FLAGS) $(SKIA_CFLAGS) $(SKIA_LDFLAGS) $(TEST_SRC) -o test-simd
+	$(CC) $(TEST_SIMD_FLAGS) $(TEST_SYSDEPS_FLAGS) $(SKIA_CFLAGS) $(SKIA_LDFLAGS) $(TEST_SRC) -o test-simd
 # -fopt-info-vec-optimized -fopt-info-vec-missed
 
 skia.o: Makefile skia.cpp
-	g++ -Wall -Wextra $(SKIA_CFLAGS) -c skia.cpp -o skia.o
+	$(CXX) -Wall -Wextra $(SKIA_CFLAGS) -c skia.cpp -o skia.o
 
 FORCE:
