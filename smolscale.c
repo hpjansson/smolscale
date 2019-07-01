@@ -2134,12 +2134,75 @@ static const SmolImplementation generic_implementation =
     &generic_conversions
 };
 
+/* In the absence of a proper build system, runtime detection is more
+   portable than compiler macros. WFM. */
+static SmolBool
+host_is_little_endian (void)
+{
+    static const union
+    {
+        uint8_t u8 [4];
+        uint32_t u32;
+    }
+    host_bytes = { { 0, 1, 2, 3 } };
+
+    if (host_bytes.u32 == 0x03020100UL)
+        return TRUE;
+
+    return FALSE;
+}
+
+/* The generic unpack/pack functions fetch and store pixels as u32.
+ * This means the byte order will be reversed on little endian, with
+ * consequences for the alpha channel and reordering logic. We deal
+ * with this by using the apparent byte order internally. */
+static SmolPixelType
+get_host_pixel_type (SmolPixelType pixel_type)
+{
+    SmolPixelType host_pixel_type = SMOL_PIXEL_MAX;
+
+    if (!host_is_little_endian ())
+        return pixel_type;
+
+    /* We use a switch for this so the compiler can remind us
+     * to keep it in sync with the SmolPixelType enum. */
+    switch (pixel_type)
+    {
+        case SMOL_PIXEL_RGBA8_PREMULTIPLIED:
+            host_pixel_type = SMOL_PIXEL_ABGR8_PREMULTIPLIED; break;
+        case SMOL_PIXEL_BGRA8_PREMULTIPLIED:
+            host_pixel_type = SMOL_PIXEL_ARGB8_PREMULTIPLIED; break;
+        case SMOL_PIXEL_ARGB8_PREMULTIPLIED:
+            host_pixel_type = SMOL_PIXEL_BGRA8_PREMULTIPLIED; break;
+        case SMOL_PIXEL_ABGR8_PREMULTIPLIED:
+            host_pixel_type = SMOL_PIXEL_RGBA8_PREMULTIPLIED; break;
+        case SMOL_PIXEL_RGBA8_UNASSOCIATED:
+            host_pixel_type = SMOL_PIXEL_ABGR8_UNASSOCIATED; break;
+        case SMOL_PIXEL_BGRA8_UNASSOCIATED:
+            host_pixel_type = SMOL_PIXEL_ARGB8_UNASSOCIATED; break;
+        case SMOL_PIXEL_ARGB8_UNASSOCIATED:
+            host_pixel_type = SMOL_PIXEL_BGRA8_UNASSOCIATED; break;
+        case SMOL_PIXEL_ABGR8_UNASSOCIATED:
+            host_pixel_type = SMOL_PIXEL_RGBA8_UNASSOCIATED; break;
+        case SMOL_PIXEL_MAX:
+            host_pixel_type = SMOL_PIXEL_MAX; break;
+    }
+
+    return host_pixel_type;
+}
+
 static void
 get_implementations (SmolScaleCtx *scale_ctx)
 {
-    const SmolConversion *conv = &generic_implementation.ctab->conversions
-      [scale_ctx->storage_type] [scale_ctx->pixel_type_in] [scale_ctx->pixel_type_out];
+    const SmolConversion *conv;
+    SmolPixelType ptype_in, ptype_out;
     uint8_t n_bytes_per_pixel;
+
+    ptype_in = get_host_pixel_type (scale_ctx->pixel_type_in);
+    ptype_out = get_host_pixel_type (scale_ctx->pixel_type_out);
+
+    conv = &generic_implementation.ctab->conversions
+        [scale_ctx->storage_type] [ptype_in] [ptype_out];
 
     n_bytes_per_pixel = conv->n_bytes_per_pixel;
     scale_ctx->unpack_row_func = conv->unpack_row_func;
