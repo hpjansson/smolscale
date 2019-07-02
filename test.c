@@ -1027,18 +1027,18 @@ run_generate (const gchar *filename,
 static void
 print_usage (void)
 {
-    g_printerr ("Usage: benchmark <smol|pixman|gdk_pixbuf|sdl|skia>\n"
-                "                 [ generate\n"
-                "                   <min_scale> <max_scale> <n_steps>\n"
-                "                   <filename> ] |\n"
-                "                 [ check ]\n"
-                "                 [ proportional\n"
-                "                   <in_width> <in_height>\n"
-                "                   <min_scale> <max_scale> <n_steps> ] |\n"
-                "                 [ <n_repetitions>\n"
-                "                   <in_width> <in_height>\n"
-                "                   <min_width> <max_width> <width_steps>\n"
-                "                   <min_height> <max_height> <height_steps> ]\n");
+    g_printerr ("Usage: test <smol|pixman|gdk_pixbuf|sdl|skia>\n"
+                "            [ generate\n"
+                "              <min_scale> <max_scale> <n_steps>\n"
+                "              <filename> ] |\n"
+                "            [ check ]\n"
+                "            [ proportional\n"
+                "              <in_width> <in_height>\n"
+                "              <min_scale> <max_scale> <n_steps> ] |\n"
+                "            [ <n_repetitions>\n"
+                "              <in_width> <in_height>\n"
+                "              <min_width> <max_width> <width_steps>\n"
+                "              <min_height> <max_height> <height_steps> ]\n");
 }
 
 #define DEFAULT_N_REPETITIONS 3
