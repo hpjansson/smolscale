@@ -1,8 +1,10 @@
 CC=gcc
 CXX=g++
 
-# Set this to either 'yes' or 'no', without the quotes
-WITH_SKIA=yes
+# Set this to either 'yes' or 'no', without the quotes. You need
+# Skia checked out and built (Shared target) in the skia/
+# subdirectory.
+WITH_SKIA=no
 
 ifeq ($(WITH_SKIA),yes)
   SKIA_OBJ=skia.o
