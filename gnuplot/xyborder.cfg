@@ -1,0 +1,7 @@
+# xy-border for next graph
+#
+# AUTHOR: Hagen Wierstorf
+set style line 101 lc rgb '#808080' lt 1 lw 1
+set border 3 front ls 101
+set tics nomirror out scale 0.75
+set format '%g'
