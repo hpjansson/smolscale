@@ -2187,8 +2187,6 @@ static const SmolConversionTable generic_conversions =
 } }
 };
 
-/* --- API --- */
-
 static const SmolImplementation generic_implementation =
 {
     {
@@ -2496,6 +2494,8 @@ smol_scale_finalize (SmolScaleCtx *scale_ctx)
 {
     free (scale_ctx->offsets_x);
 }
+
+/* --- Public API --- */
 
 SmolScaleCtx *
 smol_scale_new (SmolPixelType pixel_type_in,
