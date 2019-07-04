@@ -47,7 +47,7 @@ SmolScaleCtx *smol_scale_new (SmolPixelType pixel_type_in, const uint32_t *pixel
 
 void smol_scale_destroy (SmolScaleCtx *scale_ctx);
 
-void smol_scale_batch (const SmolScaleCtx *scale_ctx, uint32_t first_row, uint32_t n_rows);
+void smol_scale_batch (const SmolScaleCtx *scale_ctx, uint32_t first_outrow, uint32_t n_outrows);
 
 #ifdef __cplusplus
 }
