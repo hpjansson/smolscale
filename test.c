@@ -20,6 +20,16 @@
 #define CORRECTNESS_WIDTH_STEP_SIZE (((CORRECTNESS_WIDTH_MAX) - (CORRECTNESS_WIDTH_MIN)) / (CORRECTNESS_WIDTH_STEPS))
 #define CORRECTNESS_HEIGHT_STEP_SIZE (((CORRECTNESS_HEIGHT_MAX) - (CORRECTNESS_HEIGHT_MIN)) / (CORRECTNESS_HEIGHT_STEPS))
 
+/* Defined in png.c */
+gboolean smoltest_load_image (const gchar *file_name,
+                              guint *width_out,
+                              guint *height_out,
+                              gpointer *data_out);
+void smoltest_save_image (const gchar *prefix,
+                          guint32 *data,
+                          guint width,
+                          guint height);
+
 /* --- Common --- */
 
 typedef struct
@@ -955,7 +965,7 @@ run_generate (const gchar *filename,
     gchar *fname_out_prefix;
     guint step;
 
-    if (!smol_load_image (filename, &in_width, &in_height, &raw_data))
+    if (!smoltest_load_image (filename, &in_width, &in_height, &raw_data))
     {
         g_printerr ("Failed to read image '%s'.\n", filename);
         return;
@@ -999,7 +1009,7 @@ run_generate (const gchar *filename,
         unpremultiply_alpha (params.out_data, out_width, out_height);
 #endif
 
-        smol_save_image (fname_out_prefix, params.out_data, out_width, out_height);
+        smoltest_save_image (fname_out_prefix, params.out_data, out_width, out_height);
 
         g_printerr ("*");
         fflush (stderr);

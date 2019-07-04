@@ -151,9 +151,9 @@ write_png_file (PngImage *png_image, char *file_name)
 }
 
 gboolean
-smol_load_image (const gchar *file_name,
-                 guint *width_out, guint *height_out,
-                 gpointer *data_out)
+smoltest_load_image (const gchar *file_name,
+                     guint *width_out, guint *height_out,
+                     gpointer *data_out)
 {
     PngImage png_image;
     guint32 *data_u32, *p;
@@ -178,7 +178,7 @@ smol_load_image (const gchar *file_name,
 }
 
 void
-smol_save_image (const gchar *prefix, guint32 *data, guint width, guint height)
+smoltest_save_image (const gchar *prefix, guint32 *data, guint width, guint height)
 {
     PngImage png_image = { 0 };
     guint32 **rows;
