@@ -5,7 +5,7 @@ Smolscale is a smol piece of C code for quickly scaling images to a reasonable
 level of quality using CPU resources only (no GPU). It operates on 4-channel
 data with 32 bits per pixel, i.e. packed RGBA, ARGB, BGRA, etc. It supports
 both premultiplied and unassociated alpha and can convert between the two. It
-is byte ordering agnostic.
+is host byte ordering agnostic.
 
 The design goals are:
 
