@@ -82,6 +82,8 @@ compute_elapsed (struct timespec *before, struct timespec *after)
     return diff / (gdouble) 1000000.0;
 }
 
+#if 0
+
 static void
 premultiply_alpha (guint32 *pixels, guint width, guint height)
 {
@@ -140,53 +142,9 @@ unpremultiply_alpha (guint32 *pixels, guint width, guint height)
     }
 }
 
+#endif
+
 /* --- Pixman --- */
-
-static double
-min4 (double a, double b, double c, double d)
-{
-    double m1, m2;
-
-    m1 = MIN (a, b);
-    m2 = MIN (c, d);
-    return MIN (m1, m2);
-}
-
-static double
-max4 (double a, double b, double c, double d)
-{
-    double m1, m2;
-
-    m1 = MAX (a, b);
-    m2 = MAX (c, d);
-    return MAX (m1, m2);
-}
-
-static void
-compute_extents (pixman_f_transform_t *trans, double *sx, double *sy)
-{
-    double min_x, max_x, min_y, max_y;
-    pixman_f_vector_t v[4] =
-    {
-        { { 1, 1, 1 } },
-        { { -1, 1, 1 } },
-        { { -1, -1, 1 } },
-        { { 1, -1, 1 } },
-    };
-
-    pixman_f_transform_point (trans, &v[0]);
-    pixman_f_transform_point (trans, &v[1]);
-    pixman_f_transform_point (trans, &v[2]);
-    pixman_f_transform_point (trans, &v[3]);
-
-    min_x = min4 (v[0].v[0], v[1].v[0], v[2].v[0], v[3].v[0]);
-    max_x = max4 (v[0].v[0], v[1].v[0], v[2].v[0], v[3].v[0]);
-    min_y = min4 (v[0].v[1], v[1].v[1], v[2].v[1], v[3].v[1]);
-    max_y = max4 (v[0].v[1], v[1].v[1], v[2].v[1], v[3].v[1]);
-
-    *sx = (max_x - min_x) / 2.0;
-    *sy = (max_y - min_y) / 2.0;
-}
 
 static void
 scale_init_pixman (ScaleParams *params, gconstpointer in_raw, guint in_width, guint in_height)
@@ -303,8 +261,6 @@ scale_fini_gdk_pixbuf (ScaleParams *params)
 static void
 scale_do_gdk_pixbuf (ScaleParams *params, guint out_width, guint out_height)
 {
-    GdkPixbuf *scaled;
-
     if (params->priv)
     {
         g_object_unref (params->priv);
@@ -321,7 +277,6 @@ scale_do_gdk_pixbuf (ScaleParams *params, guint out_width, guint out_height)
 static void
 scale_init_sdl (ScaleParams *params, gconstpointer in_raw, guint in_width, guint in_height)
 {
-    static int sdl_is_initialized = FALSE;  /* Not MT safe */
     SDL_Surface *surface;
 
 #if 0
@@ -370,7 +325,6 @@ scale_do_sdl (ScaleParams *params, guint out_width, guint out_height)
 {
     SDL_Surface *scaled_surface [2];
     guint x_shrink_factor, y_shrink_factor;
-    gdouble x_zoom_factor, y_zoom_factor;
 
     if (params->priv)
     {
@@ -431,6 +385,10 @@ scale_do_sdl (ScaleParams *params, guint out_width, guint out_height)
 /* --- Skia --- */
 
 #ifdef WITH_SKIA
+
+/* Defined in skia.c */
+void skia_scale_raw (const uint32_t *in_raw, int in_width, int in_height,
+                     uint32_t *out_raw, int out_width, int out_height);
 
 static void
 scale_init_skia (ScaleParams *params, gconstpointer in_raw, guint in_width, guint in_height)

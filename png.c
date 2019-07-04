@@ -29,7 +29,7 @@ abort_ (const char *s, ...)
 static void
 read_png_file (const char *file_name, PngImage *png_image)
 {
-  char header [8];
+  unsigned char header [8];
   png_structp png_ptr;
   png_infop info_ptr;
   int y;
