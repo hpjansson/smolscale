@@ -312,7 +312,6 @@ static void
 scale_init_sdl (ScaleParams *params, gconstpointer in_raw, guint in_width, guint in_height)
 {
     static int sdl_is_initialized = FALSE;  /* Not MT safe */
-    SDL_PixelFormat pf = { 0 };
     SDL_Surface *surface;
 
 #if 0
@@ -327,19 +326,6 @@ scale_init_sdl (ScaleParams *params, gconstpointer in_raw, guint in_width, guint
 
     params->in_width = in_width;
     params->in_height = in_height;
-
-    pf.palette = 0;
-    pf.BitsPerPixel = 32;
-    pf.BytesPerPixel = 4;
-    pf.alpha = 255;
-    pf.Rshift = pf.Rloss = pf.Gloss = pf.Bloss = pf.Aloss = pf.colorkey = 0;
-    pf.Rmask = 0x000000ff;
-    pf.Gshift = 8;
-    pf.Gmask = 0x0000ff00;
-    pf.Bshift = 16;
-    pf.Bmask = 0x00ff0000;
-    pf.Ashift = 24;
-    pf.Amask = 0xff000000;
 
     surface = SDL_CreateRGBSurfaceFrom ((void *) in_raw,
                                         in_width,
