@@ -1,6 +1,6 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 
-/* Copyright (C) 2019 Hans Petter Jansson */
+/* Copyright (C) 2019 Hans Petter Jansson. See COPYING for details. */
 
 #include <assert.h> /* assert */
 #include <stdlib.h> /* malloc, free */

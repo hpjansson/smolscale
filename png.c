@@ -1,6 +1,9 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 
-/* Copyright (C) 2019 Hans Petter Jansson */
+/* Copyright (C) 2019 Hans Petter Jansson. See COPYING for details. */
+
+/* read_png_file() and write_png_file() are based on an example from
+ * the libpng documentation. */
 
 #include <glib.h>
 #include <png.h>
