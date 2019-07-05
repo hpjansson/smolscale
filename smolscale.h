@@ -47,6 +47,10 @@ SmolScaleCtx *smol_scale_new (SmolPixelType pixel_type_in, const uint32_t *pixel
 
 void smol_scale_destroy (SmolScaleCtx *scale_ctx);
 
+/* It's ok to call smol_scale_batch() without locking from multiple concurrent
+ * threads, as long as the outrows do not overlap. Make sure all workers are
+ * finished before you call smol_scale_destroy(). */
+
 void smol_scale_batch (const SmolScaleCtx *scale_ctx, uint32_t first_outrow, uint32_t n_outrows);
 
 #ifdef __cplusplus
