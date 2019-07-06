@@ -47,11 +47,7 @@ for UNIT in $UNITS; do
     eval TESTNAME=\${TESTNAME_${UNIT}}
 
     echo \"${DESC}\" >>results/resize-$TEST.txt
-#    # Quick
-#    ./test $TESTNAME proportional 20 $TEST $TEST 0.001 1.5 50 >>results/resize-$TEST.txt
-    # Slow
-#    ./test-simd $TESTNAME proportional 20 $TEST $TEST 0.001 1.5 500 >>results/resize-$TEST.txt
-    ./test-simd $TESTNAME proportional $(echo $TEST | sed 's/-/ /g') >>results/resize-$TEST.txt
+    ./test $TESTNAME proportional $(echo $TEST | sed 's/-/ /g') >>results/resize-$TEST.txt
     echo >>results/resize-$TEST.txt
     echo >>results/resize-$TEST.txt
   done
