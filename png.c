@@ -5,6 +5,8 @@
 /* read_png_file() and write_png_file() are based on an example from
  * the libpng documentation. */
 
+#include <stdlib.h> /* malloc, abort */
+#include <string.h> /* memcpy */
 #include <glib.h>
 #include <png.h>
 
