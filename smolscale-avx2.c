@@ -2,6 +2,10 @@
 
 /* Copyright (C) 2019 Hans Petter Jansson. See COPYING for details. */
 
+/* So it says AVX2 on the tin, but at the moment this is mostly just a
+ * straight copy of the generic code. Still, it gives a nice boost if
+ * compiled with -O3 -mavx2. */
+
 #include <assert.h> /* assert */
 #include <stdlib.h> /* malloc, free */
 #include <string.h> /* memset */
