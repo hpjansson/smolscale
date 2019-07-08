@@ -813,12 +813,12 @@ add_parts (const uint64_t * SMOL_RESTRICT parts_in,
 /* --- Precalculation --- */
 
 static void
-calc_size_steps (uint32_t dim_in,
-                 uint32_t dim_out,
-                 uint32_t *halvings_out,
-                 uint32_t *dim_bilin_out,
-                 SmolFilterType *filter_out,
-                 SmolStorageType *storage_out)
+pick_filter_params (uint32_t dim_in,
+                    uint32_t dim_out,
+                    uint32_t *halvings_out,
+                    uint32_t *dim_bilin_out,
+                    SmolFilterType *filter_out,
+                    SmolStorageType *storage_out)
 {
     *dim_bilin_out = dim_out;
     *storage_out = SMOL_STORAGE_64BPP;
@@ -2441,16 +2441,16 @@ smol_scale_init (SmolScaleCtx *scale_ctx,
     scale_ctx->height_out = height_out;
     scale_ctx->rowstride_out = rowstride_out / sizeof (uint32_t);
 
-    calc_size_steps (width_in, width_out,
-                     &scale_ctx->width_halvings,
-                     &scale_ctx->width_bilin_out,
-                     &scale_ctx->filter_h,
-                     &storage_type [0]);
-    calc_size_steps (height_in, height_out,
-                     &scale_ctx->height_halvings,
-                     &scale_ctx->height_bilin_out,
-                     &scale_ctx->filter_v,
-                     &storage_type [1]);
+    pick_filter_params (width_in, width_out,
+                        &scale_ctx->width_halvings,
+                        &scale_ctx->width_bilin_out,
+                        &scale_ctx->filter_h,
+                        &storage_type [0]);
+    pick_filter_params (height_in, height_out,
+                        &scale_ctx->height_halvings,
+                        &scale_ctx->height_bilin_out,
+                        &scale_ctx->filter_v,
+                        &storage_type [1]);
 
     scale_ctx->storage_type = MAX (storage_type [0], storage_type [1]);
 
