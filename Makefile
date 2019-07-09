@@ -18,7 +18,6 @@ WITH_SKIA=no
 GENERAL_CFLAGS=-Wall -Wextra -g
 
 SMOL_CFLAGS=$(GENERAL_CFLAGS) -O3
-SMOL_AVX2_CFLAGS=$(GENERAL_CFLAGS) -O3 -fverbose-asm -mavx2
 
 TEST_CFLAGS=$(GENERAL_CFLAGS) -O3 -flto
 TEST_SYSDEPS_FLAGS=`pkg-config --libs --cflags glib-2.0 libpng pixman-1 gdk-pixbuf-2.0 SDL_gfx`
@@ -32,6 +31,8 @@ ifeq ($(WITH_AVX2),yes)
 else
   SMOL_OBJ=smolscale.o
 endif
+
+SMOL_AVX2_CFLAGS=$(SMOL_CFLAGS) -fverbose-asm -mavx2
 
 ifeq ($(WITH_SKIA),yes)
   TEST_CFLAGS+=-DWITH_SKIA
