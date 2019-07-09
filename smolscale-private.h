@@ -158,6 +158,10 @@ struct SmolScaleCtx
     unsigned int width_halvings, height_halvings;
 };
 
+#ifdef SMOL_WITH_AVX2
+const SmolImplementation *_smol_get_avx2_implementation (void);
+#endif
+
 #ifdef __cplusplus
 }
 #endif

@@ -2305,8 +2305,6 @@ get_host_pixel_type (SmolPixelType pixel_type)
 
 #ifdef SMOL_WITH_AVX2
 
-const SmolImplementation *_smol_get_avx2_implementation (void);
-
 static SmolBool
 have_avx2 (void)
 {
