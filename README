@@ -31,7 +31,7 @@ minimal fuss:
   smolscale-private.h
 
 If you want AVX2 SIMD support, optionally copy this additional file and
-compile everything with -DWITH_AVX2:
+compile everything with -DSMOL_WITH_AVX2:
 
   smolscale-avx2.c
 
