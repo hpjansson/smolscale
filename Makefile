@@ -59,6 +59,6 @@ smolscale-avx2.o: Makefile smolscale-avx2.c smolscale.h smolscale-private.h
 	$(CC) $(SMOL_AVX2_CFLAGS) -c smolscale-avx2.c -o smolscale-avx2.o
 
 skia.o: Makefile skia.cpp
-	$(CXX) -Wall -Wextra $(SKIA_CFLAGS) -c skia.cpp -o skia.o
+	$(CXX) $(SKIA_CFLAGS) -c skia.cpp -o skia.o
 
 FORCE:
