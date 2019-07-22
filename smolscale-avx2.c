@@ -760,8 +760,8 @@ unpack_row_1234_p_to_1324_p_64bpp (const uint32_t * SMOL_RESTRICT row_in,
 static SMOL_INLINE uint64_t
 unpack_pixel_123_p_to_132a_p_64bpp (const uint8_t *p)
 {
-    return ((uint64_t) p [0] << 56) | ((uint32_t) p [1] << 16)
-        | ((uint64_t) p [2] << 40) | 0xff;
+    return ((uint64_t) p [0] << 48) | ((uint32_t) p [1] << 16)
+        | ((uint64_t) p [2] << 32) | 0xff;
 }
 
 static void
