@@ -525,7 +525,7 @@ scale_do_smol_threaded (ScaleParams *params, guint out_width, guint out_height)
 
     n_threads = g_get_num_processors ();
     thread_pool = g_thread_pool_new ((GFunc) scale_smol_thread_worker,
-                                     &scale_ctx,
+                                     scale_ctx,
                                      n_threads,
                                      FALSE,
                                      NULL);
