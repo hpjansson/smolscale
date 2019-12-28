@@ -1479,6 +1479,28 @@ interp_horizontal_one_128bpp (const SmolScaleCtx *scale_ctx,
 }
 
 static void
+interp_horizontal_copy_64bpp (const SmolScaleCtx *scale_ctx,
+                              const uint64_t * SMOL_RESTRICT row_parts_in,
+                              uint64_t * SMOL_RESTRICT row_parts_out)
+{
+    SMOL_ASSUME_TEMP_ALIGNED (row_parts_in, const uint64_t *);
+    SMOL_ASSUME_TEMP_ALIGNED (row_parts_out, uint64_t *);
+
+    memcpy (row_parts_out, row_parts_in, scale_ctx->width_out * sizeof (uint64_t));
+}
+
+static void
+interp_horizontal_copy_128bpp (const SmolScaleCtx *scale_ctx,
+                               const uint64_t * SMOL_RESTRICT row_parts_in,
+                               uint64_t * SMOL_RESTRICT row_parts_out)
+{
+    SMOL_ASSUME_TEMP_ALIGNED (row_parts_in, const uint64_t *);
+    SMOL_ASSUME_TEMP_ALIGNED (row_parts_out, uint64_t *);
+
+    memcpy (row_parts_out, row_parts_in, scale_ctx->width_out * 2 * sizeof (uint64_t));
+}
+
+static void
 scale_horizontal (const SmolScaleCtx *scale_ctx,
                   const uint32_t *row_in,
                   uint64_t *row_parts_out)
@@ -2145,6 +2167,19 @@ scale_outrow_one_128bpp (const SmolScaleCtx *scale_ctx,
     scale_ctx->pack_row_func (vertical_ctx->parts_row [0], row_out, scale_ctx->width_out);
 }
 
+static void
+scale_outrow_copy (const SmolScaleCtx *scale_ctx,
+                   SmolVerticalCtx *vertical_ctx,
+                   uint32_t row_index,
+                   uint32_t *row_out)
+{
+    scale_horizontal (scale_ctx,
+                      inrow_ofs_to_pointer (scale_ctx, row_index),
+                      vertical_ctx->parts_row [0]);
+
+    scale_ctx->pack_row_func (vertical_ctx->parts_row [0], row_out, scale_ctx->width_out);
+}
+
 /* --- Conversion tables --- */
 
 static const SmolConversionTable avx2_conversions =
@@ -2429,6 +2464,7 @@ static const SmolImplementation avx2_implementation =
         /* Horizontal filters */
         {
             /* 64bpp */
+            interp_horizontal_copy_64bpp,
             interp_horizontal_one_64bpp,
             interp_horizontal_bilinear_0h_64bpp,
             interp_horizontal_bilinear_1h_64bpp,
@@ -2441,6 +2477,7 @@ static const SmolImplementation avx2_implementation =
         },
         {
             /* 128bpp */
+            interp_horizontal_copy_128bpp,
             interp_horizontal_one_128bpp,
             interp_horizontal_bilinear_0h_128bpp,
             interp_horizontal_bilinear_1h_128bpp,
@@ -2456,6 +2493,7 @@ static const SmolImplementation avx2_implementation =
         /* Vertical filters */
         {
             /* 64bpp */
+            scale_outrow_copy,
             scale_outrow_one_64bpp,
             scale_outrow_bilinear_0h_64bpp,
             scale_outrow_bilinear_1h_64bpp,
@@ -2468,6 +2506,7 @@ static const SmolImplementation avx2_implementation =
         },
         {
             /* 128bpp */
+            scale_outrow_copy,
             scale_outrow_one_128bpp,
             scale_outrow_bilinear_0h_128bpp,
             scale_outrow_bilinear_1h_128bpp,
