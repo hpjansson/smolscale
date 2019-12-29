@@ -32,7 +32,12 @@ extern "C" {
 
 typedef unsigned int SmolBool;
 
-#define SMOL_4X2BIT(a, b, c, d) (((a) << 6) | ((b) << 4) | ((c) << 2) | (d))
+#define SMOL_4X2BIT(a, b, c, d)                                         \
+    (((a) << 6) | ((b) << 4) | ((c) << 2) | (d))
+
+#define SMOL_8X1BIT(a,b,c,d,e,f,g,h)                                    \
+    (((a) << 7) | ((b) << 6) | ((c) << 5) | ((d) << 4)                  \
+     | ((e) << 3) | ((f) << 2) | ((g) << 1) | ((h) << 0))
 
 #define SMOL_TEMP_ALIGNMENT 64
 #define SMOL_ASSUME_ALIGNED(x, t, a) (x) = (t) __builtin_assume_aligned ((x), (a))

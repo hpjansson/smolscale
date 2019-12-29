@@ -653,15 +653,103 @@ pack_row_123a_i_to_1234_u_128bpp (const uint64_t * SMOL_RESTRICT row_in,
                                   uint32_t * SMOL_RESTRICT row_out,
                                   uint32_t n_pixels)
 {
+#define ALPHA_MUL (1 << (INVERTED_DIV_SHIFT))
+#define ALPHA_MASK SMOL_8X1BIT (0, 1, 0, 0, 0, 1, 0, 0)
+
     uint32_t *row_out_max = row_out + n_pixels;
+    __m256i alpha_gather = _mm256_set_epi32 (
+        2, 6, 10, 14, 18, 22, 26, 30);
+    __m256i ones = _mm256_set_epi32 (
+        ALPHA_MUL, ALPHA_MUL, ALPHA_MUL, ALPHA_MUL,
+        ALPHA_MUL, ALPHA_MUL, ALPHA_MUL, ALPHA_MUL);
+    __m256i alpha_bcast_01 = _mm256_set_epi32 (0, 0, 0, 0, 1, 1, 1, 1);
+    __m256i alpha_bcast_23 = _mm256_set_epi32 (2, 2, 2, 2, 3, 3, 3, 3);
+    __m256i alpha_bcast_45 = _mm256_set_epi32 (4, 4, 4, 4, 5, 5, 5, 5);
+    __m256i alpha_bcast_67 = _mm256_set_epi32 (6, 6, 6, 6, 7, 7, 7, 7);
+    __m256i rounding = _mm256_set_epi32 (
+        INVERTED_DIV_ROUNDING, 0, INVERTED_DIV_ROUNDING, INVERTED_DIV_ROUNDING,
+        INVERTED_DIV_ROUNDING, 0, INVERTED_DIV_ROUNDING, INVERTED_DIV_ROUNDING);
+    __m256i m0, m1, m2, m3, m4, m5, m6, m7;
+    __m256i channel_shuf = _mm256_set_epi8 (
+        13,12,15,14, 9,8,11,10, 5,4,7,6, 1,0,3,2,
+        13,12,15,14, 9,8,11,10, 5,4,7,6, 1,0,3,2);
 
     SMOL_ASSUME_TEMP_ALIGNED (row_in, const uint64_t *);
+
+    while (row_out + 8 <= row_out_max)
+    {
+        /* Gather multipliers */
+
+        m0 = _mm256_i32gather_epi32 ((const void *) row_in, alpha_gather, 4);
+        m1 = _mm256_i32gather_epi32 ((const void *) inverted_div_table, m0, 4);
+
+        /* 2 pixels */
+
+        m2 = _mm256_permutevar8x32_epi32 (m1, alpha_bcast_67);
+        m2 = _mm256_blend_epi32 (m2, ones, ALPHA_MASK);
+        m3 = _mm256_loadu_si256 ((const __m256i *) row_in);
+        row_in += 4;
+
+        m4 = _mm256_mullo_epi32 (m2, m3);
+        m4 = _mm256_add_epi32 (m4, rounding);
+        m4 = _mm256_srli_epi32 (m4, INVERTED_DIV_SHIFT);
+
+        /* 2 pixels */
+
+        m2 = _mm256_permutevar8x32_epi32 (m1, alpha_bcast_45);
+        m2 = _mm256_blend_epi32 (m2, ones, ALPHA_MASK);
+        m3 = _mm256_loadu_si256 ((const __m256i *) row_in);
+        row_in += 4;
+
+        m5 = _mm256_mullo_epi32 (m2, m3);
+        m5 = _mm256_add_epi32 (m5, rounding);
+        m5 = _mm256_srli_epi32 (m5, INVERTED_DIV_SHIFT);
+
+        /* 2 pixels */
+
+        m2 = _mm256_permutevar8x32_epi32 (m1, alpha_bcast_23);
+        m2 = _mm256_blend_epi32 (m2, ones, ALPHA_MASK);
+        m3 = _mm256_loadu_si256 ((const __m256i *) row_in);
+        row_in += 4;
+
+        m6 = _mm256_mullo_epi32 (m2, m3);
+        m6 = _mm256_add_epi32 (m6, rounding);
+        m6 = _mm256_srli_epi32 (m6, INVERTED_DIV_SHIFT);
+
+        /* 2 pixels */
+
+        m2 = _mm256_permutevar8x32_epi32 (m1, alpha_bcast_01);
+        m2 = _mm256_blend_epi32 (m2, ones, ALPHA_MASK);
+        m3 = _mm256_loadu_si256 ((__m256i *) row_in);
+        row_in += 4;
+
+        m7 = _mm256_mullo_epi32 (m2, m3);
+        m7 = _mm256_add_epi32 (m7, rounding);
+        m7 = _mm256_srli_epi32 (m7, INVERTED_DIV_SHIFT);
+
+        /* Pack and store */
+
+        m0 = _mm256_packus_epi32 (m4, m5);
+        m1 = _mm256_packus_epi32 (m6, m7);
+        m0 = _mm256_packus_epi16 (m0, m1);;
+
+        m0 = _mm256_shuffle_epi8 (m0, channel_shuf);
+        m0 = _mm256_permute4x64_epi64 (m0, SMOL_4X2BIT (3, 1, 2, 0));
+        m0 = _mm256_shuffle_epi32 (m0, SMOL_4X2BIT (3, 1, 2, 0));
+
+        _mm256_storeu_si256 ((__m256i *) row_out, m0);
+
+        row_out += 8;
+    }
 
     while (row_out != row_out_max)
     {
         *(row_out++) = pack_pixel_123a_i_to_1234_u_128bpp (row_in);
         row_in += 2;
     }
+
+#undef ALPHA_MUL
+#undef ALPHA_MASK
 }
 
 static void
