@@ -1003,7 +1003,7 @@ unpack_row_123a_u_to_123a_i_128bpp (const uint32_t * SMOL_RESTRICT row_in,
 
     while (row_out + 16 <= row_out_max)
     {
-        m0 = _mm256_loadu_si256 ((__m256i *) row_in);
+        m0 = _mm256_loadu_si256 ((const __m256i *) row_in);
         row_in += 8;
 
         m0 = _mm256_shuffle_epi8 (m0, channel_shuf);
