@@ -1121,16 +1121,16 @@ unpack_row_123a_u_to_123a_i_128bpp (const uint32_t * SMOL_RESTRICT row_in,
         m5 = _mm256_unpacklo_epi16 (m5, zero);
         m6 = _mm256_unpacklo_epi16 (m6, zero);
 
-        _mm256_storeu_si256 ((__m256i *) row_out, m6);
+        _mm256_store_si256 ((__m256i *) row_out, m6);
         row_out += 4;
-        _mm256_storeu_si256 ((__m256i *) row_out, m5);
+        _mm256_store_si256 ((__m256i *) row_out, m5);
         row_out += 4;
-        _mm256_storeu_si256 ((__m256i *) row_out, m4);
+        _mm256_store_si256 ((__m256i *) row_out, m4);
         row_out += 4;
-        _mm256_storeu_si256 ((__m256i *) row_out, m3);
+        _mm256_store_si256 ((__m256i *) row_out, m3);
         row_out += 4;
     }
-
+ 
     while (row_out != row_out_max)
     {
         unpack_pixel_123a_u_to_123a_i_128bpp (*(row_in++), row_out);
