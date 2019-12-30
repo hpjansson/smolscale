@@ -687,7 +687,7 @@ pack_row_123a_i_to_1234_u_128bpp (const uint64_t * SMOL_RESTRICT row_in,
 
         m2 = _mm256_permutevar8x32_epi32 (m1, alpha_bcast_67);
         m2 = _mm256_blend_epi32 (m2, ones, ALPHA_MASK);
-        m3 = _mm256_loadu_si256 ((const __m256i *) row_in);
+        m3 = _mm256_stream_load_si256 ((const __m256i *) row_in);
         row_in += 4;
 
         m4 = _mm256_mullo_epi32 (m2, m3);
@@ -698,7 +698,7 @@ pack_row_123a_i_to_1234_u_128bpp (const uint64_t * SMOL_RESTRICT row_in,
 
         m2 = _mm256_permutevar8x32_epi32 (m1, alpha_bcast_45);
         m2 = _mm256_blend_epi32 (m2, ones, ALPHA_MASK);
-        m3 = _mm256_loadu_si256 ((const __m256i *) row_in);
+        m3 = _mm256_stream_load_si256 ((const __m256i *) row_in);
         row_in += 4;
 
         m5 = _mm256_mullo_epi32 (m2, m3);
@@ -709,7 +709,7 @@ pack_row_123a_i_to_1234_u_128bpp (const uint64_t * SMOL_RESTRICT row_in,
 
         m2 = _mm256_permutevar8x32_epi32 (m1, alpha_bcast_23);
         m2 = _mm256_blend_epi32 (m2, ones, ALPHA_MASK);
-        m3 = _mm256_loadu_si256 ((const __m256i *) row_in);
+        m3 = _mm256_stream_load_si256 ((const __m256i *) row_in);
         row_in += 4;
 
         m6 = _mm256_mullo_epi32 (m2, m3);
@@ -720,7 +720,7 @@ pack_row_123a_i_to_1234_u_128bpp (const uint64_t * SMOL_RESTRICT row_in,
 
         m2 = _mm256_permutevar8x32_epi32 (m1, alpha_bcast_01);
         m2 = _mm256_blend_epi32 (m2, ones, ALPHA_MASK);
-        m3 = _mm256_loadu_si256 ((__m256i *) row_in);
+        m3 = _mm256_stream_load_si256 ((const __m256i *) row_in);
         row_in += 4;
 
         m7 = _mm256_mullo_epi32 (m2, m3);
