@@ -1297,10 +1297,11 @@ interp_horizontal_bilinear_##n_halvings##h_128bpp (const SmolScaleCtx *scale_ctx
                                                    const uint64_t * SMOL_RESTRICT row_parts_in, \
                                                    uint64_t * SMOL_RESTRICT row_parts_out) \
 {                                                                       \
-    uint64_t p, q;                                                      \
     const uint16_t * SMOL_RESTRICT ofs_x = scale_ctx->offsets_x;        \
     uint64_t F;                                                         \
     uint64_t *row_parts_out_max = row_parts_out + scale_ctx->width_out * 2; \
+    __m128i mask = _mm_set_epi32 (                                      \
+        0x00ffffff, 0x00ffffff, 0x00ffffff, 0x00ffffff);                \
     int i;                                                              \
                                                                         \
     SMOL_ASSUME_TEMP_ALIGNED (row_parts_in, const uint64_t *);          \
@@ -1308,25 +1309,34 @@ interp_horizontal_bilinear_##n_halvings##h_128bpp (const SmolScaleCtx *scale_ctx
                                                                         \
     do                                                                  \
     {                                                                   \
-        uint64_t accum [2] = { 0 };                                     \
+        __m128i a0;                                                     \
+                                                                        \
+        a0 = _mm_setzero_si128 ();                                      \
                                                                         \
         for (i = 0; i < (1 << (n_halvings)); i++)                       \
         {                                                               \
+            __m128i m0, m1;                                             \
+            __m128i factors;                                            \
+                                                                        \
             row_parts_in += *(ofs_x++) * 2;                             \
             F = *(ofs_x++);                                             \
                                                                         \
-            p = row_parts_in [0];                                       \
-            q = row_parts_in [2];                                       \
+            factors = _mm_set1_epi32 ((uint32_t) F);                    \
                                                                         \
-            accum [0] += ((((p - q) * F) >> 8) + q) & 0x00ffffff00ffffffULL; \
+            m0 = _mm_stream_load_si128 ((__m128i *) row_parts_in);      \
+            m1 = _mm_stream_load_si128 ((__m128i *) row_parts_in + 1);  \
                                                                         \
-            p = row_parts_in [1];                                       \
-            q = row_parts_in [3];                                       \
-                                                                        \
-            accum [1] += ((((p - q) * F) >> 8) + q) & 0x00ffffff00ffffffULL; \
+            m0 = _mm_sub_epi32 (m0, m1);                                \
+            m0 = _mm_mullo_epi32 (m0, factors);                         \
+            m0 = _mm_srli_epi32 (m0, 8);                                \
+            a0 = _mm_add_epi32 (a0, m1);                                \
+            a0 = _mm_add_epi32 (a0, m0);                                \
         }                                                               \
-        *(row_parts_out++) = ((accum [0]) >> (n_halvings)) & 0x00ffffff00ffffffULL; \
-        *(row_parts_out++) = ((accum [1]) >> (n_halvings)) & 0x00ffffff00ffffffULL; \
+                                                                        \
+        a0 = _mm_srli_epi32 (a0, (n_halvings));                         \
+        a0 = _mm_and_si128 (a0, mask);                                  \
+        _mm_store_si128 ((__m128i *) row_parts_out, a0);                \
+        row_parts_out += 2;                                             \
     }                                                                   \
     while (row_parts_out != row_parts_out_max);                         \
 }
@@ -1362,28 +1372,36 @@ interp_horizontal_bilinear_0h_128bpp (const SmolScaleCtx *scale_ctx,
                                       const uint64_t * SMOL_RESTRICT row_parts_in,
                                       uint64_t * SMOL_RESTRICT row_parts_out)
 {
-    uint64_t p, q;
     const uint16_t * SMOL_RESTRICT ofs_x = scale_ctx->offsets_x;
     uint64_t F;
     uint64_t * SMOL_RESTRICT row_parts_out_max = row_parts_out + scale_ctx->width_out * 2;
+    __m128i mask = _mm_set_epi32 (
+        0x00ffffff, 0x00ffffff, 0x00ffffff, 0x00ffffff);
 
     SMOL_ASSUME_TEMP_ALIGNED (row_parts_in, const uint64_t *);
     SMOL_ASSUME_TEMP_ALIGNED (row_parts_out, uint64_t *);
 
     do
     {
+        __m128i m0, m1;
+        __m128i factors;
+
         row_parts_in += *(ofs_x++) * 2;
         F = *(ofs_x++);
 
-        p = row_parts_in [0];
-        q = row_parts_in [2];
+        factors = _mm_set1_epi32 ((uint32_t) F);
 
-        *(row_parts_out++) = ((((p - q) * F) >> 8) + q) & 0x00ffffff00ffffffULL;
+        m0 = _mm_stream_load_si128 ((__m128i *) row_parts_in);
+        m1 = _mm_stream_load_si128 ((__m128i *) row_parts_in + 1);
 
-        p = row_parts_in [1];
-        q = row_parts_in [3];
+        m0 = _mm_sub_epi32 (m0, m1);
+        m0 = _mm_mullo_epi32 (m0, factors);
+        m0 = _mm_srli_epi32 (m0, 8);
+        m0 = _mm_add_epi32 (m0, m1);
+        m0 = _mm_and_si128 (m0, mask);
 
-        *(row_parts_out++) = ((((p - q) * F) >> 8) + q) & 0x00ffffff00ffffffULL;
+        _mm_store_si128 ((__m128i *) row_parts_out, m0);
+        row_parts_out += 2;
     }
     while (row_parts_out != row_parts_out_max);
 }
