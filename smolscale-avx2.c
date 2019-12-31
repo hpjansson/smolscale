@@ -657,19 +657,13 @@ pack_row_123a_i_to_1234_u_128bpp (const uint64_t * SMOL_RESTRICT row_in,
 #define ALPHA_MASK SMOL_8X1BIT (0, 1, 0, 0, 0, 1, 0, 0)
 
     uint32_t *row_out_max = row_out + n_pixels;
-    __m256i alpha_gather = _mm256_set_epi32 (
-        2, 6, 10, 14, 18, 22, 26, 30);
     __m256i ones = _mm256_set_epi32 (
         ALPHA_MUL, ALPHA_MUL, ALPHA_MUL, ALPHA_MUL,
         ALPHA_MUL, ALPHA_MUL, ALPHA_MUL, ALPHA_MUL);
-    __m256i alpha_bcast_01 = _mm256_set_epi32 (0, 0, 0, 0, 1, 1, 1, 1);
-    __m256i alpha_bcast_23 = _mm256_set_epi32 (2, 2, 2, 2, 3, 3, 3, 3);
-    __m256i alpha_bcast_45 = _mm256_set_epi32 (4, 4, 4, 4, 5, 5, 5, 5);
-    __m256i alpha_bcast_67 = _mm256_set_epi32 (6, 6, 6, 6, 7, 7, 7, 7);
     __m256i rounding = _mm256_set_epi32 (
         INVERTED_DIV_ROUNDING, 0, INVERTED_DIV_ROUNDING, INVERTED_DIV_ROUNDING,
         INVERTED_DIV_ROUNDING, 0, INVERTED_DIV_ROUNDING, INVERTED_DIV_ROUNDING);
-    __m256i m0, m1, m2, m3, m4, m5, m6, m7;
+    __m256i m00, m01, m02, m03, m04, m05, m06, m07, m08;
     __m256i channel_shuf = _mm256_set_epi8 (
         13,12,15,14, 9,8,11,10, 5,4,7,6, 1,0,3,2,
         13,12,15,14, 9,8,11,10, 5,4,7,6, 1,0,3,2);
@@ -678,67 +672,66 @@ pack_row_123a_i_to_1234_u_128bpp (const uint64_t * SMOL_RESTRICT row_in,
 
     while (row_out + 8 <= row_out_max)
     {
-        /* Gather multipliers */
+        /* Load inputs */
 
-        m0 = _mm256_i32gather_epi32 ((const void *) row_in, alpha_gather, 4);
-        m1 = _mm256_i32gather_epi32 ((const void *) inverted_div_table, m0, 4);
-
-        /* 2 pixels */
-
-        m2 = _mm256_permutevar8x32_epi32 (m1, alpha_bcast_67);
-        m2 = _mm256_blend_epi32 (m2, ones, ALPHA_MASK);
-        m3 = _mm256_stream_load_si256 ((const __m256i *) row_in);
+        m00 = _mm256_stream_load_si256 ((const __m256i *) row_in);
+        row_in += 4;
+        m01 = _mm256_stream_load_si256 ((const __m256i *) row_in);
+        row_in += 4;
+        m02 = _mm256_stream_load_si256 ((const __m256i *) row_in);
+        row_in += 4;
+        m03 = _mm256_stream_load_si256 ((const __m256i *) row_in);
         row_in += 4;
 
-        m4 = _mm256_mullo_epi32 (m2, m3);
-        m4 = _mm256_add_epi32 (m4, rounding);
-        m4 = _mm256_srli_epi32 (m4, INVERTED_DIV_SHIFT);
+        /* Load alpha factors */
 
-        /* 2 pixels */
+        m04 = _mm256_slli_si256 (m00, 4);
+        m06 = _mm256_srli_si256 (m03, 4);
+        m05 = _mm256_blend_epi32 (m04, m01, ALPHA_MASK);
+        m07 = _mm256_blend_epi32 (m06, m02, ALPHA_MASK);
+        m07 = _mm256_srli_si256 (m07, 4);
 
-        m2 = _mm256_permutevar8x32_epi32 (m1, alpha_bcast_45);
-        m2 = _mm256_blend_epi32 (m2, ones, ALPHA_MASK);
-        m3 = _mm256_stream_load_si256 ((const __m256i *) row_in);
-        row_in += 4;
+        m04 = _mm256_blend_epi32 (m05, m07, SMOL_8X1BIT (0, 0, 1, 1, 0, 0, 1, 1));
+        m04 = _mm256_i32gather_epi32 ((const void *) inverted_div_table, m04, 4);
 
-        m5 = _mm256_mullo_epi32 (m2, m3);
-        m5 = _mm256_add_epi32 (m5, rounding);
-        m5 = _mm256_srli_epi32 (m5, INVERTED_DIV_SHIFT);
+        /* 2 pixels times 4 */
 
-        /* 2 pixels */
+        m05 = _mm256_shuffle_epi32 (m04, SMOL_4X2BIT (3, 3, 3, 3));
+        m06 = _mm256_shuffle_epi32 (m04, SMOL_4X2BIT (2, 2, 2, 2));
+        m07 = _mm256_shuffle_epi32 (m04, SMOL_4X2BIT (1, 1, 1, 1));
+        m08 = _mm256_shuffle_epi32 (m04, SMOL_4X2BIT (0, 0, 0, 0));
 
-        m2 = _mm256_permutevar8x32_epi32 (m1, alpha_bcast_23);
-        m2 = _mm256_blend_epi32 (m2, ones, ALPHA_MASK);
-        m3 = _mm256_stream_load_si256 ((const __m256i *) row_in);
-        row_in += 4;
+        m05 = _mm256_blend_epi32 (m05, ones, ALPHA_MASK);
+        m06 = _mm256_blend_epi32 (m06, ones, ALPHA_MASK);
+        m07 = _mm256_blend_epi32 (m07, ones, ALPHA_MASK);
+        m08 = _mm256_blend_epi32 (m08, ones, ALPHA_MASK);
 
-        m6 = _mm256_mullo_epi32 (m2, m3);
-        m6 = _mm256_add_epi32 (m6, rounding);
-        m6 = _mm256_srli_epi32 (m6, INVERTED_DIV_SHIFT);
+        m05 = _mm256_mullo_epi32 (m05, m00);
+        m06 = _mm256_mullo_epi32 (m06, m01);
+        m07 = _mm256_mullo_epi32 (m07, m02);
+        m08 = _mm256_mullo_epi32 (m08, m03);
 
-        /* 2 pixels */
+        m05 = _mm256_add_epi32 (m05, rounding);
+        m06 = _mm256_add_epi32 (m06, rounding);
+        m07 = _mm256_add_epi32 (m07, rounding);
+        m08 = _mm256_add_epi32 (m08, rounding);
 
-        m2 = _mm256_permutevar8x32_epi32 (m1, alpha_bcast_01);
-        m2 = _mm256_blend_epi32 (m2, ones, ALPHA_MASK);
-        m3 = _mm256_stream_load_si256 ((const __m256i *) row_in);
-        row_in += 4;
-
-        m7 = _mm256_mullo_epi32 (m2, m3);
-        m7 = _mm256_add_epi32 (m7, rounding);
-        m7 = _mm256_srli_epi32 (m7, INVERTED_DIV_SHIFT);
+        m05 = _mm256_srli_epi32 (m05, INVERTED_DIV_SHIFT);
+        m06 = _mm256_srli_epi32 (m06, INVERTED_DIV_SHIFT);
+        m07 = _mm256_srli_epi32 (m07, INVERTED_DIV_SHIFT);
+        m08 = _mm256_srli_epi32 (m08, INVERTED_DIV_SHIFT);
 
         /* Pack and store */
 
-        m0 = _mm256_packus_epi32 (m4, m5);
-        m1 = _mm256_packus_epi32 (m6, m7);
-        m0 = _mm256_packus_epi16 (m0, m1);;
+        m00 = _mm256_packus_epi32 (m05, m06);
+        m01 = _mm256_packus_epi32 (m07, m08);
+        m00 = _mm256_packus_epi16 (m00, m01);
 
-        m0 = _mm256_shuffle_epi8 (m0, channel_shuf);
-        m0 = _mm256_permute4x64_epi64 (m0, SMOL_4X2BIT (3, 1, 2, 0));
-        m0 = _mm256_shuffle_epi32 (m0, SMOL_4X2BIT (3, 1, 2, 0));
+        m00 = _mm256_shuffle_epi8 (m00, channel_shuf);
+        m00 = _mm256_permute4x64_epi64 (m00, SMOL_4X2BIT (3, 1, 2, 0));
+        m00 = _mm256_shuffle_epi32 (m00, SMOL_4X2BIT (3, 1, 2, 0));
 
-        _mm256_storeu_si256 ((__m256i *) row_out, m0);
-
+        _mm256_storeu_si256 ((__m256i *) row_out, m00);
         row_out += 8;
     }
 
