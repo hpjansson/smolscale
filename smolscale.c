@@ -664,7 +664,7 @@ pack_row_123a_i_to_123_u_128bpp (const uint64_t * SMOL_RESTRICT row_in,
                                  uint8_t * SMOL_RESTRICT row_out,
                                  uint32_t n_pixels)
 {
-    uint8_t *row_out_max = row_out + n_pixels;
+    uint8_t *row_out_max = row_out + n_pixels * 3;
 
     SMOL_ASSUME_TEMP_ALIGNED (row_in, const uint64_t *);
 
@@ -683,7 +683,7 @@ pack_row_123a_i_to_321_u_128bpp (const uint64_t * SMOL_RESTRICT row_in,
                                  uint8_t * SMOL_RESTRICT row_out,
                                  uint32_t n_pixels)
 {
-    uint8_t *row_out_max = row_out + n_pixels;
+    uint8_t *row_out_max = row_out + n_pixels * 3;
 
     SMOL_ASSUME_TEMP_ALIGNED (row_in, const uint64_t *);
 
