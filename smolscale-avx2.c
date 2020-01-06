@@ -1703,12 +1703,48 @@ interp_vertical_bilinear_store_128bpp (uint64_t F,
                                        uint32_t width)
 {
     uint64_t *parts_out_last = parts_out + width;
+    __m256i mask = _mm256_set_epi32 (
+        0x00ffffff, 0x00ffffff, 0x00ffffff, 0x00ffffff, 
+        0x00ffffff, 0x00ffffff, 0x00ffffff, 0x00ffffff);
+    __m256i F256;
 
     SMOL_ASSUME_TEMP_ALIGNED (top_row_parts_in, const uint64_t *);
     SMOL_ASSUME_TEMP_ALIGNED (bottom_row_parts_in, const uint64_t *);
     SMOL_ASSUME_TEMP_ALIGNED (parts_out, uint64_t *);
 
-    do
+    F256 = _mm256_set1_epi32 ((uint32_t) F);
+
+    while (parts_out + 8 <= parts_out_last)
+    {
+        __m256i m0, m1, m2, m3;
+
+        m0 = _mm256_load_si256 ((const __m256i *) top_row_parts_in);
+        top_row_parts_in += 4;
+        m2 = _mm256_load_si256 ((const __m256i *) top_row_parts_in);
+        top_row_parts_in += 4;
+        m1 = _mm256_load_si256 ((const __m256i *) bottom_row_parts_in);
+        bottom_row_parts_in += 4;
+        m3 = _mm256_load_si256 ((const __m256i *) bottom_row_parts_in);
+        bottom_row_parts_in += 4;
+
+        m0 = _mm256_sub_epi32 (m0, m1);
+        m2 = _mm256_sub_epi32 (m2, m3);
+        m0 = _mm256_mullo_epi32 (m0, F256);
+        m2 = _mm256_mullo_epi32 (m2, F256);
+        m0 = _mm256_srli_epi32 (m0, 8);
+        m2 = _mm256_srli_epi32 (m2, 8);
+        m0 = _mm256_add_epi32 (m0, m1);
+        m2 = _mm256_add_epi32 (m2, m3);
+        m0 = _mm256_and_si256 (m0, mask);
+        m2 = _mm256_and_si256 (m2, mask);
+
+        _mm256_store_si256 ((__m256i *) parts_out, m0);
+        parts_out += 4;
+        _mm256_store_si256 ((__m256i *) parts_out, m2);
+        parts_out += 4;
+    }
+
+    while (parts_out != parts_out_last)
     {
         uint64_t p, q;
 
@@ -1717,7 +1753,6 @@ interp_vertical_bilinear_store_128bpp (uint64_t F,
 
         *(parts_out++) = ((((p - q) * F) >> 8) + q) & 0x00ffffff00ffffffULL;
     }
-    while (parts_out != parts_out_last);
 }
 
 static void
@@ -1728,12 +1763,52 @@ interp_vertical_bilinear_add_128bpp (uint64_t F,
                                      uint32_t width)
 {
     uint64_t *accum_out_last = accum_out + width;
+    __m256i mask = _mm256_set_epi32 (
+        0x00ffffff, 0x00ffffff, 0x00ffffff, 0x00ffffff, 
+        0x00ffffff, 0x00ffffff, 0x00ffffff, 0x00ffffff);
+    __m256i F256;
 
     SMOL_ASSUME_TEMP_ALIGNED (top_row_parts_in, const uint64_t *);
     SMOL_ASSUME_TEMP_ALIGNED (bottom_row_parts_in, const uint64_t *);
     SMOL_ASSUME_TEMP_ALIGNED (accum_out, uint64_t *);
 
-    do
+    F256 = _mm256_set1_epi32 ((uint32_t) F);
+
+    while (accum_out + 8 <= accum_out_last)
+    {
+        __m256i m0, m1, m2, m3, o0, o1;
+
+        m0 = _mm256_load_si256 ((const __m256i *) top_row_parts_in);
+        top_row_parts_in += 4;
+        m2 = _mm256_load_si256 ((const __m256i *) top_row_parts_in);
+        top_row_parts_in += 4;
+        m1 = _mm256_load_si256 ((const __m256i *) bottom_row_parts_in);
+        bottom_row_parts_in += 4;
+        m3 = _mm256_load_si256 ((const __m256i *) bottom_row_parts_in);
+        bottom_row_parts_in += 4;
+        o0 = _mm256_load_si256 ((const __m256i *) accum_out);
+        o1 = _mm256_load_si256 ((const __m256i *) accum_out + 4);
+
+        m0 = _mm256_sub_epi32 (m0, m1);
+        m2 = _mm256_sub_epi32 (m2, m3);
+        m0 = _mm256_mullo_epi32 (m0, F256);
+        m2 = _mm256_mullo_epi32 (m2, F256);
+        m0 = _mm256_srli_epi32 (m0, 8);
+        m2 = _mm256_srli_epi32 (m2, 8);
+        m0 = _mm256_add_epi32 (m0, m1);
+        m2 = _mm256_add_epi32 (m2, m3);
+        m0 = _mm256_and_si256 (m0, mask);
+        m2 = _mm256_and_si256 (m2, mask);
+
+        o0 = _mm256_add_epi32 (o0, m0);
+        o1 = _mm256_add_epi32 (o1, m2);
+        _mm256_store_si256 ((__m256i *) accum_out, o0);
+        accum_out += 4;
+        _mm256_store_si256 ((__m256i *) accum_out, o1);
+        accum_out += 4;
+    }
+
+    while (accum_out != accum_out_last)
     {
         uint64_t p, q;
 
@@ -1742,7 +1817,6 @@ interp_vertical_bilinear_add_128bpp (uint64_t F,
 
         *(accum_out++) += ((((p - q) * F) >> 8) + q) & 0x00ffffff00ffffffULL;
     }
-    while (accum_out != accum_out_last);
 }
 
 #define DEF_INTERP_VERTICAL_BILINEAR_FINAL(n_halvings)                  \
