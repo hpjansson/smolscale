@@ -1381,13 +1381,46 @@ interp_horizontal_bilinear_0h_128bpp (const SmolScaleCtx *scale_ctx,
     const uint16_t * SMOL_RESTRICT ofs_x = scale_ctx->offsets_x;
     uint64_t F;
     uint64_t * SMOL_RESTRICT row_parts_out_max = row_parts_out + scale_ctx->width_out * 2;
-    __m128i mask = _mm_set_epi32 (
+    __m256i mask256 = _mm256_set_epi32 (
+        0x00ffffff, 0x00ffffff, 0x00ffffff, 0x00ffffff,
+        0x00ffffff, 0x00ffffff, 0x00ffffff, 0x00ffffff);
+    __m128i mask128 = _mm_set_epi32 (
         0x00ffffff, 0x00ffffff, 0x00ffffff, 0x00ffffff);
 
     SMOL_ASSUME_TEMP_ALIGNED (row_parts_in, const uint64_t *);
     SMOL_ASSUME_TEMP_ALIGNED (row_parts_out, uint64_t *);
 
-    do
+    while (row_parts_out + 4 <= row_parts_out_max)
+    {
+        __m256i m0, m1, m2, m3;
+        __m256i factors0, factors1;
+
+        row_parts_in += *(ofs_x++) * 2;
+        F = *(ofs_x++);
+        m2 = _mm256_loadu_si256 ((const __m256i *) row_parts_in);
+        factors0 = _mm256_set1_epi32 ((uint32_t) F);
+
+        row_parts_in += *(ofs_x++) * 2;
+        F = *(ofs_x++);
+        m3 = _mm256_loadu_si256 ((const __m256i *) row_parts_in);
+        factors1 = _mm256_set1_epi32 ((uint32_t) F);
+
+        factors0 = _mm256_blend_epi32 (factors0, factors1, SMOL_8X1BIT (0, 0, 0, 0, 1, 1, 1, 1));
+
+        m0 = _mm256_permute2x128_si256 (m2, m3, SMOL_4X2BIT (0, 2, 0, 0));
+        m1 = _mm256_permute2x128_si256 (m2, m3, SMOL_4X2BIT (0, 3, 0, 1));
+
+        m0 = _mm256_sub_epi32 (m0, m1);
+        m0 = _mm256_mullo_epi32 (m0, factors0);
+        m0 = _mm256_srli_epi32 (m0, 8);
+        m0 = _mm256_add_epi32 (m0, m1);
+        m0 = _mm256_and_si256 (m0, mask256);
+
+        _mm256_store_si256 ((__m256i *) row_parts_out, m0);
+        row_parts_out += 4;
+    }
+
+    /* if */ while (row_parts_out != row_parts_out_max)
     {
         __m128i m0, m1;
         __m128i factors;
@@ -1404,12 +1437,11 @@ interp_horizontal_bilinear_0h_128bpp (const SmolScaleCtx *scale_ctx,
         m0 = _mm_mullo_epi32 (m0, factors);
         m0 = _mm_srli_epi32 (m0, 8);
         m0 = _mm_add_epi32 (m0, m1);
-        m0 = _mm_and_si128 (m0, mask);
+        m0 = _mm_and_si128 (m0, mask128);
 
         _mm_store_si128 ((__m128i *) row_parts_out, m0);
         row_parts_out += 2;
     }
-    while (row_parts_out != row_parts_out_max);
 }
 
 DEF_INTERP_HORIZONTAL_BILINEAR(1)
