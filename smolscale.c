@@ -11,9 +11,6 @@
 /* --- Premultiplication --- */
 
 #define INVERTED_DIV_SHIFT 21
-#define INVERTED_DIV_ROUNDING (1U << (INVERTED_DIV_SHIFT - 1))
-#define INVERTED_DIV_ROUNDING_128BPP \
-    (((uint64_t) INVERTED_DIV_ROUNDING << 32) | INVERTED_DIV_ROUNDING)
 
 /* This table is used to divide by an integer [1..255] using only a lookup,
  * multiplication and a shift. This is faster than plain division on most
@@ -22,11 +19,10 @@
  * Each entry represents the integer 2097152 (1 << 21) divided by the index
  * of the entry. Consequently,
  *
- * (v / i) ~= (v * inverted_div_table [i] + (1 << 20)) >> 21
+ * (v / i) ~= (v * inverted_div_table [i]) >> 21
  *
- * (1 << 20) is added for nearest rounding. It would've been nice to keep
- * this table in uint16_t, but alas, we need the extra bits for sufficient
- * precision. */
+ * It would've been nice to keep this table in uint16_t, but alas, we need
+ * the extra bits for sufficient precision. */
 static const uint32_t inverted_div_table [256] =
 {
          0,2097152,1048576, 699051, 524288, 419430, 349525, 299593,
@@ -70,10 +66,8 @@ unpremul_i_to_u_128bpp (const uint64_t * SMOL_RESTRICT in,
                         uint64_t * SMOL_RESTRICT out,
                         uint8_t alpha)
 {
-    out [0] = ((in [0] * (uint64_t) inverted_div_table [alpha]
-                + INVERTED_DIV_ROUNDING_128BPP) >> INVERTED_DIV_SHIFT);
-    out [1] = ((in [1] * (uint64_t) inverted_div_table [alpha]
-                + INVERTED_DIV_ROUNDING_128BPP) >> INVERTED_DIV_SHIFT);
+    out [0] = ((in [0] * (uint64_t) inverted_div_table [alpha]) >> INVERTED_DIV_SHIFT);
+    out [1] = ((in [1] * (uint64_t) inverted_div_table [alpha]) >> INVERTED_DIV_SHIFT);
 }
 
 static SMOL_INLINE void
@@ -632,7 +626,7 @@ pack_row_a234_p_to_432_u_128bpp (const uint64_t * SMOL_RESTRICT row_in,
 static SMOL_INLINE uint32_t
 pack_pixel_123a_i_to_1234_u_128bpp (const uint64_t * SMOL_RESTRICT in)
 {
-    uint8_t alpha = in [1] & 0xff;
+    uint8_t alpha = (in [1] >> 8) & 0xff;
     uint64_t t [2];
 
     unpremul_i_to_u_128bpp (in, t, alpha);
@@ -701,7 +695,7 @@ pack_row_123a_i_to_321_u_128bpp (const uint64_t * SMOL_RESTRICT row_in,
 static SMOL_INLINE uint32_t                                             \
 pack_pixel_123a_i_to_##a##b##c##d##_u_128bpp (const uint64_t * SMOL_RESTRICT in) \
 {                                                                       \
-    uint8_t alpha = in [1] & 0xff;                                      \
+    uint8_t alpha = (in [1] >> 8) & 0xff;                      \
     uint64_t t [2];                                                     \
     unpremul_i_to_u_128bpp (in, t, alpha);                              \
     t [1] = (t [1] & 0xffffffff00000000ULL) | alpha;                    \
@@ -889,7 +883,7 @@ unpack_pixel_a234_u_to_234a_i_128bpp (uint32_t p,
     uint64_t alpha = p >> 24;
 
     out [0] = (((((p64 & 0x00ff0000) << 16) | ((p64 & 0x0000ff00) >> 8)) * alpha));
-    out [1] = (((((p64 & 0x000000ff) << 32) * alpha))) | alpha;
+    out [1] = (((((p64 & 0x000000ff) << 32) * alpha))) | (alpha << 8) | 0x80;
 }
 
 static void
@@ -972,7 +966,7 @@ unpack_pixel_123a_u_to_123a_i_128bpp (uint32_t p,
     uint64_t alpha = p & 0xff;
 
     out [0] = (((((p64 & 0xff000000) << 8) | ((p64 & 0x00ff0000) >> 16)) * alpha));
-    out [1] = (((((p64 & 0x0000ff00) << 24) * alpha))) | alpha;
+    out [1] = (((((p64 & 0x0000ff00) << 24) * alpha))) | (alpha << 8) | 0x80;
 }
 
 static void
