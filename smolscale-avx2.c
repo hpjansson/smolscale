@@ -1245,6 +1245,19 @@ add_parts (const uint64_t * SMOL_RESTRICT parts_in,
     SMOL_ASSUME_TEMP_ALIGNED (parts_in, const uint64_t *);
     SMOL_ASSUME_TEMP_ALIGNED (parts_acc_out, uint64_t *);
 
+    while (parts_in + 4 <= parts_in_max)
+    {
+        __m256i m0, m1;
+
+        m0 = _mm256_stream_load_si256 ((const __m256i *) parts_in);
+        parts_in += 4;
+        m1 = _mm256_load_si256 ((__m256i *) parts_acc_out);
+
+        m0 = _mm256_add_epi32 (m0, m1);
+        _mm256_store_si256 ((__m256i *) parts_acc_out, m0);
+        parts_acc_out += 4;
+    }
+
     while (parts_in < parts_in_max)
         *(parts_acc_out++) += *(parts_in++);
 }
