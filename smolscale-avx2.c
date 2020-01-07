@@ -1412,34 +1412,32 @@ interp_horizontal_bilinear_0h_128bpp (const SmolScaleCtx *scale_ctx,
 
     while (row_parts_out + 4 <= row_parts_out_max)
     {
-        __m256i m0, m1, m2, m3;
+        __m256i m0, m1;
         __m256i factors;
+        __m128i n0, n1, n2, n3;
         uint32_t f, g;
 
         row_parts_in += *(ofs_x++) * 2;
         f = *(ofs_x++);
-        m2 = _mm256_loadu_si256 ((const __m256i *) row_parts_in);
+        n0 = _mm_load_si128 ((__m128i *) row_parts_in);
+        n1 = _mm_load_si128 ((__m128i *) row_parts_in + 1);
 
         row_parts_in += *(ofs_x++) * 2;
         g = *(ofs_x++);
-        m3 = _mm256_loadu_si256 ((const __m256i *) row_parts_in);
+        n2 = _mm_load_si128 ((__m128i *) row_parts_in);
+        n3 = _mm_load_si128 ((__m128i *) row_parts_in + 1);
 
+        m0 = _mm256_set_m128i (n2, n0);
+        m1 = _mm256_set_m128i (n3, n1);
         factors = _mm256_set_epi32 (f, f, f, f, g, g, g, g);
 
-        m0 = _mm256_permute2x128_si256 (m2, m3, SMOL_4X2BIT (0, 2, 0, 0));
-        m1 = _mm256_permute2x128_si256 (m2, m3, SMOL_4X2BIT (0, 3, 0, 1));
-
-        m0 = _mm256_sub_epi32 (m0, m1);
-        m0 = _mm256_mullo_epi32 (m0, factors);
-        m0 = _mm256_srli_epi32 (m0, 8);
-        m0 = _mm256_add_epi32 (m0, m1);
-        m0 = _mm256_and_si256 (m0, mask256);
-
+        m0 = LERP_SIMD256_EPI32_AND_MASK (m0, m1, factors, mask256);
         _mm256_store_si256 ((__m256i *) row_parts_out, m0);
         row_parts_out += 4;
     }
 
-    /* if */ while (row_parts_out != row_parts_out_max)
+    /* No need for a loop here; let compiler know we're doing it at most once */
+    if (row_parts_out != row_parts_out_max)
     {
         __m128i m0, m1;
         __m128i factors;
@@ -1449,16 +1447,10 @@ interp_horizontal_bilinear_0h_128bpp (const SmolScaleCtx *scale_ctx,
         f = *(ofs_x++);
 
         factors = _mm_set1_epi32 ((uint32_t) f);
-
         m0 = _mm_stream_load_si128 ((__m128i *) row_parts_in);
         m1 = _mm_stream_load_si128 ((__m128i *) row_parts_in + 1);
 
-        m0 = _mm_sub_epi32 (m0, m1);
-        m0 = _mm_mullo_epi32 (m0, factors);
-        m0 = _mm_srli_epi32 (m0, 8);
-        m0 = _mm_add_epi32 (m0, m1);
-        m0 = _mm_and_si128 (m0, mask128);
-
+        m0 = LERP_SIMD128_EPI32_AND_MASK (m0, m1, factors, mask128);
         _mm_store_si128 ((__m128i *) row_parts_out, m0);
         row_parts_out += 2;
     }
