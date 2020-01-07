@@ -13,6 +13,27 @@
 #include <immintrin.h>
 #include "smolscale-private.h"
 
+
+/* --- Linear interpolation helpers --- */
+
+#define LERP_SIMD256_EPI32(a, b, f)                                     \
+    _mm256_add_epi32 (                                                  \
+    _mm256_srli_epi32 (                                                 \
+    _mm256_mullo_epi32 (                                                \
+    _mm256_sub_epi32 ((a), (b)), factors), 8), (b))
+
+#define LERP_SIMD128_EPI32(a, b, f)                                     \
+    _mm_add_epi32 (                                                     \
+    _mm_srli_epi32 (                                                    \
+    _mm_mullo_epi32 (                                                   \
+    _mm_sub_epi32 ((a), (b)), factors), 8), (b))
+
+#define LERP_SIMD256_EPI32_AND_MASK(a, b, f, mask)                      \
+    _mm256_and_si256 (LERP_SIMD256_EPI32 ((a), (b), (f)), (mask))
+
+#define LERP_SIMD128_EPI32_AND_MASK(a, b, f, mask)                      \
+    _mm_and_si128 (LERP_SIMD128_EPI32 ((a), (b), (f)), (mask))
+
 /* --- Premultiplication --- */
 
 #define INVERTED_DIV_SHIFT 21
