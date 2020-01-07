@@ -1379,7 +1379,6 @@ interp_horizontal_bilinear_0h_128bpp (const SmolScaleCtx *scale_ctx,
                                       uint64_t * SMOL_RESTRICT row_parts_out)
 {
     const uint16_t * SMOL_RESTRICT ofs_x = scale_ctx->offsets_x;
-    uint64_t F;
     uint64_t * SMOL_RESTRICT row_parts_out_max = row_parts_out + scale_ctx->width_out * 2;
     __m256i mask256 = _mm256_set_epi32 (
         0x00ffffff, 0x00ffffff, 0x00ffffff, 0x00ffffff,
@@ -1393,25 +1392,24 @@ interp_horizontal_bilinear_0h_128bpp (const SmolScaleCtx *scale_ctx,
     while (row_parts_out + 4 <= row_parts_out_max)
     {
         __m256i m0, m1, m2, m3;
-        __m256i factors0, factors1;
+        __m256i factors;
+        uint32_t f, g;
 
         row_parts_in += *(ofs_x++) * 2;
-        F = *(ofs_x++);
+        f = *(ofs_x++);
         m2 = _mm256_loadu_si256 ((const __m256i *) row_parts_in);
-        factors0 = _mm256_set1_epi32 ((uint32_t) F);
 
         row_parts_in += *(ofs_x++) * 2;
-        F = *(ofs_x++);
+        g = *(ofs_x++);
         m3 = _mm256_loadu_si256 ((const __m256i *) row_parts_in);
-        factors1 = _mm256_set1_epi32 ((uint32_t) F);
 
-        factors0 = _mm256_blend_epi32 (factors0, factors1, SMOL_8X1BIT (0, 0, 0, 0, 1, 1, 1, 1));
+        factors = _mm256_set_epi32 (f, f, f, f, g, g, g, g);
 
         m0 = _mm256_permute2x128_si256 (m2, m3, SMOL_4X2BIT (0, 2, 0, 0));
         m1 = _mm256_permute2x128_si256 (m2, m3, SMOL_4X2BIT (0, 3, 0, 1));
 
         m0 = _mm256_sub_epi32 (m0, m1);
-        m0 = _mm256_mullo_epi32 (m0, factors0);
+        m0 = _mm256_mullo_epi32 (m0, factors);
         m0 = _mm256_srli_epi32 (m0, 8);
         m0 = _mm256_add_epi32 (m0, m1);
         m0 = _mm256_and_si256 (m0, mask256);
@@ -1424,11 +1422,12 @@ interp_horizontal_bilinear_0h_128bpp (const SmolScaleCtx *scale_ctx,
     {
         __m128i m0, m1;
         __m128i factors;
+        uint32_t f;
 
         row_parts_in += *(ofs_x++) * 2;
-        F = *(ofs_x++);
+        f = *(ofs_x++);
 
-        factors = _mm_set1_epi32 ((uint32_t) F);
+        factors = _mm_set1_epi32 ((uint32_t) f);
 
         m0 = _mm_stream_load_si128 ((__m128i *) row_parts_in);
         m1 = _mm_stream_load_si128 ((__m128i *) row_parts_in + 1);
