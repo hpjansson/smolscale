@@ -10,6 +10,8 @@
 #include "smolscale.h"
 #include "png.h"
 
+#define PIXEL_TYPE_SMOL SMOL_PIXEL_ARGB8_UNASSOCIATED
+
 #define CORRECTNESS_WIDTH_MIN 1
 #define CORRECTNESS_WIDTH_MAX 65535
 #define CORRECTNESS_WIDTH_STEPS 100
@@ -458,11 +460,11 @@ scale_do_smol (ScaleParams *params, guint out_width, guint out_height)
         g_free (params->out_data);
 
     scaled = g_new (guint32, out_width * out_height);
-    smol_scale_simple (SMOL_PIXEL_RGBA8_PREMULTIPLIED,
+    smol_scale_simple (PIXEL_TYPE_SMOL,
                        params->in_data,
                        params->in_width, params->in_height,
                        params->in_width * sizeof (guint32),
-                       SMOL_PIXEL_RGBA8_PREMULTIPLIED,
+                       PIXEL_TYPE_SMOL,
                        scaled,
                        out_width, out_height,
                        out_width * sizeof (guint32));
@@ -516,10 +518,10 @@ scale_do_smol_threaded (ScaleParams *params, guint out_width, guint out_height)
 
     scaled = g_new (guint32, out_width * out_height);
 
-    scale_ctx = smol_scale_new (SMOL_PIXEL_RGBA8_PREMULTIPLIED,
+    scale_ctx = smol_scale_new (PIXEL_TYPE_SMOL,
                                 params->in_data,
                                 params->in_width, params->in_height, params->in_width * sizeof (guint32),
-                                SMOL_PIXEL_RGBA8_PREMULTIPLIED,
+                                PIXEL_TYPE_SMOL,
                                 scaled,
                                 out_width, out_height, out_width * sizeof (guint32));
 
