@@ -1406,6 +1406,7 @@ interp_horizontal_bilinear_0h_128bpp (const SmolScaleCtx *scale_ctx,
         0x00ffffff, 0x00ffffff, 0x00ffffff, 0x00ffffff);
     __m128i mask128 = _mm_set_epi32 (
         0x00ffffff, 0x00ffffff, 0x00ffffff, 0x00ffffff);
+    const __m256i zero = _mm256_setzero_si256 ();
 
     SMOL_ASSUME_TEMP_ALIGNED (row_parts_in, const uint64_t *);
     SMOL_ASSUME_TEMP_ALIGNED (row_parts_out, uint64_t *);
@@ -1414,22 +1415,22 @@ interp_horizontal_bilinear_0h_128bpp (const SmolScaleCtx *scale_ctx,
     {
         __m256i m0, m1;
         __m256i factors;
-        __m128i n0, n1, n2, n3;
-        uint32_t f, g;
+        __m128i n0, n1, n2, n3, n4, n5;
 
         row_parts_in += *(ofs_x++) * 2;
-        f = *(ofs_x++);
+        n4 = _mm_set1_epi16 (*(ofs_x++));
         n0 = _mm_load_si128 ((__m128i *) row_parts_in);
         n1 = _mm_load_si128 ((__m128i *) row_parts_in + 1);
 
         row_parts_in += *(ofs_x++) * 2;
-        g = *(ofs_x++);
+        n5 = _mm_set1_epi16 (*(ofs_x++));
         n2 = _mm_load_si128 ((__m128i *) row_parts_in);
         n3 = _mm_load_si128 ((__m128i *) row_parts_in + 1);
 
         m0 = _mm256_set_m128i (n2, n0);
         m1 = _mm256_set_m128i (n3, n1);
-        factors = _mm256_set_epi32 (f, f, f, f, g, g, g, g);
+        factors = _mm256_set_m128i (n5, n4);
+        factors = _mm256_blend_epi16 (factors, zero, 0xaa);
 
         m0 = LERP_SIMD256_EPI32_AND_MASK (m0, m1, factors, mask256);
         _mm256_store_si256 ((__m256i *) row_parts_out, m0);
