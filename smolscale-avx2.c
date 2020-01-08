@@ -668,17 +668,20 @@ pack_row_123a_i_to_1234_u_128bpp (const uint64_t * SMOL_RESTRICT row_in,
                                   uint32_t * SMOL_RESTRICT row_out,
                                   uint32_t n_pixels)
 {
-#define ALPHA_MUL (1 << (INVERTED_DIV_SHIFT))
+#define ALPHA_MUL (1 << (INVERTED_DIV_SHIFT - 8))
 #define ALPHA_MASK SMOL_8X1BIT (0, 1, 0, 0, 0, 1, 0, 0)
 
     uint32_t *row_out_max = row_out + n_pixels;
     __m256i ones = _mm256_set_epi32 (
         ALPHA_MUL, ALPHA_MUL, ALPHA_MUL, ALPHA_MUL,
         ALPHA_MUL, ALPHA_MUL, ALPHA_MUL, ALPHA_MUL);
-    __m256i m00, m01, m02, m03, m04, m05, m06, m07, m08;
     __m256i channel_shuf = _mm256_set_epi8 (
         13,12,15,14, 9,8,11,10, 5,4,7,6, 1,0,3,2,
         13,12,15,14, 9,8,11,10, 5,4,7,6, 1,0,3,2);
+    __m256i alpha_clean_mask = _mm256_set_epi32 (
+        0x000000ff, 0x000000ff, 0x000000ff, 0x000000ff,
+        0x000000ff, 0x000000ff, 0x000000ff, 0x000000ff);
+    __m256i m00, m01, m02, m03, m04, m05, m06, m07, m08;
 
     SMOL_ASSUME_TEMP_ALIGNED (row_in, const uint64_t *);
 
@@ -705,6 +708,7 @@ pack_row_123a_i_to_1234_u_128bpp (const uint64_t * SMOL_RESTRICT row_in,
 
         m04 = _mm256_blend_epi32 (m05, m07, SMOL_8X1BIT (0, 0, 1, 1, 0, 0, 1, 1));
         m04 = _mm256_srli_epi32 (m04, 8);
+        m04 = _mm256_and_si256 (m04, alpha_clean_mask);
         m04 = _mm256_i32gather_epi32 ((const void *) inverted_div_table, m04, 4);
 
         /* 2 pixels times 4 */
