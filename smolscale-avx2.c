@@ -1325,47 +1325,52 @@ interp_horizontal_bilinear_##n_halvings##h_128bpp (const SmolScaleCtx *scale_ctx
                                                    uint64_t * SMOL_RESTRICT row_parts_out) \
 {                                                                       \
     const uint16_t * SMOL_RESTRICT ofs_x = scale_ctx->offsets_x;        \
-    uint64_t F;                                                         \
     uint64_t *row_parts_out_max = row_parts_out + scale_ctx->width_out * 2; \
-    __m128i mask = _mm_set_epi32 (                                      \
+    __m128i mask128 = _mm_set_epi32 (                                   \
         0x00ffffff, 0x00ffffff, 0x00ffffff, 0x00ffffff);                \
+    __m256i zero256 = _mm256_setzero_si256 ();                          \
     int i;                                                              \
                                                                         \
     SMOL_ASSUME_TEMP_ALIGNED (row_parts_in, const uint64_t *);          \
     SMOL_ASSUME_TEMP_ALIGNED (row_parts_out, uint64_t *);               \
                                                                         \
-    do                                                                  \
+    while (row_parts_out != row_parts_out_max)                          \
     {                                                                   \
-        __m128i a0;                                                     \
+        __m256i a0 = _mm256_setzero_si256 ();                           \
+        __m128i a1;                                                     \
                                                                         \
-        a0 = _mm_setzero_si128 ();                                      \
-                                                                        \
-        for (i = 0; i < (1 << (n_halvings)); i++)                       \
+        for (i = 0; i < (1 << ((n_halvings) - 1)); i++)                 \
         {                                                               \
-            __m128i m0, m1;                                             \
-            __m128i factors;                                            \
+            __m256i m0, m1;                                             \
+            __m256i factors;                                            \
+            __m128i n0, n1, n2, n3, n4, n5;                             \
                                                                         \
             row_parts_in += *(ofs_x++) * 2;                             \
-            F = *(ofs_x++);                                             \
+            n4 = _mm_set1_epi16 (*(ofs_x++));                           \
+            n0 = _mm_load_si128 ((__m128i *) row_parts_in);             \
+            n1 = _mm_load_si128 ((__m128i *) row_parts_in + 1);         \
                                                                         \
-            factors = _mm_set1_epi32 ((uint32_t) F);                    \
+            row_parts_in += *(ofs_x++) * 2;                             \
+            n5 = _mm_set1_epi16 (*(ofs_x++));                           \
+            n2 = _mm_load_si128 ((__m128i *) row_parts_in);             \
+            n3 = _mm_load_si128 ((__m128i *) row_parts_in + 1);         \
                                                                         \
-            m0 = _mm_stream_load_si128 ((__m128i *) row_parts_in);      \
-            m1 = _mm_stream_load_si128 ((__m128i *) row_parts_in + 1);  \
+            m0 = _mm256_set_m128i (n2, n0);                             \
+            m1 = _mm256_set_m128i (n3, n1);                             \
+            factors = _mm256_set_m128i (n5, n4);                        \
+            factors = _mm256_blend_epi16 (factors, zero256, 0xaa);      \
                                                                         \
-            m0 = _mm_sub_epi32 (m0, m1);                                \
-            m0 = _mm_mullo_epi32 (m0, factors);                         \
-            m0 = _mm_srli_epi32 (m0, 8);                                \
-            a0 = _mm_add_epi32 (a0, m1);                                \
-            a0 = _mm_add_epi32 (a0, m0);                                \
+            m0 = LERP_SIMD256_EPI32 (m0, m1, factors);                  \
+            a0 = _mm256_add_epi32 (a0, m0);                             \
         }                                                               \
                                                                         \
-        a0 = _mm_srli_epi32 (a0, (n_halvings));                         \
-        a0 = _mm_and_si128 (a0, mask);                                  \
-        _mm_store_si128 ((__m128i *) row_parts_out, a0);                \
+        a1 = _mm_add_epi32 (_mm256_extracti128_si256 (a0, 0),           \
+                            _mm256_extracti128_si256 (a0, 1));          \
+        a1 = _mm_srli_epi32 (a1, (n_halvings));                         \
+        a1 = _mm_and_si128 (a1, mask128);                               \
+        _mm_store_si128 ((__m128i *) row_parts_out, a1);                \
         row_parts_out += 2;                                             \
     }                                                                   \
-    while (row_parts_out != row_parts_out_max);                         \
 }
 
 static void
