@@ -668,13 +668,13 @@ pack_row_123a_i_to_1234_u_128bpp (const uint64_t * SMOL_RESTRICT row_in,
 #define ALPHA_MASK SMOL_8X1BIT (0, 1, 0, 0, 0, 1, 0, 0)
 
     uint32_t *row_out_max = row_out + n_pixels;
-    __m256i ones = _mm256_set_epi32 (
+    const __m256i ones = _mm256_set_epi32 (
         ALPHA_MUL, ALPHA_MUL, ALPHA_MUL, ALPHA_MUL,
         ALPHA_MUL, ALPHA_MUL, ALPHA_MUL, ALPHA_MUL);
-    __m256i channel_shuf = _mm256_set_epi8 (
+    const __m256i channel_shuf = _mm256_set_epi8 (
         13,12,15,14, 9,8,11,10, 5,4,7,6, 1,0,3,2,
         13,12,15,14, 9,8,11,10, 5,4,7,6, 1,0,3,2);
-    __m256i alpha_clean_mask = _mm256_set_epi32 (
+    const __m256i alpha_clean_mask = _mm256_set_epi32 (
         0x000000ff, 0x000000ff, 0x000000ff, 0x000000ff,
         0x000000ff, 0x000000ff, 0x000000ff, 0x000000ff);
     __m256i m00, m01, m02, m03, m04, m05, m06, m07, m08;
@@ -1075,17 +1075,17 @@ unpack_row_123a_u_to_123a_i_128bpp (const uint32_t * SMOL_RESTRICT row_in,
                                     uint32_t n_pixels)
 {
     uint64_t *row_out_max = row_out + n_pixels * 2;
-    __m256i zero = _mm256_setzero_si256 ();
-    __m256i alpha_mul = _mm256_set_epi32 (
+    const __m256i zero = _mm256_setzero_si256 ();
+    const __m256i alpha_mul = _mm256_set_epi32 (
         256, 0, 256, 0,
         256, 0, 256, 0);
-    __m256i alpha_add = _mm256_set_epi32 (
+    const __m256i alpha_add = _mm256_set_epi32 (
         0x80, 0, 0x80, 0,
         0x80, 0, 0x80, 0);
-    __m256i channel_shuf = _mm256_set_epi8 (
+    const __m256i channel_shuf = _mm256_set_epi8 (
         13,12,15,14, 9,8,11,10, 5,4,7,6, 1,0,3,2,
         13,12,15,14, 9,8,11,10, 5,4,7,6, 1,0,3,2);
-    __m256i factor_shuf = _mm256_set_epi8 (
+    const __m256i factor_shuf = _mm256_set_epi8 (
         255,12,255,255, 255,12,255,12, 255,4,255,255, 255,4,255,4,
         255,12,255,255, 255,12,255,12, 255,4,255,255, 255,4,255,4);
     __m256i m0, m1, m2, m3, m4, m5, m6;
@@ -1326,9 +1326,9 @@ interp_horizontal_bilinear_##n_halvings##h_128bpp (const SmolScaleCtx *scale_ctx
 {                                                                       \
     const uint16_t * SMOL_RESTRICT ofs_x = scale_ctx->offsets_x;        \
     uint64_t *row_parts_out_max = row_parts_out + scale_ctx->width_out * 2; \
-    __m128i mask128 = _mm_set_epi32 (                                   \
+    const __m128i mask128 = _mm_set_epi32 (                             \
         0x00ffffff, 0x00ffffff, 0x00ffffff, 0x00ffffff);                \
-    __m256i zero256 = _mm256_setzero_si256 ();                          \
+    const __m256i zero256 = _mm256_setzero_si256 ();                    \
     int i;                                                              \
                                                                         \
     SMOL_ASSUME_TEMP_ALIGNED (row_parts_in, const uint64_t *);          \
@@ -1406,10 +1406,10 @@ interp_horizontal_bilinear_0h_128bpp (const SmolScaleCtx *scale_ctx,
 {
     const uint16_t * SMOL_RESTRICT ofs_x = scale_ctx->offsets_x;
     uint64_t * SMOL_RESTRICT row_parts_out_max = row_parts_out + scale_ctx->width_out * 2;
-    __m256i mask256 = _mm256_set_epi32 (
+    const __m256i mask256 = _mm256_set_epi32 (
         0x00ffffff, 0x00ffffff, 0x00ffffff, 0x00ffffff,
         0x00ffffff, 0x00ffffff, 0x00ffffff, 0x00ffffff);
-    __m128i mask128 = _mm_set_epi32 (
+    const __m128i mask128 = _mm_set_epi32 (
         0x00ffffff, 0x00ffffff, 0x00ffffff, 0x00ffffff);
     const __m256i zero = _mm256_setzero_si256 ();
 
@@ -1766,7 +1766,7 @@ interp_vertical_bilinear_store_128bpp (uint64_t F,
                                        uint32_t width)
 {
     uint64_t *parts_out_last = parts_out + width;
-    __m256i mask = _mm256_set_epi32 (
+    const __m256i mask = _mm256_set_epi32 (
         0x00ffffff, 0x00ffffff, 0x00ffffff, 0x00ffffff, 
         0x00ffffff, 0x00ffffff, 0x00ffffff, 0x00ffffff);
     __m256i F256;
@@ -1826,7 +1826,7 @@ interp_vertical_bilinear_add_128bpp (uint64_t F,
                                      uint32_t width)
 {
     uint64_t *accum_out_last = accum_out + width;
-    __m256i mask = _mm256_set_epi32 (
+    const __m256i mask = _mm256_set_epi32 (
         0x00ffffff, 0x00ffffff, 0x00ffffff, 0x00ffffff, 
         0x00ffffff, 0x00ffffff, 0x00ffffff, 0x00ffffff);
     __m256i F256;
