@@ -1099,12 +1099,10 @@ unpack_row_123a_u_to_123a_i_128bpp (const uint32_t * SMOL_RESTRICT row_in,
         row_in += 8;
 
         m0 = _mm256_shuffle_epi8 (m0, channel_shuf);
+        m0 = _mm256_permute4x64_epi64 (m0, SMOL_4X2BIT (3, 1, 2, 0));
 
-        m1 = _mm256_permute4x64_epi64 (m0, SMOL_4X2BIT (1, 1, 0, 0));
-        m2 = _mm256_permute4x64_epi64 (m0, SMOL_4X2BIT (3, 3, 2, 2));
-
-        m1 = _mm256_unpacklo_epi8 (m1, zero);
-        m2 = _mm256_unpacklo_epi8 (m2, zero);
+        m1 = _mm256_unpacklo_epi8 (m0, zero);
+        m2 = _mm256_unpackhi_epi8 (m0, zero);
 
         fact1 = _mm256_shuffle_epi8 (m1, factor_shuf);
         fact2 = _mm256_shuffle_epi8 (m2, factor_shuf);
@@ -1118,15 +1116,13 @@ unpack_row_123a_u_to_123a_i_128bpp (const uint32_t * SMOL_RESTRICT row_in,
         m1 = _mm256_add_epi16 (m1, alpha_add);
         m2 = _mm256_add_epi16 (m2, alpha_add);
 
-        m3 = _mm256_permute4x64_epi64 (m1, SMOL_4X2BIT (1, 1, 0, 0));
-        m4 = _mm256_permute4x64_epi64 (m1, SMOL_4X2BIT (3, 3, 2, 2));
-        m5 = _mm256_permute4x64_epi64 (m2, SMOL_4X2BIT (1, 1, 0, 0));
-        m6 = _mm256_permute4x64_epi64 (m2, SMOL_4X2BIT (3, 3, 2, 2));
+        m1 = _mm256_permute4x64_epi64 (m1, SMOL_4X2BIT (3, 1, 2, 0));
+        m2 = _mm256_permute4x64_epi64 (m2, SMOL_4X2BIT (3, 1, 2, 0));
 
-        m3 = _mm256_unpacklo_epi16 (m3, zero);
-        m4 = _mm256_unpacklo_epi16 (m4, zero);
-        m5 = _mm256_unpacklo_epi16 (m5, zero);
-        m6 = _mm256_unpacklo_epi16 (m6, zero);
+        m3 = _mm256_unpacklo_epi16 (m1, zero);
+        m4 = _mm256_unpackhi_epi16 (m1, zero);
+        m5 = _mm256_unpacklo_epi16 (m2, zero);
+        m6 = _mm256_unpackhi_epi16 (m2, zero);
 
         _mm256_store_si256 ((__m256i *) row_out, m3);
         row_out += 4;
