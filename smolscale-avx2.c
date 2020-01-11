@@ -4,6 +4,7 @@
 
 #include <assert.h> /* assert */
 #include <stdlib.h> /* malloc, free, alloca */
+#include <stddef.h> /* ptrdiff_t */
 #include <string.h> /* memset */
 #include <limits.h>
 #include <immintrin.h>
