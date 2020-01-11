@@ -1100,41 +1100,41 @@ unpack_row_123a_u_to_123a_i_128bpp (const uint32_t * SMOL_RESTRICT row_in,
 
         m0 = _mm256_shuffle_epi8 (m0, channel_shuf);
 
-        m2 = _mm256_permute4x64_epi64 (m0, SMOL_4X2BIT (1, 1, 0, 0));
-        m1 = _mm256_permute4x64_epi64 (m0, SMOL_4X2BIT (3, 3, 2, 2));
+        m1 = _mm256_permute4x64_epi64 (m0, SMOL_4X2BIT (1, 1, 0, 0));
+        m2 = _mm256_permute4x64_epi64 (m0, SMOL_4X2BIT (3, 3, 2, 2));
 
-        m2 = _mm256_unpacklo_epi8 (m2, zero);
         m1 = _mm256_unpacklo_epi8 (m1, zero);
+        m2 = _mm256_unpacklo_epi8 (m2, zero);
 
-        fact2 = _mm256_shuffle_epi8 (m2, factor_shuf);
         fact1 = _mm256_shuffle_epi8 (m1, factor_shuf);
+        fact2 = _mm256_shuffle_epi8 (m2, factor_shuf);
 
-        fact2 = _mm256_or_si256 (fact2, alpha_mul);
         fact1 = _mm256_or_si256 (fact1, alpha_mul);
+        fact2 = _mm256_or_si256 (fact2, alpha_mul);
 
-        m2 = _mm256_mullo_epi16 (m2, fact2);
         m1 = _mm256_mullo_epi16 (m1, fact1);
+        m2 = _mm256_mullo_epi16 (m2, fact2);
 
-        m2 = _mm256_add_epi16 (m2, alpha_add);
         m1 = _mm256_add_epi16 (m1, alpha_add);
+        m2 = _mm256_add_epi16 (m2, alpha_add);
 
-        m6 = _mm256_permute4x64_epi64 (m2, SMOL_4X2BIT (1, 1, 0, 0));
-        m5 = _mm256_permute4x64_epi64 (m2, SMOL_4X2BIT (3, 3, 2, 2));
-        m4 = _mm256_permute4x64_epi64 (m1, SMOL_4X2BIT (1, 1, 0, 0));
-        m3 = _mm256_permute4x64_epi64 (m1, SMOL_4X2BIT (3, 3, 2, 2));
+        m3 = _mm256_permute4x64_epi64 (m1, SMOL_4X2BIT (1, 1, 0, 0));
+        m4 = _mm256_permute4x64_epi64 (m1, SMOL_4X2BIT (3, 3, 2, 2));
+        m5 = _mm256_permute4x64_epi64 (m2, SMOL_4X2BIT (1, 1, 0, 0));
+        m6 = _mm256_permute4x64_epi64 (m2, SMOL_4X2BIT (3, 3, 2, 2));
 
-        m6 = _mm256_unpacklo_epi16 (m6, zero);
-        m5 = _mm256_unpacklo_epi16 (m5, zero);
-        m4 = _mm256_unpacklo_epi16 (m4, zero);
         m3 = _mm256_unpacklo_epi16 (m3, zero);
+        m4 = _mm256_unpacklo_epi16 (m4, zero);
+        m5 = _mm256_unpacklo_epi16 (m5, zero);
+        m6 = _mm256_unpacklo_epi16 (m6, zero);
 
-        _mm256_store_si256 ((__m256i *) row_out, m6);
-        row_out += 4;
-        _mm256_store_si256 ((__m256i *) row_out, m5);
+        _mm256_store_si256 ((__m256i *) row_out, m3);
         row_out += 4;
         _mm256_store_si256 ((__m256i *) row_out, m4);
         row_out += 4;
-        _mm256_store_si256 ((__m256i *) row_out, m3);
+        _mm256_store_si256 ((__m256i *) row_out, m5);
+        row_out += 4;
+        _mm256_store_si256 ((__m256i *) row_out, m6);
         row_out += 4;
     }
 
