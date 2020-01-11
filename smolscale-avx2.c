@@ -973,6 +973,76 @@ unpack_row_a234_u_to_a234_p_128bpp (const uint32_t * SMOL_RESTRICT row_in,
     }
 }
 
+/* Unpack u -> i (common) */
+
+static void
+unpack_8x_xxxx_u_to_123a_i_128bpp (const uint32_t * SMOL_RESTRICT *in,
+                                   uint64_t * SMOL_RESTRICT *out,
+                                   uint64_t *out_max,
+                                   const __m256i channel_shuf)
+{
+    const __m256i zero = _mm256_setzero_si256 ();
+    const __m256i factor_shuf = _mm256_set_epi8 (
+        255, 12, 255, 255, 255, 12, 255, 12,  255, 4, 255, 255, 255, 4, 255, 4,
+        255, 12, 255, 255, 255, 12, 255, 12,  255, 4, 255, 255, 255, 4, 255, 4);
+    const __m256i alpha_mul = _mm256_set_epi16 (
+        0, 0x100, 0, 0,  0, 0x100, 0, 0,
+        0, 0x100, 0, 0,  0, 0x100, 0, 0);
+    const __m256i alpha_add = _mm256_set_epi16 (
+        0, 0x80, 0, 0,  0, 0x80, 0, 0,
+        0, 0x80, 0, 0,  0, 0x80, 0, 0);
+    __m256i m0, m1, m2, m3, m4, m5, m6;
+    __m256i fact1, fact2;
+    const __m256i * SMOL_RESTRICT my_in = (const __m256i * SMOL_RESTRICT) *in;
+    __m256i * SMOL_RESTRICT my_out = (__m256i * SMOL_RESTRICT) *out;
+
+    SMOL_ASSUME_TEMP_ALIGNED (my_out, __m256i * SMOL_RESTRICT);
+
+    while ((ptrdiff_t) (my_out + 4) <= (ptrdiff_t) out_max)
+    {
+        m0 = _mm256_loadu_si256 (my_in);
+        my_in++;
+
+        m0 = _mm256_shuffle_epi8 (m0, channel_shuf);
+        m0 = _mm256_permute4x64_epi64 (m0, SMOL_4X2BIT (3, 1, 2, 0));
+
+        m1 = _mm256_unpacklo_epi8 (m0, zero);
+        m2 = _mm256_unpackhi_epi8 (m0, zero);
+
+        fact1 = _mm256_shuffle_epi8 (m1, factor_shuf);
+        fact2 = _mm256_shuffle_epi8 (m2, factor_shuf);
+
+        fact1 = _mm256_or_si256 (fact1, alpha_mul);
+        fact2 = _mm256_or_si256 (fact2, alpha_mul);
+
+        m1 = _mm256_mullo_epi16 (m1, fact1);
+        m2 = _mm256_mullo_epi16 (m2, fact2);
+
+        m1 = _mm256_add_epi16 (m1, alpha_add);
+        m2 = _mm256_add_epi16 (m2, alpha_add);
+
+        m1 = _mm256_permute4x64_epi64 (m1, SMOL_4X2BIT (3, 1, 2, 0));
+        m2 = _mm256_permute4x64_epi64 (m2, SMOL_4X2BIT (3, 1, 2, 0));
+
+        m3 = _mm256_unpacklo_epi16 (m1, zero);
+        m4 = _mm256_unpackhi_epi16 (m1, zero);
+        m5 = _mm256_unpacklo_epi16 (m2, zero);
+        m6 = _mm256_unpackhi_epi16 (m2, zero);
+
+        _mm256_store_si256 ((__m256i *) my_out, m3);
+        my_out++;
+        _mm256_store_si256 ((__m256i *) my_out, m4);
+        my_out++;
+        _mm256_store_si256 ((__m256i *) my_out, m5);
+        my_out++;
+        _mm256_store_si256 ((__m256i *) my_out, m6);
+        my_out++;
+    }
+
+    *out = (uint64_t * SMOL_RESTRICT) my_out;
+    *in = (const uint32_t * SMOL_RESTRICT) my_in;
+}
+
 /* Unpack u (alpha first) -> i */
 
 static SMOL_INLINE void
@@ -1075,64 +1145,14 @@ unpack_row_123a_u_to_123a_i_128bpp (const uint32_t * SMOL_RESTRICT row_in,
                                     uint32_t n_pixels)
 {
     uint64_t *row_out_max = row_out + n_pixels * 2;
-    const __m256i zero = _mm256_setzero_si256 ();
     const __m256i channel_shuf = _mm256_set_epi8 (
         13,12,15,14, 9,8,11,10, 5,4,7,6, 1,0,3,2,
         13,12,15,14, 9,8,11,10, 5,4,7,6, 1,0,3,2);
-    const __m256i factor_shuf = _mm256_set_epi8 (
-        255, 12, 255, 255, 255, 12, 255, 12,  255, 4, 255, 255, 255, 4, 255, 4,
-        255, 12, 255, 255, 255, 12, 255, 12,  255, 4, 255, 255, 255, 4, 255, 4);
-    const __m256i alpha_mul = _mm256_set_epi16 (
-        0, 0x100, 0, 0,  0, 0x100, 0, 0,
-        0, 0x100, 0, 0,  0, 0x100, 0, 0);
-    const __m256i alpha_add = _mm256_set_epi16 (
-        0, 0x80, 0, 0,  0, 0x80, 0, 0,
-        0, 0x80, 0, 0,  0, 0x80, 0, 0);
-    __m256i m0, m1, m2, m3, m4, m5, m6;
-    __m256i fact1, fact2;
 
-    SMOL_ASSUME_TEMP_ALIGNED (row_out, uint64_t *);
+    SMOL_ASSUME_TEMP_ALIGNED (row_out, uint64_t * SMOL_RESTRICT);
 
-    while (row_out + 16 <= row_out_max)
-    {
-        m0 = _mm256_loadu_si256 ((const __m256i *) row_in);
-        row_in += 8;
-
-        m0 = _mm256_shuffle_epi8 (m0, channel_shuf);
-        m0 = _mm256_permute4x64_epi64 (m0, SMOL_4X2BIT (3, 1, 2, 0));
-
-        m1 = _mm256_unpacklo_epi8 (m0, zero);
-        m2 = _mm256_unpackhi_epi8 (m0, zero);
-
-        fact1 = _mm256_shuffle_epi8 (m1, factor_shuf);
-        fact2 = _mm256_shuffle_epi8 (m2, factor_shuf);
-
-        fact1 = _mm256_or_si256 (fact1, alpha_mul);
-        fact2 = _mm256_or_si256 (fact2, alpha_mul);
-
-        m1 = _mm256_mullo_epi16 (m1, fact1);
-        m2 = _mm256_mullo_epi16 (m2, fact2);
-
-        m1 = _mm256_add_epi16 (m1, alpha_add);
-        m2 = _mm256_add_epi16 (m2, alpha_add);
-
-        m1 = _mm256_permute4x64_epi64 (m1, SMOL_4X2BIT (3, 1, 2, 0));
-        m2 = _mm256_permute4x64_epi64 (m2, SMOL_4X2BIT (3, 1, 2, 0));
-
-        m3 = _mm256_unpacklo_epi16 (m1, zero);
-        m4 = _mm256_unpackhi_epi16 (m1, zero);
-        m5 = _mm256_unpacklo_epi16 (m2, zero);
-        m6 = _mm256_unpackhi_epi16 (m2, zero);
-
-        _mm256_store_si256 ((__m256i *) row_out, m3);
-        row_out += 4;
-        _mm256_store_si256 ((__m256i *) row_out, m4);
-        row_out += 4;
-        _mm256_store_si256 ((__m256i *) row_out, m5);
-        row_out += 4;
-        _mm256_store_si256 ((__m256i *) row_out, m6);
-        row_out += 4;
-    }
+    unpack_8x_xxxx_u_to_123a_i_128bpp (&row_in, &row_out, row_out_max,
+                                       channel_shuf);
 
     while (row_out != row_out_max)
     {
