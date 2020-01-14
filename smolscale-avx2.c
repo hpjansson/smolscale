@@ -661,39 +661,38 @@ pack_pixel_123a_i_to_1234_u_128bpp (const uint64_t * SMOL_RESTRICT in)
 }
 
 static void
-pack_row_123a_i_to_1234_u_128bpp (const uint64_t * SMOL_RESTRICT row_in,
-                                  uint32_t * SMOL_RESTRICT row_out,
-                                  uint32_t n_pixels)
+pack_8x_123a_i_to_xxxx_u_128bpp (const uint64_t * SMOL_RESTRICT *in,
+                                 uint32_t * SMOL_RESTRICT *out,
+                                 uint32_t * out_max,
+                                 const __m256i channel_shuf)
 {
 #define ALPHA_MUL (1 << (INVERTED_DIV_SHIFT - 8))
 #define ALPHA_MASK SMOL_8X1BIT (0, 1, 0, 0, 0, 1, 0, 0)
 
-    uint32_t *row_out_max = row_out + n_pixels;
     const __m256i ones = _mm256_set_epi32 (
         ALPHA_MUL, ALPHA_MUL, ALPHA_MUL, ALPHA_MUL,
         ALPHA_MUL, ALPHA_MUL, ALPHA_MUL, ALPHA_MUL);
-    const __m256i channel_shuf = _mm256_set_epi8 (
-        13,12,15,14, 9,8,11,10, 5,4,7,6, 1,0,3,2,
-        13,12,15,14, 9,8,11,10, 5,4,7,6, 1,0,3,2);
     const __m256i alpha_clean_mask = _mm256_set_epi32 (
         0x000000ff, 0x000000ff, 0x000000ff, 0x000000ff,
         0x000000ff, 0x000000ff, 0x000000ff, 0x000000ff);
     __m256i m00, m01, m02, m03, m04, m05, m06, m07, m08;
+    const __m256i * SMOL_RESTRICT my_in = (const __m256i * SMOL_RESTRICT) *in;
+    __m256i * SMOL_RESTRICT my_out = (__m256i * SMOL_RESTRICT) *out;
 
-    SMOL_ASSUME_TEMP_ALIGNED (row_in, const uint64_t *);
+    SMOL_ASSUME_TEMP_ALIGNED (my_in, __m256i * SMOL_RESTRICT);
 
-    while (row_out + 8 <= row_out_max)
+    while ((ptrdiff_t) (my_out + 1) <= (ptrdiff_t) out_max)
     {
         /* Load inputs */
 
-        m00 = _mm256_stream_load_si256 ((const __m256i *) row_in);
-        row_in += 4;
-        m01 = _mm256_stream_load_si256 ((const __m256i *) row_in);
-        row_in += 4;
-        m02 = _mm256_stream_load_si256 ((const __m256i *) row_in);
-        row_in += 4;
-        m03 = _mm256_stream_load_si256 ((const __m256i *) row_in);
-        row_in += 4;
+        m00 = _mm256_stream_load_si256 (my_in);
+        my_in++;
+        m01 = _mm256_stream_load_si256 (my_in);
+        my_in++;
+        m02 = _mm256_stream_load_si256 (my_in);
+        my_in++;
+        m03 = _mm256_stream_load_si256 (my_in);
+        my_in++;
 
         /* Load alpha factors */
 
@@ -740,18 +739,63 @@ pack_row_123a_i_to_1234_u_128bpp (const uint64_t * SMOL_RESTRICT row_in,
         m00 = _mm256_permute4x64_epi64 (m00, SMOL_4X2BIT (3, 1, 2, 0));
         m00 = _mm256_shuffle_epi32 (m00, SMOL_4X2BIT (3, 1, 2, 0));
 
-        _mm256_storeu_si256 ((__m256i *) row_out, m00);
-        row_out += 8;
+        _mm256_storeu_si256 (my_out, m00);
+        my_out += 1;
     }
+
+    *out = (uint32_t * SMOL_RESTRICT) my_out;
+    *in = (const uint64_t * SMOL_RESTRICT) my_in;
+
+#undef ALPHA_MUL
+#undef ALPHA_MASK
+}
+
+/* PACK_SHUF_MM256_EPI8() 
+ *
+ * Generates a shuffling register for packing 8bpc pixel channels in the
+ * provided order. The order (1, 2, 3, 4) is neutral and corresponds to
+ *
+ * _mm256_set_epi8 (13,12,15,14, 9,8,11,10, 5,4,7,6, 1,0,3,2,
+ *                  13,12,15,14, 9,8,11,10, 5,4,7,6, 1,0,3,2);
+ */
+#define SHUF_ORDER 0x01000302U
+#define SHUF_CH(n) ((char) (SHUF_ORDER >> ((4 - (n)) * 8)))
+#define SHUF_QUAD_CH(q, n) (4 * (q) + SHUF_CH (n))
+#define SHUF_QUAD(q, a, b, c, d) \
+    SHUF_QUAD_CH ((q), (a)), \
+    SHUF_QUAD_CH ((q), (b)), \
+    SHUF_QUAD_CH ((q), (c)), \
+    SHUF_QUAD_CH ((q), (d))
+#define PACK_SHUF_EPI8_LANE(a, b, c, d) \
+    SHUF_QUAD (3, (a), (b), (c), (d)), \
+    SHUF_QUAD (2, (a), (b), (c), (d)), \
+    SHUF_QUAD (1, (a), (b), (c), (d)), \
+    SHUF_QUAD (0, (a), (b), (c), (d))
+#define PACK_SHUF_MM256_EPI8(a, b, c, d) _mm256_set_epi8 ( \
+    PACK_SHUF_EPI8_LANE ((a), (b), (c), (d)), \
+    PACK_SHUF_EPI8_LANE ((a), (b), (c), (d)))
+
+static void
+pack_row_123a_i_to_1234_u_128bpp (const uint64_t * SMOL_RESTRICT row_in,
+                                  uint32_t * SMOL_RESTRICT row_out,
+                                  uint32_t n_pixels)
+{
+#define ALPHA_MUL (1 << (INVERTED_DIV_SHIFT - 8))
+#define ALPHA_MASK SMOL_8X1BIT (0, 1, 0, 0, 0, 1, 0, 0)
+
+    uint32_t *row_out_max = row_out + n_pixels;
+    const __m256i channel_shuf = PACK_SHUF_MM256_EPI8 (1, 2, 3, 4);
+
+    SMOL_ASSUME_TEMP_ALIGNED (row_in, const uint64_t * SMOL_RESTRICT);
+
+    pack_8x_123a_i_to_xxxx_u_128bpp (&row_in, &row_out, row_out_max,
+                                     channel_shuf);
 
     while (row_out != row_out_max)
     {
         *(row_out++) = pack_pixel_123a_i_to_1234_u_128bpp (row_in);
         row_in += 2;
     }
-
-#undef ALPHA_MUL
-#undef ALPHA_MASK
 }
 
 static void
@@ -796,7 +840,7 @@ pack_row_123a_i_to_321_u_128bpp (const uint64_t * SMOL_RESTRICT row_in,
 static SMOL_INLINE uint32_t                                             \
 pack_pixel_123a_i_to_##a##b##c##d##_u_128bpp (const uint64_t * SMOL_RESTRICT in) \
 {                                                                       \
-    uint8_t alpha = (in [1] >> 8) & 0xff;                      \
+    uint8_t alpha = (in [1] >> 8) & 0xff;                               \
     uint64_t t [2];                                                     \
     unpremul_i_to_u_128bpp (in, t, alpha);                              \
     t [1] = (t [1] & 0xffffffff00000000ULL) | alpha;                    \
@@ -809,7 +853,10 @@ pack_row_123a_i_to_##a##b##c##d##_u_128bpp (const uint64_t * SMOL_RESTRICT row_i
                                             uint32_t n_pixels)          \
 {                                                                       \
     uint32_t *row_out_max = row_out + n_pixels;                         \
+    const __m256i channel_shuf = PACK_SHUF_MM256_EPI8 ((a), (b), (c), (d)); \
     SMOL_ASSUME_TEMP_ALIGNED (row_in, const uint64_t *);                \
+    pack_8x_123a_i_to_xxxx_u_128bpp (&row_in, &row_out, row_out_max,    \
+                                     channel_shuf);                     \
     while (row_out != row_out_max)                                      \
     {                                                                   \
         *(row_out++) = pack_pixel_123a_i_to_##a##b##c##d##_u_128bpp (row_in); \
