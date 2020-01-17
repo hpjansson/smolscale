@@ -1,3 +1,5 @@
+# You need GNU Make ('gmake') for this!
+
 # Compilers to use for C and C++. E.g. gcc and g++, or clang and clang++.
 CC=gcc
 CXX=g++
