@@ -19,6 +19,8 @@ GENERAL_CFLAGS=-Wall -Wextra -g
 
 SMOL_CFLAGS=$(GENERAL_CFLAGS) -O3
 
+VERIFY_CFLAGS=$(GENERAL_CFLAGS)
+
 TEST_CFLAGS=$(GENERAL_CFLAGS) -O3 -flto
 TEST_SYSDEPS_FLAGS=`pkg-config --libs --cflags glib-2.0 libpng pixman-1 gdk-pixbuf-2.0 SDL_gfx`
 TEST_DEBUG_FLAGS=$(GENERAL_CFLAGS) -O2 -g -fno-inline -fno-omit-frame-pointer
@@ -42,15 +44,19 @@ else
   SKIA_OBJ=
 endif
 
+VERIFY_SRC=verify.c
 TEST_SRC=png.c test.c
 
-all: test
+all: verify test
 
 clean: FORCE
 	rm -f test $(SMOL_OBJ) $(SKIA_OBJ)
 
 test: Makefile smolscale.h $(TEST_SRC) $(SMOL_OBJ) $(SKIA_OBJ)
 	$(CC) $(TEST_CFLAGS) $(TEST_LDFLAGS) $(TEST_SYSDEPS_FLAGS) $(SMOL_OBJ) $(TEST_SRC) -o test
+
+verify: Makefile smolscale.h $(VERIFY_SRC) $(SMOL_OBJ)
+	$(CC) $(VERIFY_CFLAGS) $(VERIFY_LDFLAGS) $(SMOL_OBJ) $(VERIFY_SRC) -o verify
 
 smolscale.o: Makefile smolscale.c smolscale.h smolscale-private.h
 	$(CC) $(SMOL_CFLAGS) -c smolscale.c -o smolscale.o
