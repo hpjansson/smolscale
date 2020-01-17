@@ -34,6 +34,9 @@
 /* --- Premultiplication --- */
 
 #define INVERTED_DIV_SHIFT 21
+#define INVERTED_DIV_ROUNDING (1U << (INVERTED_DIV_SHIFT - 1))
+#define INVERTED_DIV_ROUNDING_128BPP \
+    (((uint64_t) INVERTED_DIV_ROUNDING << 32) | INVERTED_DIV_ROUNDING)
 
 /* This table is used to divide by an integer [1..255] using only a lookup,
  * multiplication and a shift. This is faster than plain division on most
@@ -42,10 +45,11 @@
  * Each entry represents the integer 2097152 (1 << 21) divided by the index
  * of the entry. Consequently,
  *
- * (v / i) ~= (v * inverted_div_table [i]) >> 21
+ * (v / i) ~= (v * inverted_div_table [i] + (1 << 20)) >> 21
  *
- * It would've been nice to keep this table in uint16_t, but alas, we need
- * the extra bits for sufficient precision. */
+ * (1 << 20) is added for nearest rounding. It would've been nice to keep
+ * this table in uint16_t, but alas, we need the extra bits for sufficient
+ * precision. */
 static const uint32_t inverted_div_table [256] =
 {
          0,2097152,1048576, 699051, 524288, 419430, 349525, 299593,
@@ -89,8 +93,10 @@ unpremul_i_to_u_128bpp (const uint64_t * SMOL_RESTRICT in,
                         uint64_t * SMOL_RESTRICT out,
                         uint8_t alpha)
 {
-    out [0] = ((in [0] * (uint64_t) inverted_div_table [alpha]) >> INVERTED_DIV_SHIFT);
-    out [1] = ((in [1] * (uint64_t) inverted_div_table [alpha]) >> INVERTED_DIV_SHIFT);
+    out [0] = ((in [0] * (uint64_t) inverted_div_table [alpha]
+                + INVERTED_DIV_ROUNDING_128BPP) >> INVERTED_DIV_SHIFT);
+    out [1] = ((in [1] * (uint64_t) inverted_div_table [alpha]
+                + INVERTED_DIV_ROUNDING_128BPP) >> INVERTED_DIV_SHIFT);
 }
 
 static SMOL_INLINE void
@@ -675,6 +681,9 @@ pack_8x_123a_i_to_xxxx_u_128bpp (const uint64_t * SMOL_RESTRICT *in,
     const __m256i alpha_clean_mask = _mm256_set_epi32 (
         0x000000ff, 0x000000ff, 0x000000ff, 0x000000ff,
         0x000000ff, 0x000000ff, 0x000000ff, 0x000000ff);
+    const __m256i rounding = _mm256_set_epi32 (
+        INVERTED_DIV_ROUNDING, 0, INVERTED_DIV_ROUNDING, INVERTED_DIV_ROUNDING,
+        INVERTED_DIV_ROUNDING, 0, INVERTED_DIV_ROUNDING, INVERTED_DIV_ROUNDING);
     __m256i m00, m01, m02, m03, m04, m05, m06, m07, m08;
     const __m256i * SMOL_RESTRICT my_in = (const __m256i * SMOL_RESTRICT) *in;
     __m256i * SMOL_RESTRICT my_out = (__m256i * SMOL_RESTRICT) *out;
@@ -723,6 +732,11 @@ pack_8x_123a_i_to_xxxx_u_128bpp (const uint64_t * SMOL_RESTRICT *in,
         m06 = _mm256_mullo_epi32 (m06, m01);
         m07 = _mm256_mullo_epi32 (m07, m02);
         m08 = _mm256_mullo_epi32 (m08, m03);
+
+        m05 = _mm256_add_epi32 (m05, rounding);
+        m06 = _mm256_add_epi32 (m06, rounding);
+        m07 = _mm256_add_epi32 (m07, rounding);
+        m08 = _mm256_add_epi32 (m08, rounding);
 
         m05 = _mm256_srli_epi32 (m05, INVERTED_DIV_SHIFT);
         m06 = _mm256_srli_epi32 (m06, INVERTED_DIV_SHIFT);

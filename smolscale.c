@@ -11,6 +11,9 @@
 /* --- Premultiplication --- */
 
 #define INVERTED_DIV_SHIFT 21
+#define INVERTED_DIV_ROUNDING (1U << (INVERTED_DIV_SHIFT - 1))
+#define INVERTED_DIV_ROUNDING_128BPP \
+    (((uint64_t) INVERTED_DIV_ROUNDING << 32) | INVERTED_DIV_ROUNDING)
 
 /* This table is used to divide by an integer [1..255] using only a lookup,
  * multiplication and a shift. This is faster than plain division on most
@@ -19,10 +22,11 @@
  * Each entry represents the integer 2097152 (1 << 21) divided by the index
  * of the entry. Consequently,
  *
- * (v / i) ~= (v * inverted_div_table [i]) >> 21
+ * (v / i) ~= (v * inverted_div_table [i] + (1 << 20)) >> 21
  *
- * It would've been nice to keep this table in uint16_t, but alas, we need
- * the extra bits for sufficient precision. */
+ * (1 << 20) is added for nearest rounding. It would've been nice to keep
+ * this table in uint16_t, but alas, we need the extra bits for sufficient
+ * precision. */
 static const uint32_t inverted_div_table [256] =
 {
          0,2097152,1048576, 699051, 524288, 419430, 349525, 299593,
@@ -66,8 +70,10 @@ unpremul_i_to_u_128bpp (const uint64_t * SMOL_RESTRICT in,
                         uint64_t * SMOL_RESTRICT out,
                         uint8_t alpha)
 {
-    out [0] = ((in [0] * (uint64_t) inverted_div_table [alpha]) >> INVERTED_DIV_SHIFT);
-    out [1] = ((in [1] * (uint64_t) inverted_div_table [alpha]) >> INVERTED_DIV_SHIFT);
+    out [0] = ((in [0] * (uint64_t) inverted_div_table [alpha]
+                + INVERTED_DIV_ROUNDING_128BPP) >> INVERTED_DIV_SHIFT);
+    out [1] = ((in [1] * (uint64_t) inverted_div_table [alpha]
+                + INVERTED_DIV_ROUNDING_128BPP) >> INVERTED_DIV_SHIFT);
 }
 
 static SMOL_INLINE void
