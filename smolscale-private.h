@@ -53,10 +53,10 @@ typedef unsigned int SmolBool;
 #define SMOL_CONST __attribute__((const))
 #define SMOL_PURE __attribute__((pure))
 
-#define SMALL_MUL 256U
-#define BIG_MUL 65536U
-#define BOXES_MULTIPLIER ((uint64_t) BIG_MUL * SMALL_MUL)
-#define BILIN_MULTIPLIER ((uint64_t) BIG_MUL * BIG_MUL)
+#define SMOL_SMALL_MUL 256U
+#define SMOL_BIG_MUL 65536U
+#define SMOL_BOXES_MULTIPLIER ((uint64_t) SMOL_BIG_MUL * SMOL_SMALL_MUL)
+#define SMOL_BILIN_MULTIPLIER ((uint64_t) SMOL_BIG_MUL * SMOL_BIG_MUL)
 
 #define SMOL_ALIGNMENT 64
 

@@ -1069,9 +1069,9 @@ scale_64bpp (uint64_t accum,
 
     /* Average the inputs */
     a = ((accum & 0x0000ffff0000ffffULL) * multiplier
-         + (BOXES_MULTIPLIER / 2) + ((BOXES_MULTIPLIER / 2) << 32)) / BOXES_MULTIPLIER;
+         + (SMOL_BOXES_MULTIPLIER / 2) + ((SMOL_BOXES_MULTIPLIER / 2) << 32)) / SMOL_BOXES_MULTIPLIER;
     b = (((accum & 0xffff0000ffff0000ULL) >> 16) * multiplier
-         + (BOXES_MULTIPLIER / 2) + ((BOXES_MULTIPLIER / 2) << 32)) / BOXES_MULTIPLIER;
+         + (SMOL_BOXES_MULTIPLIER / 2) + ((SMOL_BOXES_MULTIPLIER / 2) << 32)) / SMOL_BOXES_MULTIPLIER;
 
     /* Return pixel */
     return (a & 0x000000ff000000ffULL) | ((b & 0x000000ff000000ffULL) << 16);
@@ -1084,10 +1084,10 @@ scale_128bpp_half (uint64_t accum,
     uint64_t a, b;
 
     a = accum & 0x00000000ffffffffULL;
-    a = (a * multiplier + BOXES_MULTIPLIER / 2) / BOXES_MULTIPLIER;
+    a = (a * multiplier + SMOL_BOXES_MULTIPLIER / 2) / SMOL_BOXES_MULTIPLIER;
 
     b = (accum & 0xffffffff00000000ULL) >> 32;
-    b = (b * multiplier + BOXES_MULTIPLIER / 2) / BOXES_MULTIPLIER;
+    b = (b * multiplier + SMOL_BOXES_MULTIPLIER / 2) / SMOL_BOXES_MULTIPLIER;
 
     return (a & 0x000000000000ffffULL)
            | ((b & 0x000000000000ffffULL) << 32);
@@ -1183,19 +1183,19 @@ precalc_bilinear_array (uint16_t *array,
     if (dim_in > dim_out)
     {
         /* Minification */
-        frac_stepF = ofs_stepF = (dim_in * BILIN_MULTIPLIER) / dim_out;
-        fracF = (frac_stepF - BILIN_MULTIPLIER) / 2;
+        frac_stepF = ofs_stepF = (dim_in * SMOL_BILIN_MULTIPLIER) / dim_out;
+        fracF = (frac_stepF - SMOL_BILIN_MULTIPLIER) / 2;
     }
     else
     {
         /* Magnification */
-        frac_stepF = ofs_stepF = ((dim_in - 1) * BILIN_MULTIPLIER) / (dim_out > 1 ? (dim_out - 1) : 1);
+        frac_stepF = ofs_stepF = ((dim_in - 1) * SMOL_BILIN_MULTIPLIER) / (dim_out > 1 ? (dim_out - 1) : 1);
         fracF = 0;
     }
 
     do
     {
-        uint16_t ofs = fracF / BILIN_MULTIPLIER;
+        uint16_t ofs = fracF / SMOL_BILIN_MULTIPLIER;
 
         /* We sample ofs and its neighbor -- prevent out of bounds access
          * for the latter. */
@@ -1203,7 +1203,7 @@ precalc_bilinear_array (uint16_t *array,
             break;
 
         *(pu16++) = make_absolute_offsets ? ofs : ofs - last_ofs;
-        *(pu16++) = SMALL_MUL - ((fracF / (BILIN_MULTIPLIER / SMALL_MUL)) % SMALL_MUL);
+        *(pu16++) = SMOL_SMALL_MUL - ((fracF / (SMOL_BILIN_MULTIPLIER / SMOL_SMALL_MUL)) % SMOL_SMALL_MUL);
         fracF += frac_stepF;
 
         last_ofs = ofs;
@@ -1236,21 +1236,21 @@ precalc_boxes_array (uint16_t *array,
     uint64_t stride;
     uint64_t a, b;
 
-    frac_stepF = ((uint64_t) dim_in * BIG_MUL) / (uint64_t) dim_out;
+    frac_stepF = ((uint64_t) dim_in * SMOL_BIG_MUL) / (uint64_t) dim_out;
     fracF = 0;
     ofs = 0;
 
-    stride = frac_stepF / (uint64_t) BIG_MUL;
-    f = (frac_stepF / SMALL_MUL) % SMALL_MUL;
+    stride = frac_stepF / (uint64_t) SMOL_BIG_MUL;
+    f = (frac_stepF / SMOL_SMALL_MUL) % SMOL_SMALL_MUL;
 
-    a = (BOXES_MULTIPLIER * 255);
+    a = (SMOL_BOXES_MULTIPLIER * 255);
     b = ((stride * 255) + ((f * 255) / 256));
     *span_mul = (a + (b / 2)) / b;
 
     do
     {
         fracF += frac_stepF;
-        next_ofs = (uint64_t) fracF / ((uint64_t) BIG_MUL);
+        next_ofs = (uint64_t) fracF / ((uint64_t) SMOL_BIG_MUL);
 
         /* Prevent out of bounds access */
         if (ofs >= dim_in - 1)
@@ -1264,7 +1264,7 @@ precalc_boxes_array (uint16_t *array,
         }
 
         stride = next_ofs - ofs - 1;
-        f = (fracF / SMALL_MUL) % SMALL_MUL;
+        f = (fracF / SMOL_SMALL_MUL) % SMOL_SMALL_MUL;
 
         /* Fraction is the other way around, since left pixel of each span
          * comes first, and it's on the right side of the fractional sample. */

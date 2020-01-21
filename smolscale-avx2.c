@@ -1307,9 +1307,9 @@ scale_64bpp (uint64_t accum,
 
     /* Average the inputs */
     a = ((accum & 0x0000ffff0000ffffULL) * multiplier
-         + (BOXES_MULTIPLIER / 2) + ((BOXES_MULTIPLIER / 2) << 32)) / BOXES_MULTIPLIER;
+         + (SMOL_BOXES_MULTIPLIER / 2) + ((SMOL_BOXES_MULTIPLIER / 2) << 32)) / SMOL_BOXES_MULTIPLIER;
     b = (((accum & 0xffff0000ffff0000ULL) >> 16) * multiplier
-         + (BOXES_MULTIPLIER / 2) + ((BOXES_MULTIPLIER / 2) << 32)) / BOXES_MULTIPLIER;
+         + (SMOL_BOXES_MULTIPLIER / 2) + ((SMOL_BOXES_MULTIPLIER / 2) << 32)) / SMOL_BOXES_MULTIPLIER;
 
     /* Return pixel */
     return (a & 0x000000ff000000ffULL) | ((b & 0x000000ff000000ffULL) << 16);
@@ -1322,10 +1322,10 @@ scale_128bpp_half (uint64_t accum,
     uint64_t a, b;
 
     a = accum & 0x00000000ffffffffULL;
-    a = (a * multiplier + BOXES_MULTIPLIER / 2) / BOXES_MULTIPLIER;
+    a = (a * multiplier + SMOL_BOXES_MULTIPLIER / 2) / SMOL_BOXES_MULTIPLIER;
 
     b = (accum & 0xffffffff00000000ULL) >> 32;
-    b = (b * multiplier + BOXES_MULTIPLIER / 2) / BOXES_MULTIPLIER;
+    b = (b * multiplier + SMOL_BOXES_MULTIPLIER / 2) / SMOL_BOXES_MULTIPLIER;
 
     return (a & 0x000000000000ffffULL)
            | ((b & 0x000000000000ffffULL) << 32);
