@@ -21,61 +21,18 @@ PixelInfo;
 
 static const PixelInfo pixel_info [] =
 {
-    {
-        SMOL_PIXEL_RGBA8_PREMULTIPLIED,
-        { "rgba" },
-        4
-    },
-    {
-        SMOL_PIXEL_BGRA8_PREMULTIPLIED,
-        { "bgra" },
-        4
-    },
-    {
-        SMOL_PIXEL_ARGB8_PREMULTIPLIED,
-        { "argb" },
-        4
-    },
-    {
-        SMOL_PIXEL_ABGR8_PREMULTIPLIED,
-        { "abgr" },
-        4
-    },
-    {
-        SMOL_PIXEL_RGBA8_UNASSOCIATED,
-        { "rgbA" },
-        4
-    },
-    {
-        SMOL_PIXEL_BGRA8_UNASSOCIATED,
-        { "bgrA" },
-        4
-    },
-    {
-        SMOL_PIXEL_ARGB8_UNASSOCIATED,
-        { "Argb" },
-        4
-    },
-    {
-        SMOL_PIXEL_ABGR8_UNASSOCIATED,
-        { "Abgr" },
-        4
-    },
-    {
-        SMOL_PIXEL_RGB8,
-        { "rgb\0" },
-        3
-    },
-    {
-        SMOL_PIXEL_BGR8,
-        { "bgr\0" },
-        3
-    },
-    {
-        SMOL_PIXEL_MAX,
-        { '\0', '\0', '\0', '\0', '\0' },
-        0
-    }
+    { SMOL_PIXEL_RGBA8_PREMULTIPLIED,    "rgba",       4 },
+    { SMOL_PIXEL_BGRA8_PREMULTIPLIED,    "bgra",       4 },
+    { SMOL_PIXEL_ARGB8_PREMULTIPLIED,    "argb",       4 },
+    { SMOL_PIXEL_ABGR8_PREMULTIPLIED,    "abgr",       4 },
+    { SMOL_PIXEL_RGBA8_UNASSOCIATED,     "rgbA",       4 },
+    { SMOL_PIXEL_BGRA8_UNASSOCIATED,     "bgrA",       4 },
+    { SMOL_PIXEL_ARGB8_UNASSOCIATED,     "Argb",       4 },
+    { SMOL_PIXEL_ABGR8_UNASSOCIATED,     "Abgr",       4 },
+    { SMOL_PIXEL_RGB8,                   "rgb\0",      3 },
+    { SMOL_PIXEL_BGR8,                   "bgr\0",      3 },
+
+    { SMOL_PIXEL_MAX,                    "\0\0\0\0",   0 }
 };
 
 static const PixelInfo *
