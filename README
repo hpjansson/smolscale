@@ -3,17 +3,18 @@ Smolscale
 
 Smolscale is a smol piece of C code for quickly scaling images to a reasonable
 level of quality using CPU resources only (no GPU). It operates on 4-channel
-data with 32 bits per pixel, i.e. packed RGBA, ARGB, BGRA, etc. It supports
-both premultiplied and unassociated alpha and can convert between the two. It
-is host byte ordering agnostic.
+data with 32 bits per pixel, i.e. packed RGBA, ARGB, BGRA etc, as well as
+3-channel data without an alpha channel. It supports both premultiplied and
+unassociated alpha and can convert between the two. It is host byte ordering
+agnostic. The maximum image dimensions are 65535x65535 pixels.
 
 The design goals are:
 
 * High throughput: Optimized code, within reason. Easily parallelizable.
 
-* Decent quality: No "jaggies" as produced by nearest-neighbor scaling.
+* Decent quality: No aliasing as produced by nearest-neighbor scaling.
 
-* Low memory overhead: Mostly on the stack.
+* Low memory overhead.
 
 * Simplicity: A modern C toolchain as the only dependency.
 
@@ -45,8 +46,8 @@ Tests
 -----
 
 There is a testing and benchmarking program included. It lives in test.c.
-You should be able to build it by simply issuing 'make'. It also allows you
-to test a few non-smol image scaling implementations.
+You should be able to build it by simply issuing 'gmake' or 'make'. It also
+allows you to test a few non-smol image scaling implementations.
 
 You need the development files for the following dependencies installed first
 (these are for test.c only and are not needed for Smolscale proper):
