@@ -6,11 +6,13 @@
 #include <pixman.h>
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include <SDL/SDL_rotozoom.h> /* zoomSurface() from SDL_gfx */
+#include <libswscale/swscale.h>
 #include <stdlib.h> /* strtoul, strtod */
 #include "smolscale.h"
 #include "png.h"
 
 #define PIXEL_TYPE_SMOL SMOL_PIXEL_ARGB8_UNASSOCIATED
+#define PIXEL_TYPE_LIBSWSCALE AV_PIX_FMT_ARGB
 
 #define CORRECTNESS_WIDTH_MIN 1
 #define CORRECTNESS_WIDTH_MAX 65535
@@ -547,6 +549,64 @@ scale_do_smol_threaded (ScaleParams *params, guint out_width, guint out_height)
     params->out_data = scaled;
 }
 
+/* --- libswscale --- */
+
+static void
+scale_init_libswscale (ScaleParams *params, gconstpointer in_raw, guint in_width, guint in_height)
+{
+    params->in_width = in_width;
+    params->in_height = in_height;
+    params->in_data = (gpointer) in_raw;
+}
+
+static void
+scale_fini_libswscale (G_GNUC_UNUSED ScaleParams *params)
+{
+    if (params->priv)
+        g_free (params->priv);
+    if (params->out_data)
+        g_free (params->out_data);
+}
+
+static void
+scale_do_libswscale (ScaleParams *params, guint out_width, guint out_height)
+{
+    SwsFilter src_filter, dest_filter;
+    struct SwsContext *ctx;
+    const uint8_t *src_planes;
+    uint8_t *dest_planes;
+    int src_stride, dest_stride;
+    gdouble fscale_x, fscale_y;
+    int flags;
+    gpointer scaled;
+
+    if (params->priv)
+        g_free (params->priv);
+    if (params->out_data)
+        g_free (params->out_data);
+
+    scaled = g_new (guint32, out_width * out_height);
+
+    src_planes = params->in_data;
+    src_stride = params->in_width * sizeof (guint32);
+    dest_planes = scaled;
+    dest_stride = out_width * sizeof (guint32);
+
+    fscale_x = (double) params->in_width / (double) out_width;
+    fscale_y = (double) params->in_height / (double) out_height;
+    flags = (fscale_x <= 2.0 || fscale_y <= 2.0) ? SWS_FAST_BILINEAR : SWS_AREA;
+
+    ctx = sws_getContext (params->in_width, params->in_height, PIXEL_TYPE_LIBSWSCALE,
+                          out_width, out_height, PIXEL_TYPE_LIBSWSCALE,
+                          flags,
+                          NULL, NULL, NULL);
+
+    sws_scale (ctx, &src_planes, &src_stride, 0, params->in_height,
+               &dest_planes, &dest_stride);
+
+    params->out_data = scaled;
+}
+
 /* --- Benchmarks --- */
 
 static void
@@ -983,7 +1043,7 @@ run_generate (const gchar *filename,
 static void
 print_usage (void)
 {
-    g_printerr ("Usage: test <smol|pixman|gdk_pixbuf|sdl|skia>\n"
+    g_printerr ("Usage: test <smol|libswscale|pixman|gdk_pixbuf|sdl|skia>\n"
                 "            [ generate\n"
                 "              <min_scale> <max_scale> <n_steps>\n"
                 "              <filename> ] |\n"
@@ -1069,6 +1129,12 @@ main (int argc, char *argv [])
         fini_func = scale_fini_sdl;
         do_func = scale_do_sdl;
     }
+    else if (!strcasecmp (argv [1], "libswscale"))
+    {
+        init_func = scale_init_libswscale;
+        fini_func = scale_fini_libswscale;
+        do_func = scale_do_libswscale;
+    }
     else if (!strcasecmp (argv [1], "skia"))
     {
 #ifdef WITH_SKIA
@@ -1082,6 +1148,7 @@ main (int argc, char *argv [])
     }
     else
     {
+        g_printerr ("Unknown scaler module: %s\n", argv [1]);
         print_usage ();
         return 1;
     }

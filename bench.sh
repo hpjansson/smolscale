@@ -1,6 +1,7 @@
 #!/bin/bash
 
 DESC_gdkpixbuf="GDK-Pixbuf"
+DESC_libswscale="libswscale"
 DESC_pixman="Pixman"
 DESC_sdl="SDL_gfx"
 DESC_skia="Skia"
@@ -8,6 +9,7 @@ DESC_smolscale="Smolscale"
 DESC_smolscale_mt="Smolscale MT"
 
 TESTNAME_gdkpixbuf="gdk_pixbuf"
+TESTNAME_libswscale="libswscale"
 TESTNAME_pixman="pixman"
 TESTNAME_sdl="sdl"
 TESTNAME_skia="skia"
@@ -15,7 +17,14 @@ TESTNAME_smolscale="smol"
 TESTNAME_smolscale_mt="smol-mt"
 
 UNITS=" \
+libswscale
+smolscale
+smolscale_mt
+"
+
+UNITS_AVAILABLE=" \
 gdkpixbuf
+libswscale
 pixman
 sdl
 skia

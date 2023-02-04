@@ -56,6 +56,8 @@ You need the development files for the following dependencies installed first
 
 * libpng
 
+* libswscale
+
 * pixman
 
 * SDL_gfx
