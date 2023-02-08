@@ -604,6 +604,8 @@ scale_do_libswscale (ScaleParams *params, guint out_width, guint out_height)
     sws_scale (ctx, &src_planes, &src_stride, 0, params->in_height,
                &dest_planes, &dest_stride);
 
+    sws_freeContext (ctx);
+
     params->out_data = scaled;
 }
 
