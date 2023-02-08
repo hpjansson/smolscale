@@ -2896,13 +2896,13 @@ get_implementations (SmolScaleCtx *scale_ctx)
 
 static void
 smol_scale_init (SmolScaleCtx *scale_ctx,
-                 SmolPixelType pixel_type_in,
                  const void *pixels_in,
+                 SmolPixelType pixel_type_in,
                  uint32_t width_in,
                  uint32_t height_in,
                  uint32_t rowstride_in,
-                 SmolPixelType pixel_type_out,
                  void *pixels_out,
+                 SmolPixelType pixel_type_out,
                  uint32_t width_out,
                  uint32_t height_out,
                  uint32_t rowstride_out,
@@ -2911,13 +2911,13 @@ smol_scale_init (SmolScaleCtx *scale_ctx,
 {
     SmolStorageType storage_type [2];
 
-    scale_ctx->pixel_type_in = pixel_type_in;
     scale_ctx->pixels_in = pixels_in;
+    scale_ctx->pixel_type_in = pixel_type_in;
     scale_ctx->width_in = width_in;
     scale_ctx->height_in = height_in;
     scale_ctx->rowstride_in = rowstride_in / sizeof (uint32_t);
-    scale_ctx->pixel_type_out = pixel_type_out;
     scale_ctx->pixels_out = pixels_out;
+    scale_ctx->pixel_type_out = pixel_type_out;
     scale_ctx->width_out = width_out;
     scale_ctx->height_out = height_out;
     scale_ctx->rowstride_out = rowstride_out / sizeof (uint32_t);
@@ -2982,13 +2982,13 @@ smol_scale_finalize (SmolScaleCtx *scale_ctx)
 /* --- Public API --- */
 
 SmolScaleCtx *
-smol_scale_new (SmolPixelType pixel_type_in,
-                const void *pixels_in,
+smol_scale_new (const void *pixels_in,
+                SmolPixelType pixel_type_in,
                 uint32_t width_in,
                 uint32_t height_in,
                 uint32_t rowstride_in,
-                SmolPixelType pixel_type_out,
                 void *pixels_out,
+                SmolPixelType pixel_type_out,
                 uint32_t width_out,
                 uint32_t height_out,
                 uint32_t rowstride_out)
@@ -2997,13 +2997,13 @@ smol_scale_new (SmolPixelType pixel_type_in,
 
     scale_ctx = calloc (sizeof (SmolScaleCtx), 1);
     smol_scale_init (scale_ctx,
-                     pixel_type_in,
                      pixels_in,
+                     pixel_type_in,
                      width_in,
                      height_in,
                      rowstride_in,
-                     pixel_type_out,
                      pixels_out,
+                     pixel_type_out,
                      width_out,
                      height_out,
                      rowstride_out,
@@ -3013,13 +3013,13 @@ smol_scale_new (SmolPixelType pixel_type_in,
 }
 
 SmolScaleCtx *
-smol_scale_new_full (SmolPixelType pixel_type_in,
-                     const void *pixels_in,
+smol_scale_new_full (const void *pixels_in,
+                     SmolPixelType pixel_type_in,
                      uint32_t width_in,
                      uint32_t height_in,
                      uint32_t rowstride_in,
-                     SmolPixelType pixel_type_out,
                      void *pixels_out,
+                     SmolPixelType pixel_type_out,
                      uint32_t width_out,
                      uint32_t height_out,
                      uint32_t rowstride_out,
@@ -3030,13 +3030,13 @@ smol_scale_new_full (SmolPixelType pixel_type_in,
 
     scale_ctx = calloc (sizeof (SmolScaleCtx), 1);
     smol_scale_init (scale_ctx,
-                     pixel_type_in,
                      pixels_in,
+                     pixel_type_in,
                      width_in,
                      height_in,
                      rowstride_in,
-                     pixel_type_out,
                      pixels_out,
+                     pixel_type_out,
                      width_out,
                      height_out,
                      rowstride_out,
@@ -3053,13 +3053,13 @@ smol_scale_destroy (SmolScaleCtx *scale_ctx)
 }
 
 void
-smol_scale_simple (SmolPixelType pixel_type_in,
-                   const void *pixels_in,
+smol_scale_simple (const void *pixels_in,
+                   SmolPixelType pixel_type_in,
                    uint32_t width_in,
                    uint32_t height_in,
                    uint32_t rowstride_in,
-                   SmolPixelType pixel_type_out,
                    void *pixels_out,
+                   SmolPixelType pixel_type_out,
                    uint32_t width_out,
                    uint32_t height_out,
                    uint32_t rowstride_out)
@@ -3067,9 +3067,9 @@ smol_scale_simple (SmolPixelType pixel_type_in,
     SmolScaleCtx scale_ctx;
 
     smol_scale_init (&scale_ctx,
-                     pixel_type_in, pixels_in,
+                     pixels_in, pixel_type_in,
                      width_in, height_in, rowstride_in,
-                     pixel_type_out, pixels_out,
+                     pixels_out, pixel_type_out,
                      width_out, height_out, rowstride_out,
                      NULL, NULL);
     do_rows (&scale_ctx,

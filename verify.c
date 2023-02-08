@@ -175,8 +175,8 @@ verify_ordering (void)
 
             populate_pixels (expected_output, pinfo_out->type, 65536);
 
-            smol_scale_simple (pinfo_in->type, (const uint32_t *) input, 16384, 1, 16384 * pinfo_in->n_channels,
-                               pinfo_out->type, (uint32_t *) output, 16383, 1, 16383 * pinfo_out->n_channels);
+            smol_scale_simple ((const uint32_t *) input, pinfo_in->type, 16384, 1, 16384 * pinfo_in->n_channels,
+                               (uint32_t *) output, pinfo_out->type, 16383, 1, 16383 * pinfo_out->n_channels);
 
             if (fuzzy_compare_bytes (output, expected_output, 64, 2))
             {
@@ -225,8 +225,8 @@ verify_unassociated_alpha (void)
         else
             expected_output [1] = expected_output [2] = expected_output [3] = 0xff;
 
-        smol_scale_simple (SMOL_PIXEL_ARGB8_UNASSOCIATED, (const uint32_t *) input, 2, 1, 8,
-                           SMOL_PIXEL_ARGB8_UNASSOCIATED, (uint32_t *) output, 1, 1, 4);
+        smol_scale_simple ((const uint32_t *) input, SMOL_PIXEL_ARGB8_UNASSOCIATED, 2, 1, 8,
+                           (uint32_t *) output, SMOL_PIXEL_ARGB8_UNASSOCIATED, 1, 1, 4);
 
         if (fuzzy_compare_bytes (output, expected_output, 4,
                                  i < 0x0a ? 0x7f :
@@ -252,8 +252,8 @@ verify_unassociated_alpha (void)
         expected_output [0] = (0xff + i) / 2;
         expected_output [1] = expected_output [2] = expected_output [3] = (0xff * 0xff) / (0xff + i);
 
-        smol_scale_simple (SMOL_PIXEL_ARGB8_UNASSOCIATED, (const uint32_t *) input, 2, 1, 8,
-                           SMOL_PIXEL_ARGB8_UNASSOCIATED, (uint32_t *) output, 1, 1, 4);
+        smol_scale_simple ((const uint32_t *) input, SMOL_PIXEL_ARGB8_UNASSOCIATED, 2, 1, 8,
+                           (uint32_t *) output, SMOL_PIXEL_ARGB8_UNASSOCIATED, 1, 1, 4);
 
         if (fuzzy_compare_bytes (output, expected_output, 4, 1))
         {
