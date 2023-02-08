@@ -2,6 +2,7 @@
 
 /* Copyright © 2019 Hans Petter Jansson. See COPYING for details. */
 
+#include <sys/random.h>
 #include <glib.h>
 #include <pixman.h>
 #include <gdk-pixbuf/gdk-pixbuf.h>
@@ -70,6 +71,27 @@ gen_color_canvas (guint width, guint height, guint32 color)
     for (p = canvas; p < canvas_end; p++)
         *p = color;
     
+    return canvas;
+}
+
+static gpointer
+gen_random_canvas (guint width, guint height)
+{
+    guint8 *canvas;
+    guint8 *canvas_end;
+    guint8 *p;
+
+    canvas = g_malloc (width * height * sizeof (guint32));
+    canvas_end = canvas + width * height;
+
+    for (p = canvas; p < canvas_end; )
+    {
+        ssize_t r = getrandom (p, canvas_end - p, 0);
+        if (r < 0)
+            continue;
+        p += r;
+    }
+
     return canvas;
 }
 
@@ -1223,7 +1245,7 @@ main (int argc, char *argv [])
 
     if (scale_op == SCALE_OP_BENCHMARK)
     {
-        gpointer raw_data = gen_color_canvas (in_width, in_height, 0x55555555);
+        gpointer raw_data = gen_random_canvas (in_width, in_height);
         run_benchmark (raw_data,
                        n_repetitions,
                        in_width, in_height,
@@ -1235,7 +1257,7 @@ main (int argc, char *argv [])
     }
     else if (scale_op == SCALE_OP_BENCHMARK_PROP)
     {
-        gpointer raw_data = gen_color_canvas (in_width, in_height, 0x55555555);
+        gpointer raw_data = gen_random_canvas (in_width, in_height);
         run_benchmark_proportional (raw_data,
                                     n_repetitions,
                                     in_width, in_height,
