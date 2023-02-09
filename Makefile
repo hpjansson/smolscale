@@ -24,8 +24,11 @@ SMOL_CFLAGS=$(GENERAL_CFLAGS) -O3
 VERIFY_CFLAGS=$(GENERAL_CFLAGS)
 
 TEST_CFLAGS=$(GENERAL_CFLAGS) -O3 -flto
+TEST_DEBUG_CFLAGS=$(GENERAL_CFLAGS) -Og -g -fno-inline -fno-omit-frame-pointer
 TEST_SYSDEPS_FLAGS=`pkg-config --libs --cflags glib-2.0 libpng pixman-1 gdk-pixbuf-2.0 SDL_gfx libswscale`
-TEST_DEBUG_FLAGS=$(GENERAL_CFLAGS) -O2 -g -fno-inline -fno-omit-frame-pointer
+
+# -lm is for stb_image_resize.
+TEST_LDFLAGS=-lm
 
 SKIA_CFLAGS=$(GENERAL_CFLAGS) -O3 -Iskia -Iskia/include/core
 
@@ -54,7 +57,7 @@ all: verify test
 clean: FORCE
 	rm -f test $(SMOL_OBJ) $(SKIA_OBJ)
 
-test: Makefile smolscale.h $(TEST_SRC) $(SMOL_OBJ) $(SKIA_OBJ)
+test: Makefile smolscale.h stb_image_resize.h $(TEST_SRC) $(SMOL_OBJ) $(SKIA_OBJ)
 	$(CC) $(TEST_CFLAGS) $(TEST_LDFLAGS) $(TEST_SYSDEPS_FLAGS) $(SMOL_OBJ) $(TEST_SRC) -o test
 
 verify: Makefile smolscale.h $(VERIFY_SRC) $(SMOL_OBJ)

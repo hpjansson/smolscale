@@ -2,6 +2,7 @@
 
 /* Copyright © 2019 Hans Petter Jansson. See COPYING for details. */
 
+#include <math.h>  /* stb_image_resize needs pow() */
 #include <sys/random.h>
 #include <glib.h>
 #include <pixman.h>
@@ -11,6 +12,9 @@
 #include <stdlib.h> /* strtoul, strtod */
 #include "smolscale.h"
 #include "png.h"
+
+#define STB_IMAGE_RESIZE_IMPLEMENTATION
+#include "stb_image_resize.h"
 
 #define PIXEL_TYPE_SMOL SMOL_PIXEL_ARGB8_PREMULTIPLIED
 #define PIXEL_TYPE_LIBSWSCALE AV_PIX_FMT_ARGB
@@ -631,6 +635,54 @@ scale_do_libswscale (ScaleParams *params, guint out_width, guint out_height)
     params->out_data = scaled;
 }
 
+/* --- stb --- */
+
+static void
+scale_init_stb (ScaleParams *params, gconstpointer in_raw, guint in_width, guint in_height)
+{
+    params->in_width = in_width;
+    params->in_height = in_height;
+    params->in_data = (gpointer) in_raw;
+}
+
+static void
+scale_fini_stb (G_GNUC_UNUSED ScaleParams *params)
+{
+    if (params->priv)
+        g_free (params->priv);
+    if (params->out_data)
+        g_free (params->out_data);
+}
+
+static void
+scale_do_stb (ScaleParams *params, guint out_width, guint out_height)
+{
+    gdouble fscale_x, fscale_y;
+    gpointer scaled;
+
+    if (params->priv)
+        g_free (params->priv);
+    if (params->out_data)
+        g_free (params->out_data);
+
+    scaled = g_new (guint32, out_width * out_height);
+
+#if 0
+    stbir_resize_uint8 (params->in_data, params->in_width, params->in_height, 0,
+                        scaled, out_width, out_height, 0, 4);
+#else
+    stbir_resize_uint8_generic (params->in_data, params->in_width, params->in_height, 0,
+                                scaled, out_width, out_height, 0, 4, 0,
+                                STBIR_FLAG_ALPHA_PREMULTIPLIED,
+                                STBIR_EDGE_ZERO,
+                                STBIR_FILTER_BOX,
+                                STBIR_COLORSPACE_LINEAR,
+                                NULL);
+#endif
+
+    params->out_data = scaled;
+}
+
 /* --- Benchmarks --- */
 
 static void
@@ -1067,7 +1119,7 @@ run_generate (const gchar *filename,
 static void
 print_usage (void)
 {
-    g_printerr ("Usage: test <smol|libswscale|pixman|gdk_pixbuf|sdl|skia>\n"
+    g_printerr ("Usage: test <smol|libswscale|pixman|gdk_pixbuf|sdl|skia|stb>\n"
                 "            [ generate\n"
                 "              <min_scale> <max_scale> <n_steps>\n"
                 "              <filename> ] |\n"
@@ -1169,6 +1221,12 @@ main (int argc, char *argv [])
         g_printerr ("No Skia support built in; see Makefile.\n");
         return 1;
 #endif
+    }
+    else if (!strcasecmp (argv [1], "stb"))
+    {
+        init_func = scale_init_stb;
+        fini_func = scale_fini_stb;
+        do_func = scale_do_stb;
     }
     else
     {
