@@ -7,6 +7,7 @@ DESC_sdl="SDL_gfx"
 DESC_skia="Skia"
 DESC_smolscale="Smolscale"
 DESC_smolscale_mt="Smolscale MT"
+DESC_stb="stb_resize"
 
 TESTNAME_gdkpixbuf="gdk_pixbuf"
 TESTNAME_libswscale="libswscale"
@@ -15,6 +16,7 @@ TESTNAME_sdl="sdl"
 TESTNAME_skia="skia"
 TESTNAME_smolscale="smol"
 TESTNAME_smolscale_mt="smol-mt"
+TESTNAME_stb="stb"
 
 UNITS=" \
 libswscale
@@ -30,6 +32,7 @@ sdl
 skia
 smolscale
 smolscale_mt
+stb
 "
 
 TESTS=" \
