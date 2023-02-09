@@ -1150,13 +1150,13 @@ main (int argc, char *argv [])
     guint in_width, in_height;
     guint out_width_min, out_width_max, out_width_steps;
     guint out_height_min, out_height_max, out_height_steps;
-    gdouble scale_min, scale_max;
-    guint scale_steps;
+    gdouble scale_min = 1.0, scale_max = 1.0;
+    guint scale_steps = 1;
     ScaleInitFunc init_func;
     ScaleFiniFunc fini_func;
     ScaleDoFunc do_func;
     ScaleOperation scale_op = SCALE_OP_BENCHMARK;
-    gchar *filename;
+    gchar *filename = NULL;
     gint i;
 
     if (argc < 2)
