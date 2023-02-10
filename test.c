@@ -495,7 +495,8 @@ scale_do_smol (ScaleParams *params, guint out_width, guint out_height)
                        scaled,
                        PIXEL_TYPE_SMOL,
                        out_width, out_height,
-                       out_width * sizeof (guint32));
+                       out_width * sizeof (guint32),
+                       TRUE);
 
     params->out_data = scaled;
 }
@@ -551,7 +552,8 @@ scale_do_smol_threaded (ScaleParams *params, guint out_width, guint out_height)
                                 params->in_width, params->in_height, params->in_width * sizeof (guint32),
                                 scaled,
                                 PIXEL_TYPE_SMOL,
-                                out_width, out_height, out_width * sizeof (guint32));
+                                out_width, out_height, out_width * sizeof (guint32),
+                                TRUE);
 
     n_threads = g_get_num_processors ();
     thread_pool = g_thread_pool_new ((GFunc) scale_smol_thread_worker,

@@ -186,7 +186,12 @@ struct SmolScaleCtx
 
     uint32_t width_bilin_out, height_bilin_out;
     unsigned int width_halvings, height_halvings;
+
+    unsigned int with_srgb : 1;
 };
+
+extern const uint16_t smol_from_srgb_lut [256];
+extern const uint8_t smol_to_srgb_lut [4096];
 
 #ifdef SMOL_WITH_AVX2
 const SmolImplementation *_smol_get_avx2_implementation (void);

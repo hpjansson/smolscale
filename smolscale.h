@@ -47,19 +47,22 @@ typedef struct SmolScaleCtx SmolScaleCtx;
 void smol_scale_simple (const void *pixels_in, SmolPixelType pixel_type_in,
                         uint32_t width_in, uint32_t height_in, uint32_t rowstride_in,
                         void *pixels_out, SmolPixelType pixel_type_out,
-                        uint32_t width_out, uint32_t height_out, uint32_t rowstride_out);
+                        uint32_t width_out, uint32_t height_out, uint32_t rowstride_out,
+                        uint8_t with_srgb);
 
 /* Batch API: Allows scaling a few rows at a time. Suitable for multithreading. */
 
 SmolScaleCtx *smol_scale_new (const void *pixels_in, SmolPixelType pixel_type_in,
                               uint32_t width_in, uint32_t height_in, uint32_t rowstride_in,
                               void *pixels_out, SmolPixelType pixel_type_out,
-                              uint32_t width_out, uint32_t height_out, uint32_t rowstride_out);
+                              uint32_t width_out, uint32_t height_out, uint32_t rowstride_out,
+                              uint8_t with_srgb);
 
 SmolScaleCtx *smol_scale_new_full (const void *pixels_in, SmolPixelType pixel_type_in,
                                    uint32_t width_in, uint32_t height_in, uint32_t rowstride_in,
                                    void *pixels_out, SmolPixelType pixel_type_out,
                                    uint32_t width_out, uint32_t height_out, uint32_t rowstride_out,
+                                   uint8_t with_srgb,
                                    SmolPostRowFunc post_row_func, void *user_data);
 
 void smol_scale_destroy (SmolScaleCtx *scale_ctx);

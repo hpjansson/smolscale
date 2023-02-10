@@ -10,7 +10,6 @@
 #include <immintrin.h>
 #include "smolscale-private.h"
 
-
 /* --- Linear interpolation helpers --- */
 
 #define LERP_SIMD256_EPI32(a, b, f)                                     \
@@ -30,6 +29,52 @@
 
 #define LERP_SIMD128_EPI32_AND_MASK(a, b, f, mask)                      \
     _mm_and_si128 (LERP_SIMD128_EPI32 ((a), (b), (f)), (mask))
+
+/* --- sRGB/linear conversion --- */
+
+static void
+from_srgb_row_128bpp (uint64_t * SMOL_RESTRICT row_parts_inout,
+                      uint32_t n_pixels)
+{
+    uint64_t *row_parts_inout_max = row_parts_inout + n_pixels * 2;
+
+    SMOL_ASSUME_ALIGNED (row_parts_inout, uint64_t *);
+
+    while (row_parts_inout != row_parts_inout_max)
+    {
+        uint64_t part = *row_parts_inout;
+        *(row_parts_inout++) =
+            (part & 0xffffffff00000000)
+            | smol_from_srgb_lut [part & 0xff];
+
+        part = *row_parts_inout;
+        *(row_parts_inout++) =
+            ((uint64_t) smol_from_srgb_lut [part >> 32] << 32)
+            | smol_from_srgb_lut [part & 0xff];
+    }
+}
+
+static void
+to_srgb_row_128bpp (uint64_t * SMOL_RESTRICT row_parts_inout,
+                    uint32_t n_pixels)
+{
+    uint64_t *row_parts_inout_max = row_parts_inout + n_pixels * 2;
+
+    SMOL_ASSUME_ALIGNED (row_parts_inout, uint64_t *);
+
+    while (row_parts_inout != row_parts_inout_max)
+    {
+        uint64_t part = *row_parts_inout;
+        *(row_parts_inout++) =
+            (part & 0xffffffff00000000)
+            | smol_to_srgb_lut [part & 0xffff];
+
+        part = *row_parts_inout;
+        *(row_parts_inout++) =
+            (((uint64_t) smol_to_srgb_lut [part >> 32]) << 32)
+            | smol_to_srgb_lut [part & 0xffff];
+    }
+}
 
 /* --- Premultiplication --- */
 
@@ -1772,6 +1817,8 @@ scale_horizontal (const SmolScaleCtx *scale_ctx,
     scale_ctx->unpack_row_func (row_in,
                                 unpacked_in,
                                 scale_ctx->width_in);
+    if (scale_ctx->with_srgb)
+        from_srgb_row_128bpp (unpacked_in, scale_ctx->width_in);
     scale_ctx->hfilter_func (scale_ctx,
                              unpacked_in,
                              row_parts_out);
@@ -2120,6 +2167,8 @@ scale_outrow_bilinear_##n_halvings##h_128bpp (const SmolScaleCtx *scale_ctx, \
                                                            vertical_ctx->parts_row [2], \
                                                            scale_ctx->width_out * 2); \
                                                                         \
+    if (scale_ctx->with_srgb)                                           \
+        to_srgb_row_128bpp (vertical_ctx->parts_row [2], scale_ctx->width_out); \
     scale_ctx->pack_row_func (vertical_ctx->parts_row [2], row_out, scale_ctx->width_out); \
 }
 
@@ -2150,6 +2199,8 @@ scale_outrow_bilinear_0h_128bpp (const SmolScaleCtx *scale_ctx,
                                            vertical_ctx->parts_row [1],
                                            vertical_ctx->parts_row [2],
                                            scale_ctx->width_out * 2);
+    if (scale_ctx->with_srgb)
+        to_srgb_row_128bpp (vertical_ctx->parts_row [2], scale_ctx->width_out);
     scale_ctx->pack_row_func (vertical_ctx->parts_row [2], row_out, scale_ctx->width_out);
 }
 
@@ -2200,6 +2251,8 @@ scale_outrow_bilinear_1h_128bpp (const SmolScaleCtx *scale_ctx,
                                               vertical_ctx->parts_row [1],
                                               vertical_ctx->parts_row [2],
                                               scale_ctx->width_out * 2);
+    if (scale_ctx->with_srgb)
+        to_srgb_row_128bpp (vertical_ctx->parts_row [2], scale_ctx->width_out);
     scale_ctx->pack_row_func (vertical_ctx->parts_row [2], row_out, scale_ctx->width_out);
 }
 
@@ -2464,6 +2517,8 @@ scale_outrow_box_128bpp (const SmolScaleCtx *scale_ctx,
                               scale_ctx->span_mul_y,
                               vertical_ctx->parts_row [1],
                               scale_ctx->width_out);
+    if (scale_ctx->with_srgb)
+        to_srgb_row_128bpp (vertical_ctx->parts_row [1], scale_ctx->width_out);
     scale_ctx->pack_row_func (vertical_ctx->parts_row [1], row_out, scale_ctx->width_out);
 }
 
@@ -2508,6 +2563,8 @@ scale_outrow_one_128bpp (const SmolScaleCtx *scale_ctx,
         vertical_ctx->in_ofs = 0;
     }
 
+    if (scale_ctx->with_srgb)
+        to_srgb_row_128bpp (vertical_ctx->parts_row [0], scale_ctx->width_out);
     scale_ctx->pack_row_func (vertical_ctx->parts_row [0], row_out, scale_ctx->width_out);
 }
 
@@ -2522,6 +2579,8 @@ scale_outrow_copy (const SmolScaleCtx *scale_ctx,
                       inrow_ofs_to_pointer (scale_ctx, row_index),
                       vertical_ctx->parts_row [0]);
 
+    if (scale_ctx->with_srgb)
+        to_srgb_row_128bpp (vertical_ctx->parts_row [0], scale_ctx->width_out);
     scale_ctx->pack_row_func (vertical_ctx->parts_row [0], row_out, scale_ctx->width_out);
 }
 
