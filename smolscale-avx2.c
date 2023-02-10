@@ -1954,7 +1954,7 @@ interp_vertical_bilinear_add_128bpp (uint64_t F,
         m3 = _mm256_load_si256 ((const __m256i *) bottom_row_parts_in);
         bottom_row_parts_in += 4;
         o0 = _mm256_load_si256 ((const __m256i *) accum_out);
-        o1 = _mm256_load_si256 ((const __m256i *) accum_out + 4);
+        o1 = _mm256_load_si256 ((const __m256i *) (accum_out + 4));
 
         m0 = _mm256_sub_epi32 (m0, m1);
         m2 = _mm256_sub_epi32 (m2, m3);
