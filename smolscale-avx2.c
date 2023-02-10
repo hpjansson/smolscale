@@ -78,59 +78,6 @@ to_srgb_row_128bpp (uint64_t * SMOL_RESTRICT row_parts_inout,
 
 /* --- Premultiplication --- */
 
-#define INVERTED_DIV_SHIFT 21
-#define INVERTED_DIV_ROUNDING (1U << (INVERTED_DIV_SHIFT - 1))
-#define INVERTED_DIV_ROUNDING_128BPP \
-    (((uint64_t) INVERTED_DIV_ROUNDING << 32) | INVERTED_DIV_ROUNDING)
-
-/* This table is used to divide by an integer [1..255] using only a lookup,
- * multiplication and a shift. This is faster than plain division on most
- * architectures.
- *
- * Each entry represents the integer 2097152 (1 << 21) divided by the index
- * of the entry. Consequently,
- *
- * (v / i) ~= (v * inverted_div_table [i] + (1 << 20)) >> 21
- *
- * (1 << 20) is added for nearest rounding. It would've been nice to keep
- * this table in uint16_t, but alas, we need the extra bits for sufficient
- * precision. */
-static const uint32_t inverted_div_table [256] =
-{
-         0,2097152,1048576, 699051, 524288, 419430, 349525, 299593,
-    262144, 233017, 209715, 190650, 174763, 161319, 149797, 139810,
-    131072, 123362, 116508, 110376, 104858,  99864,  95325,  91181,
-     87381,  83886,  80660,  77672,  74898,  72316,  69905,  67650,
-     65536,  63550,  61681,  59919,  58254,  56680,  55188,  53773,
-     52429,  51150,  49932,  48771,  47663,  46603,  45590,  44620,
-     43691,  42799,  41943,  41121,  40330,  39569,  38836,  38130,
-     37449,  36792,  36158,  35545,  34953,  34380,  33825,  33288,
-     32768,  32264,  31775,  31301,  30840,  30394,  29959,  29537,
-     29127,  28728,  28340,  27962,  27594,  27236,  26887,  26546,
-     26214,  25891,  25575,  25267,  24966,  24672,  24385,  24105,
-     23831,  23564,  23302,  23046,  22795,  22550,  22310,  22075,
-     21845,  21620,  21400,  21183,  20972,  20764,  20560,  20361,
-     20165,  19973,  19784,  19600,  19418,  19240,  19065,  18893,
-     18725,  18559,  18396,  18236,  18079,  17924,  17772,  17623,
-     17476,  17332,  17190,  17050,  16913,  16777,  16644,  16513,
-     16384,  16257,  16132,  16009,  15888,  15768,  15650,  15534,
-     15420,  15308,  15197,  15087,  14980,  14873,  14769,  14665,
-     14564,  14463,  14364,  14266,  14170,  14075,  13981,  13888,
-     13797,  13707,  13618,  13530,  13443,  13358,  13273,  13190,
-     13107,  13026,  12945,  12866,  12788,  12710,  12633,  12558,
-     12483,  12409,  12336,  12264,  12193,  12122,  12053,  11984,
-     11916,  11848,  11782,  11716,  11651,  11586,  11523,  11460,
-     11398,  11336,  11275,  11215,  11155,  11096,  11038,  10980,
-     10923,  10866,  10810,  10755,  10700,  10645,  10592,  10538,
-     10486,  10434,  10382,  10331,  10280,  10230,  10180,  10131,
-     10082,  10034,   9986,   9939,   9892,   9846,   9800,   9754,
-      9709,   9664,   9620,   9576,   9533,   9489,   9447,   9404,
-      9362,   9321,   9279,   9239,   9198,   9158,   9118,   9079,
-      9039,   9001,   8962,   8924,   8886,   8849,   8812,   8775,
-      8738,   8702,   8666,   8630,   8595,   8560,   8525,   8490,
-      8456,   8422,   8389,   8355,   8322,   8289,   8257,   8224,
-};
-
 /* Masking and shifting out the results is left to the caller. In
  * and out may not overlap. */
 static SMOL_INLINE void
@@ -138,9 +85,9 @@ unpremul_i_to_u_128bpp (const uint64_t * SMOL_RESTRICT in,
                         uint64_t * SMOL_RESTRICT out,
                         uint8_t alpha)
 {
-    out [0] = ((in [0] * (uint64_t) inverted_div_table [alpha]
+    out [0] = ((in [0] * (uint64_t) inverted_div_lut [alpha]
                 + INVERTED_DIV_ROUNDING_128BPP) >> INVERTED_DIV_SHIFT);
-    out [1] = ((in [1] * (uint64_t) inverted_div_table [alpha]
+    out [1] = ((in [1] * (uint64_t) inverted_div_lut [alpha]
                 + INVERTED_DIV_ROUNDING_128BPP) >> INVERTED_DIV_SHIFT);
 }
 
@@ -149,9 +96,9 @@ unpremul_p_to_u_128bpp (const uint64_t * SMOL_RESTRICT in,
                         uint64_t * SMOL_RESTRICT out,
                         uint8_t alpha)
 {
-    out [0] = (((in [0] << 8) * (uint64_t) inverted_div_table [alpha])
+    out [0] = (((in [0] << 8) * (uint64_t) inverted_div_lut [alpha])
                >> INVERTED_DIV_SHIFT);
-    out [1] = (((in [1] << 8) * (uint64_t) inverted_div_table [alpha])
+    out [1] = (((in [1] << 8) * (uint64_t) inverted_div_lut [alpha])
                >> INVERTED_DIV_SHIFT);
 }
 
@@ -766,7 +713,7 @@ pack_8x_123a_i_to_xxxx_u_128bpp (const uint64_t * SMOL_RESTRICT *in,
         m04 = _mm256_blend_epi32 (m05, m07, SMOL_8X1BIT (0, 0, 1, 1, 0, 0, 1, 1));
         m04 = _mm256_srli_epi32 (m04, 8);
         m04 = _mm256_and_si256 (m04, alpha_clean_mask);
-        m04 = _mm256_i32gather_epi32 ((const void *) inverted_div_table, m04, 4);
+        m04 = _mm256_i32gather_epi32 ((const void *) inverted_div_lut, m04, 4);
 
         /* 2 pixels times 4 */
 

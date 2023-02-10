@@ -379,11 +379,6 @@ to_srgb_row_128bpp (uint64_t * SMOL_RESTRICT row_parts_inout,
 
 /* --- Premultiplication --- */
 
-#define INVERTED_DIV_SHIFT 21
-#define INVERTED_DIV_ROUNDING (1U << (INVERTED_DIV_SHIFT - 1))
-#define INVERTED_DIV_ROUNDING_128BPP \
-    (((uint64_t) INVERTED_DIV_ROUNDING << 32) | INVERTED_DIV_ROUNDING)
-
 /* This table is used to divide by an integer [1..255] using only a lookup,
  * multiplication and a shift. This is faster than plain division on most
  * architectures.
@@ -396,7 +391,7 @@ to_srgb_row_128bpp (uint64_t * SMOL_RESTRICT row_parts_inout,
  * (1 << 20) is added for nearest rounding. It would've been nice to keep
  * this table in uint16_t, but alas, we need the extra bits for sufficient
  * precision. */
-static const uint32_t inverted_div_table [256] =
+const uint32_t inverted_div_lut [256] =
 {
          0,2097152,1048576, 699051, 524288, 419430, 349525, 299593,
     262144, 233017, 209715, 190650, 174763, 161319, 149797, 139810,
@@ -439,9 +434,9 @@ unpremul_i_to_u_128bpp (const uint64_t * SMOL_RESTRICT in,
                         uint64_t * SMOL_RESTRICT out,
                         uint8_t alpha)
 {
-    out [0] = ((in [0] * (uint64_t) inverted_div_table [alpha]
+    out [0] = ((in [0] * (uint64_t) inverted_div_lut [alpha]
                 + INVERTED_DIV_ROUNDING_128BPP) >> INVERTED_DIV_SHIFT);
-    out [1] = ((in [1] * (uint64_t) inverted_div_table [alpha]
+    out [1] = ((in [1] * (uint64_t) inverted_div_lut [alpha]
                 + INVERTED_DIV_ROUNDING_128BPP) >> INVERTED_DIV_SHIFT);
 }
 
@@ -450,9 +445,9 @@ unpremul_p_to_u_128bpp (const uint64_t * SMOL_RESTRICT in,
                         uint64_t * SMOL_RESTRICT out,
                         uint8_t alpha)
 {
-    out [0] = (((in [0] << 8) * (uint64_t) inverted_div_table [alpha])
+    out [0] = (((in [0] << 8) * (uint64_t) inverted_div_lut [alpha])
                >> INVERTED_DIV_SHIFT);
-    out [1] = (((in [1] << 8) * (uint64_t) inverted_div_table [alpha])
+    out [1] = (((in [1] << 8) * (uint64_t) inverted_div_lut [alpha])
                >> INVERTED_DIV_SHIFT);
 }
 
