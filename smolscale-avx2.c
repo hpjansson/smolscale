@@ -1414,6 +1414,9 @@ interp_horizontal_bilinear_##n_halvings##h_128bpp (const SmolScaleCtx *scale_ctx
 {                                                                       \
     const uint16_t * SMOL_RESTRICT ofs_x = scale_ctx->offsets_x;        \
     uint64_t *row_parts_out_max = row_parts_out + scale_ctx->width_out * 2; \
+    const __m256i mask256 = _mm256_set_epi32 (                          \
+        0x00ffffff, 0x00ffffff, 0x00ffffff, 0x00ffffff,                 \
+        0x00ffffff, 0x00ffffff, 0x00ffffff, 0x00ffffff);                \
     const __m128i mask128 = _mm_set_epi32 (                             \
         0x00ffffff, 0x00ffffff, 0x00ffffff, 0x00ffffff);                \
     const __m256i zero256 = _mm256_setzero_si256 ();                    \
@@ -1448,7 +1451,7 @@ interp_horizontal_bilinear_##n_halvings##h_128bpp (const SmolScaleCtx *scale_ctx
             factors = _mm256_set_m128i (n5, n4);                        \
             factors = _mm256_blend_epi16 (factors, zero256, 0xaa);      \
                                                                         \
-            m0 = LERP_SIMD256_EPI32 (m0, m1, factors);                  \
+            m0 = LERP_SIMD256_EPI32_AND_MASK (m0, m1, factors, mask256); \
             a0 = _mm256_add_epi32 (a0, m0);                             \
         }                                                               \
                                                                         \
