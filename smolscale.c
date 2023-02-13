@@ -1181,8 +1181,8 @@ unpack_pixel_123_p_to_123a_p_128bpp (const uint8_t *in,
 
 static void
 unpack_row_123_p_to_123a_p_128bpp (const uint8_t * SMOL_RESTRICT row_in,
-                                    uint64_t * SMOL_RESTRICT row_out,
-                                    uint32_t n_pixels)
+                                   uint64_t * SMOL_RESTRICT row_out,
+                                   uint32_t n_pixels)
 {
     uint64_t *row_out_max = row_out + n_pixels * 2;
 
