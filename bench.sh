@@ -46,7 +46,7 @@ TESTS_AVAILABLE="\
 10-16383-16383-0.0001-0.1-100
 "
 
-LD_LIBRARY_PATH="skia/out/Shared"
+export LD_LIBRARY_PATH="$PWD/skia/out/Shared"
 
 rm -Rf results
 mkdir -p results
