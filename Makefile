@@ -58,7 +58,7 @@ clean: FORCE
 	rm -f test $(SMOL_OBJ) $(SKIA_OBJ)
 
 test: Makefile smolscale.h stb_image_resize.h $(TEST_SRC) $(SMOL_OBJ) $(SKIA_OBJ)
-	$(CC) $(TEST_CFLAGS) $(TEST_LDFLAGS) $(TEST_SYSDEPS_FLAGS) $(SMOL_OBJ) $(TEST_SRC) -o test
+	$(CC) $(TEST_SRC) $(TEST_CFLAGS) $(TEST_LDFLAGS) $(TEST_SYSDEPS_FLAGS) $(SMOL_OBJ) -o test
 
 verify: Makefile smolscale.h $(VERIFY_SRC) $(SMOL_OBJ)
 	$(CC) $(VERIFY_CFLAGS) $(VERIFY_LDFLAGS) $(SMOL_OBJ) $(VERIFY_SRC) -o verify
