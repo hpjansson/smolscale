@@ -19,7 +19,10 @@ TESTNAME_smolscale_mt="smol-mt"
 TESTNAME_stb="stb"
 
 UNITS=" \
+gdkpixbuf
 libswscale
+pixman
+stb
 smolscale
 smolscale_mt
 "
