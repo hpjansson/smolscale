@@ -265,6 +265,52 @@ to_srgb_pixel_xxxa_128bpp (uint64_t * SMOL_RESTRICT pixel_inout)
         | (part & 0xffffffff);
 }
 
+/* --- DEPRECATED --- */
+
+static void
+from_srgb_row_128bpp (uint64_t * SMOL_RESTRICT row_parts_inout,
+                      uint32_t n_pixels)
+{
+    uint64_t *row_parts_inout_max = row_parts_inout + n_pixels * 2;
+
+    SMOL_ASSUME_ALIGNED (row_parts_inout, uint64_t *);
+
+    while (row_parts_inout != row_parts_inout_max)
+    {
+        uint64_t part = *row_parts_inout;
+        *(row_parts_inout++) =
+            (part & 0xffffffff00000000)
+            | smol_from_srgb_lut [part & 0xff];
+
+        part = *row_parts_inout;
+        *(row_parts_inout++) =
+            ((uint64_t) smol_from_srgb_lut [part >> 32] << 32)
+            | smol_from_srgb_lut [part & 0xff];
+    }
+}
+
+static void
+to_srgb_row_128bpp (uint64_t * SMOL_RESTRICT row_parts_inout,
+                    uint32_t n_pixels)
+{
+    uint64_t *row_parts_inout_max = row_parts_inout + n_pixels * 2;
+
+    SMOL_ASSUME_ALIGNED (row_parts_inout, uint64_t *);
+
+    while (row_parts_inout != row_parts_inout_max)
+    {
+        uint64_t part = *row_parts_inout;
+        *(row_parts_inout++) =
+            (part & 0xffffffff00000000)
+            | smol_to_srgb_lut [part & 0xffff];
+
+        part = *row_parts_inout;
+        *(row_parts_inout++) =
+            (((uint64_t) smol_to_srgb_lut [part >> 32]) << 32)
+            | smol_to_srgb_lut [part & 0xffff];
+    }
+}
+
 /* --- Premultiplication --- */
 
 /* This table is used to divide by an integer [1..255] using only a lookup,
