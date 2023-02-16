@@ -2614,11 +2614,11 @@ scale_outrow_one_128bpp (const SmolScaleCtx *scale_ctx,
                           vertical_ctx,
                           inrow_ofs_to_pointer (scale_ctx, 0),
                           vertical_ctx->parts_row [0]);
+        if (scale_ctx->with_srgb)
+            to_srgb_row_128bpp (vertical_ctx->parts_row [0], scale_ctx->width_out);
         vertical_ctx->in_ofs = 0;
     }
 
-    if (scale_ctx->with_srgb)
-        to_srgb_row_128bpp (vertical_ctx->parts_row [0], scale_ctx->width_out);
     scale_ctx->pack_row_func (vertical_ctx->parts_row [0], row_out, scale_ctx->width_out);
 }
 
