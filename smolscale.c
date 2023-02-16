@@ -1298,14 +1298,14 @@ unpack_row_123a_u_to_123a_i_128bpp (const uint32_t * SMOL_RESTRICT row_in,
 
 /* --- Filter helpers --- */
 
-static SMOL_INLINE const uint32_t *
+static SMOL_INLINE const char *
 inrow_ofs_to_pointer (const SmolScaleCtx *scale_ctx,
                       uint32_t inrow_ofs)
 {
     return scale_ctx->pixels_in + scale_ctx->rowstride_in * inrow_ofs;
 }
 
-static SMOL_INLINE uint32_t *
+static SMOL_INLINE char *
 outrow_ofs_to_pointer (const SmolScaleCtx *scale_ctx,
                        uint32_t outrow_ofs)
 {
@@ -1922,7 +1922,7 @@ interp_horizontal_copy_128bpp (const SmolScaleCtx *scale_ctx,
 static void
 scale_horizontal (const SmolScaleCtx *scale_ctx,
                   SmolVerticalCtx *vertical_ctx,
-                  const uint32_t *row_in,
+                  const char *row_in,
                   uint64_t *row_parts_out)
 {
     uint64_t * SMOL_RESTRICT unpacked_in;
@@ -1939,10 +1939,10 @@ scale_horizontal (const SmolScaleCtx *scale_ctx,
                 smol_alloc_aligned (scale_ctx->width_in * sizeof (uint32_t),
                                     &vertical_ctx->in_aligned_storage);
         memcpy (vertical_ctx->in_aligned, row_in, scale_ctx->width_in * sizeof (uint32_t));
-        row_in = vertical_ctx->in_aligned;
+        row_in = (const char *) vertical_ctx->in_aligned;
     }
 
-    scale_ctx->unpack_row_func (row_in,
+    scale_ctx->unpack_row_func ((const uint32_t *) row_in,
                                 unpacked_in,
                                 scale_ctx->width_in);
     if (scale_ctx->with_srgb)
@@ -2682,7 +2682,7 @@ do_rows (const SmolScaleCtx *scale_ctx,
     for (i = row_out_index; i < row_out_index + n_rows; i++)
     {
         scale_outrow (scale_ctx, &vertical_ctx, i, outrows_dest);
-        outrows_dest = (uint32_t *) outrows_dest + scale_ctx->rowstride_out;
+        outrows_dest = (char *) outrows_dest + scale_ctx->rowstride_out;
     }
 
     for (i = 0; i < n_stored_rows; i++)
@@ -3229,12 +3229,12 @@ smol_scale_init (SmolScaleCtx *scale_ctx,
     scale_ctx->pixel_type_in = pixel_type_in;
     scale_ctx->width_in = width_in;
     scale_ctx->height_in = height_in;
-    scale_ctx->rowstride_in = rowstride_in / sizeof (uint32_t);
+    scale_ctx->rowstride_in = rowstride_in;
     scale_ctx->pixels_out = pixels_out;
     scale_ctx->pixel_type_out = pixel_type_out;
     scale_ctx->width_out = width_out;
     scale_ctx->height_out = height_out;
-    scale_ctx->rowstride_out = rowstride_out / sizeof (uint32_t);
+    scale_ctx->rowstride_out = rowstride_out;
     scale_ctx->with_srgb = with_srgb;
 
     scale_ctx->post_row_func = post_row_func;

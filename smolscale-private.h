@@ -161,8 +161,8 @@ struct SmolScaleCtx
 {
     /* <private> */
 
-    const uint32_t *pixels_in;
-    uint32_t *pixels_out;
+    const char *pixels_in;
+    char *pixels_out;
     uint32_t width_in, height_in, rowstride_in;
     uint32_t width_out, height_out, rowstride_out;
 
