@@ -170,10 +170,12 @@ verify_ordering (void)
         {
             const PixelInfo *pinfo_out = &pixel_info [type_out_index];
 
-            fprintf (stdout, "%s -> %s: ", pinfo_in->channels, pinfo_out->channels);
-            fflush (stdout);
-
             populate_pixels (expected_output, pinfo_out->type, 65536);
+
+            /* Horizontal scale */
+
+            fprintf (stdout, "H %s -> %s: ", pinfo_in->channels, pinfo_out->channels);
+            fflush (stdout);
 
             smol_scale_simple ((const uint32_t *) input, pinfo_in->type, 16384, 1, 16384 * pinfo_in->n_channels,
                                (uint32_t *) output, pinfo_out->type, 16383, 1, 16383 * pinfo_out->n_channels,
@@ -188,10 +190,29 @@ verify_ordering (void)
             }
             else
             {
-                fprintf (stdout, "ok");
+                fprintf (stdout, "ok\n");
             }
 
-            fputc ('\n', stdout);
+            /* Vertical scale */
+
+            fprintf (stdout, "V %s -> %s: ", pinfo_in->channels, pinfo_out->channels);
+            fflush (stdout);
+
+            smol_scale_simple ((const uint32_t *) input, pinfo_in->type, 1, 16384, pinfo_in->n_channels,
+                               (uint32_t *) output, pinfo_out->type, 1, 16383, pinfo_out->n_channels,
+                               0);
+
+            if (fuzzy_compare_bytes (output, expected_output, 64, 2))
+            {
+                fprintf (stdout, "mismatch\n");
+                print_bytes (expected_output, 64, pinfo_out->n_channels);
+                print_bytes (output, 64, pinfo_out->n_channels);
+                result = 1;
+            }
+            else
+            {
+                fprintf (stdout, "ok\n");
+            }
         }
     }
 
