@@ -3259,7 +3259,8 @@ smol_scale_init (SmolScaleCtx *scale_ctx,
                                     + (scale_ctx->height_bilin_out + 1) * 2) * sizeof (uint16_t));
     scale_ctx->offsets_y = scale_ctx->offsets_x + (scale_ctx->width_bilin_out + 1) * 2;
 
-    if (scale_ctx->filter_h == SMOL_FILTER_ONE)
+    if (scale_ctx->filter_h == SMOL_FILTER_ONE
+        || scale_ctx->filter_h == SMOL_FILTER_COPY)
     {
     }
     else if (scale_ctx->filter_h == SMOL_FILTER_BOX)
@@ -3273,7 +3274,8 @@ smol_scale_init (SmolScaleCtx *scale_ctx,
                                 width_in, scale_ctx->width_bilin_out, FALSE);
     }
 
-    if (scale_ctx->filter_v == SMOL_FILTER_ONE)
+    if (scale_ctx->filter_v == SMOL_FILTER_ONE
+        || scale_ctx->filter_v == SMOL_FILTER_COPY)
     {
     }
     else if (scale_ctx->filter_v == SMOL_FILTER_BOX)
