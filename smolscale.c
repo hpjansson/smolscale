@@ -409,6 +409,14 @@ premul_u_to_p_64bpp (const uint64_t in,
     return ((in * ((uint16_t) alpha + 1)) >> 8) & 0x00ff00ff00ff00ff;
 }
 
+static SMOL_INLINE void
+premul_u_to_p_128bpp (uint64_t * SMOL_RESTRICT inout,
+                      uint8_t alpha)
+{
+    inout [0] = ((inout [0] * ((uint16_t) alpha + 1)) >> 8) & 0x00ffffff00ffffff;
+    inout [1] = ((inout [1] * ((uint16_t) alpha + 1)) >> 8) & 0x00ffffff00ffffff;
+}
+
 /* --- Packing --- */
 
 /* It's nice to be able to shift by a negative amount */
@@ -1046,6 +1054,23 @@ unpack_row_123a_p_to_123a_p_128bpp (const uint32_t * SMOL_RESTRICT row_in,
     }
 }
 
+static void
+unpack_row_123a_p_to_123a_pl_128bpp (const uint32_t * SMOL_RESTRICT row_in,
+                                     uint64_t * SMOL_RESTRICT row_out,
+                                     uint32_t n_pixels)
+{
+    uint64_t *row_out_max = row_out + n_pixels * 2;
+
+    SMOL_ASSUME_ALIGNED (row_out, uint64_t *);
+
+    while (row_out != row_out_max)
+    {
+        unpack_pixel_123a_p_to_123a_p_128bpp (*(row_in++), row_out);
+        from_srgb_pixel_xxxa_128bpp (row_out);
+        row_out += 2;
+    }
+}
+
 static SMOL_INLINE void
 unpack_pixel_a234_p_to_234a_p_128bpp (uint32_t p,
                                       uint64_t *out)
@@ -1071,6 +1096,23 @@ unpack_row_a234_p_to_234a_p_128bpp (const uint32_t * SMOL_RESTRICT row_in,
     }
 }
 
+static void
+unpack_row_a234_p_to_234a_pl_128bpp (const uint32_t * SMOL_RESTRICT row_in,
+                                     uint64_t * SMOL_RESTRICT row_out,
+                                     uint32_t n_pixels)
+{
+    uint64_t *row_out_max = row_out + n_pixels * 2;
+
+    SMOL_ASSUME_ALIGNED (row_out, uint64_t *);
+
+    while (row_out != row_out_max)
+    {
+        unpack_pixel_a234_p_to_234a_p_128bpp (*(row_in++), row_out);
+        from_srgb_pixel_xxxa_128bpp (row_out);
+        row_out += 2;
+    }
+}
+
 static SMOL_INLINE void
 unpack_pixel_123_p_to_123a_p_128bpp (const uint8_t *in,
                                      uint64_t *out)
@@ -1091,6 +1133,31 @@ unpack_row_123_p_to_123a_p_128bpp (const uint8_t * SMOL_RESTRICT row_in,
     while (row_out != row_out_max)
     {
         unpack_pixel_123_p_to_123a_p_128bpp (row_in, row_out);
+        row_in += 3;
+        row_out += 2;
+    }
+}
+
+static SMOL_INLINE void
+unpack_pixel_123_p_to_123a_pl_128bpp (const uint8_t *in,
+                                      uint64_t *out)
+{
+    unpack_pixel_123_p_to_123a_p_128bpp (in, out);
+    from_srgb_pixel_xxxa_128bpp (out);
+}
+
+static void
+unpack_row_123_p_to_123a_pl_128bpp (const uint8_t * SMOL_RESTRICT row_in,
+                                    uint64_t * SMOL_RESTRICT row_out,
+                                    uint32_t n_pixels)
+{
+    uint64_t *row_out_max = row_out + n_pixels * 2;
+
+    SMOL_ASSUME_ALIGNED (row_out, uint64_t *);
+
+    while (row_out != row_out_max)
+    {
+        unpack_pixel_123_p_to_123a_pl_128bpp (row_in, row_out);
         row_in += 3;
         row_out += 2;
     }
@@ -1150,6 +1217,44 @@ unpack_row_a234_u_to_234a_p_128bpp (const uint32_t * SMOL_RESTRICT row_in,
     }
 }
 
+static SMOL_INLINE void
+unpack_pixel_a234_u_to_234a_pl_128bpp (uint32_t p,
+                                       uint64_t *out)
+{
+    uint64_t p64 = p;
+    uint8_t alpha = p >> 24;
+
+    /* FIXME: It should be possible to improve this by packing three channels in
+     * 64 bits (alpha is not needed). Each channel needs 12 bits (for srgb) plus
+     * 8 bits (for premul) = 20 bits. Times three makes 60 bits. This allows us
+     * to do premul with a single 64-bit operation. Then we shift things out into
+     * 128bpp and merge alpha back in afterwards. */
+
+    out [0] = ((p64 & 0x00ff0000) << 16) | ((p64 & 0x0000ff00) >> 8);
+    out [1] = ((p64 & 0x000000ff) << 32);
+
+    from_srgb_pixel_xxxa_128bpp (out);
+    premul_u_to_p_128bpp (out, alpha);
+
+    out [1] |= (uint64_t) alpha;
+}
+
+static void
+unpack_row_a234_u_to_234a_pl_128bpp (const uint32_t * SMOL_RESTRICT row_in,
+                                     uint64_t * SMOL_RESTRICT row_out,
+                                     uint32_t n_pixels)
+{
+    uint64_t *row_out_max = row_out + n_pixels * 2;
+
+    SMOL_ASSUME_ALIGNED (row_out, uint64_t *);
+
+    while (row_out != row_out_max)
+    {
+        unpack_pixel_a234_u_to_234a_pl_128bpp (*(row_in++), row_out);
+        row_out += 2;
+    }
+}
+
 /* Unpack u (alpha first) -> i */
 
 static SMOL_INLINE void
@@ -1175,6 +1280,39 @@ unpack_row_a234_u_to_234a_i_128bpp (const uint32_t * SMOL_RESTRICT row_in,
     while (row_out != row_out_max)
     {
         unpack_pixel_a234_u_to_234a_i_128bpp (*(row_in++), row_out);
+        row_out += 2;
+    }
+}
+
+static SMOL_INLINE void
+unpack_pixel_a234_u_to_234a_il_128bpp (uint32_t p,
+                                       uint64_t *out)
+{
+    uint64_t p64 = p;
+    uint64_t alpha = p >> 24;
+
+    out [0] = ((p64 & 0x00ff0000) << 16) | ((p64 & 0x0000ff00) >> 8);
+    out [1] = ((p64 & 0x000000ff) << 32);
+
+    from_srgb_pixel_xxxa_128bpp (out);
+    out [0] *= alpha;
+    out [1] *= alpha;
+
+    out [1] |= (alpha << 8) | 0x80;
+}
+
+static void
+unpack_row_a234_u_to_234a_il_128bpp (const uint32_t * SMOL_RESTRICT row_in,
+                                     uint64_t * SMOL_RESTRICT row_out,
+                                     uint32_t n_pixels)
+{
+    uint64_t *row_out_max = row_out + n_pixels * 2;
+
+    SMOL_ASSUME_ALIGNED (row_out, uint64_t *);
+
+    while (row_out != row_out_max)
+    {
+        unpack_pixel_a234_u_to_234a_il_128bpp (*(row_in++), row_out);
         row_out += 2;
     }
 }
@@ -1233,6 +1371,44 @@ unpack_row_123a_u_to_123a_p_128bpp (const uint32_t * SMOL_RESTRICT row_in,
     }
 }
 
+static SMOL_INLINE void
+unpack_pixel_123a_u_to_123a_pl_128bpp (uint32_t p,
+                                       uint64_t *out)
+{
+    uint64_t p64 = p;
+    uint8_t alpha = p & 0xff;
+
+    /* FIXME: It should be possible to improve this by packing three channels in
+     * 64 bits (alpha is not needed). Each channel needs 12 bits (for srgb) plus
+     * 8 bits (for premul) = 20 bits. Times three makes 60 bits. This allows us
+     * to do premul with a single 64-bit operation. Then we shift things out into
+     * 128bpp and merge alpha back in afterwards. */
+
+    out [0] = ((p64 & 0xff000000) << 8) | ((p64 & 0x00ff0000) >> 16);
+    out [1] = ((p64 & 0x0000ff00) << 24);
+
+    from_srgb_pixel_xxxa_128bpp (out);
+    premul_u_to_p_128bpp (out, alpha);
+
+    out [1] |= alpha;
+}
+
+static void
+unpack_row_123a_u_to_123a_pl_128bpp (const uint32_t * SMOL_RESTRICT row_in,
+                                     uint64_t * SMOL_RESTRICT row_out,
+                                     uint32_t n_pixels)
+{
+    uint64_t *row_out_max = row_out + n_pixels * 2;
+
+    SMOL_ASSUME_ALIGNED (row_out, uint64_t *);
+
+    while (row_out != row_out_max)
+    {
+        unpack_pixel_123a_u_to_123a_pl_128bpp (*(row_in++), row_out);
+        row_out += 2;
+    }
+}
+
 /* Unpack u (alpha last) -> i */
 
 static SMOL_INLINE void
@@ -1258,6 +1434,39 @@ unpack_row_123a_u_to_123a_i_128bpp (const uint32_t * SMOL_RESTRICT row_in,
     while (row_out != row_out_max)
     {
         unpack_pixel_123a_u_to_123a_i_128bpp (*(row_in++), row_out);
+        row_out += 2;
+    }
+}
+
+static SMOL_INLINE void
+unpack_pixel_123a_u_to_123a_il_128bpp (uint32_t p,
+                                       uint64_t *out)
+{
+    uint64_t p64 = p;
+    uint64_t alpha = p & 0xff;
+
+    out [0] = ((p64 & 0xff000000) << 8) | ((p64 & 0x00ff0000) >> 16);
+    out [1] = ((p64 & 0x0000ff00) << 24);
+
+    from_srgb_pixel_xxxa_128bpp (out);
+    out [0] *= alpha;
+    out [1] *= alpha;
+
+    out [1] |= (alpha << 8) | 0x80;
+}
+
+static void
+unpack_row_123a_u_to_123a_il_128bpp (const uint32_t * SMOL_RESTRICT row_in,
+                                     uint64_t * SMOL_RESTRICT row_out,
+                                     uint32_t n_pixels)
+{
+    uint64_t *row_out_max = row_out + n_pixels * 2;
+
+    SMOL_ASSUME_ALIGNED (row_out, uint64_t *);
+
+    while (row_out != row_out_max)
+    {
+        unpack_pixel_123a_u_to_123a_il_128bpp (*(row_in++), row_out);
         row_out += 2;
     }
 }
