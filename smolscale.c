@@ -267,6 +267,7 @@ to_srgb_pixel_xxxa_128bpp (uint64_t * SMOL_RESTRICT pixel_inout)
 
 /* --- DEPRECATED --- */
 
+/* FIXME: Fails with internally premultiplied (16-bit values) */
 static void
 from_srgb_row_128bpp (uint64_t * SMOL_RESTRICT row_parts_inout,
                       uint32_t n_pixels)
