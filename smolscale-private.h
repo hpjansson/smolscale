@@ -79,8 +79,11 @@ typedef unsigned int SmolBool;
 
 typedef enum
 {
+    SMOL_STORAGE_24BPP,
+    SMOL_STORAGE_32BPP,
     SMOL_STORAGE_64BPP,
     SMOL_STORAGE_128BPP,
+
     SMOL_STORAGE_MAX
 }
 SmolStorageType;
@@ -102,6 +105,64 @@ typedef enum
 }
 SmolFilterType;
 
+typedef enum
+{
+    SMOL_REORDER_1234_TO_1234,
+
+    SMOL_REORDER_1234_TO_2341,
+    SMOL_REORDER_1234_TO_3214,
+    SMOL_REORDER_1234_TO_4123,
+    SMOL_REORDER_1234_TO_4321,
+    SMOL_REORDER_1234_TO_123,
+    SMOL_REORDER_1234_TO_321,
+    SMOL_REORDER_123_TO_1234,
+
+    SMOL_REORDER_1234_TO_1324,
+    SMOL_REORDER_1234_TO_2314,
+    SMOL_REORDER_1234_TO_4132,
+    SMOL_REORDER_1234_TO_4231,
+    SMOL_REORDER_1234_TO_132,
+    SMOL_REORDER_1234_TO_231,
+    SMOL_REORDER_123_TO_1324,
+
+    SMOL_REORDER_MAX
+}
+SmolReorderType;
+
+typedef enum
+{
+    SMOL_ALPHA_UNASSOCIATED,
+    SMOL_ALPHA_PREMULTIPLIED,
+    SMOL_ALPHA_UPMULTIPLIED,
+
+    SMOL_ALPHA_MAX
+}
+SmolAlphaType;
+
+typedef enum
+{
+    SMOL_GAMMA_SRGB_COMPRESSED,
+    SMOL_GAMMA_SRGB_LINEAR,
+
+    SMOL_GAMMA_MAX
+}
+SmolGammaType;
+
+typedef struct
+{
+    unsigned char src [4];
+    unsigned char dest [4];
+}
+SmolReorderMeta;
+
+typedef struct
+{
+    unsigned char storage;
+    unsigned char alpha;
+    unsigned char order [4];
+}
+SmolPixelTypeMeta;
+
 /* For reusing rows that have already undergone horizontal scaling */
 typedef struct
 {
@@ -119,6 +180,9 @@ typedef void (SmolUnpackRowFunc) (const uint32_t *row_in,
 typedef void (SmolPackRowFunc) (const uint64_t *row_in,
                                 uint32_t *row_out,
                                 uint32_t n_pixels);
+typedef void (SmolRepackRowFunc) (const void *row_in,
+                                  void *row_out,
+                                  uint32_t n_pixels);
 typedef void (SmolHFilterFunc) (const SmolScaleCtx *scale_ctx,
                                 const uint64_t *row_limbs_in,
                                 uint64_t *row_limbs_out);
@@ -126,6 +190,38 @@ typedef void (SmolVFilterFunc) (const SmolScaleCtx *scale_ctx,
                                 SmolVerticalCtx *vertical_ctx,
                                 uint32_t outrow_index,
                                 uint32_t *row_out);
+
+#define SMOL_REPACK_META(order_in, storage_in, alpha_in, gamma_in,      \
+                         order_out, storage_out, alpha_out, gamma_out)  \
+    { (((SMOL_REORDER_##order_in##_TO_##order_out) << 10)               \
+       | ((SMOL_STORAGE_##storage_in##BPP) << 8) | ((SMOL_ALPHA_##alpha_in) << 6) \
+       | ((SMOL_GAMMA_SRGB_##gamma_in) << 5)                            \
+       | ((SMOL_STORAGE_##storage_out##BPP) << 3) | ((SMOL_ALPHA_##alpha_out) << 1) \
+       | ((SMOL_GAMMA_SRGB_##gamma_out) << 0)), \
+    (SmolRepackRowFunc *) repack_row_##order_in##_##storage_in##_##alpha_in##_##gamma_in##_to_##order_out##_##storage_out##_##alpha_out##_##gamma_out }
+
+#define SMOL_REPACK_META_LAST { 0xffff, NULL }
+
+typedef struct
+{
+    uint16_t signature;
+    SmolRepackRowFunc *repack_row_func;
+}
+SmolRepackMeta;
+
+#define SMOL_REPACK_ROW_DEF(order_in, storage_in, limb_bits_in, alpha_in, gamma_in, \
+                            order_out, storage_out, limb_bits_out, alpha_out, gamma_out) \
+    static void repack_row_##order_in##_##storage_in##_##alpha_in##_##gamma_in##_to_##order_out##_##storage_out##_##alpha_out##_##gamma_out \
+    (const uint##limb_bits_in##_t * SMOL_RESTRICT row_in,               \
+     uint##limb_bits_out##_t * SMOL_RESTRICT row_out,                   \
+     uint32_t n_pixels)                                                 \
+    {                                                                   \
+        uint##limb_bits_out##_t *row_out_max = row_out + n_pixels * (storage_out / limb_bits_out); \
+        SMOL_ASSUME_ALIGNED_TO (row_in, uint##limb_bits_in##_t *, limb_bits_in / 8); \
+        SMOL_ASSUME_ALIGNED_TO (row_out, uint##limb_bits_out##_t *, limb_bits_out / 8);
+
+#define SMOL_REPACK_ROW_DEF_END }
+
 
 #define SMOL_CONV_UNDEFINED { 0, NULL, NULL }
 #define SMOL_CONV(un_from_order, un_from_type, un_to_order, un_to_type, pk_from_order, pk_from_type, pk_to_order, pk_to_type, storage_bits) \
