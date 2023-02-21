@@ -4,8 +4,8 @@
 CC=gcc
 CXX=g++
 
-# Set this to 'yes', without the quotes, to build AVX2 optimized
-# backend for Smolscale, 'no' otherwise. The backend supplements the
+# Set this to 'yes', without the quotes, to build the AVX2 optimized
+# backend for Smolscale, 'no' otherwise. This backend supplements the
 # generic one and will only be used if CPU support is detected
 # at runtime.
 WITH_AVX2=yes
