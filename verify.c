@@ -5,6 +5,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "smolscale.h"
 
 #define N_MOD_STEPS 16
@@ -159,9 +160,6 @@ verify_ordering_dir (const unsigned char *input, int n_in, const PixelInfo *pinf
 {
     int result = 0;
 
-    fprintf (stdout, "%c %s -> %s: ", dir ? 'V' : 'H', pinfo_in->channels, pinfo_out->channels);
-    fflush (stdout);
-
     if (dir)
         smol_scale_simple (input, pinfo_in->type, 1, n_in, pinfo_in->n_channels,
                            output, pinfo_out->type, 1, n_out, pinfo_out->n_channels,
@@ -173,19 +171,20 @@ verify_ordering_dir (const unsigned char *input, int n_in, const PixelInfo *pinf
 
     if (fuzzy_compare_bytes (output, expected_output, 64, 2))
     {
+        fprintf (stdout, "%c %s -> %s: ", dir ? 'V' : 'H', pinfo_in->channels, pinfo_out->channels);
         fprintf (stdout, "mismatch\n");
         print_bytes (expected_output, 64, pinfo_out->n_channels);
         print_bytes (output, 64, pinfo_out->n_channels);
         result = 1;
     }
-    else
-    {
-        fprintf (stdout, "ok\n");
-    }
 
     return result;
 }
 
+/* FIXME: This does not verify the 128bpp pathways. In order to do that, we have
+ * to scale the image by a lot, and then we wouldn't be able to verify that the
+ * pixels are assessed in the right order. The pixels may be out of order if
+ * there's an error in SIMD code. */
 static int
 verify_ordering (void)
 {
@@ -194,6 +193,9 @@ verify_ordering (void)
     unsigned char expected_output [65536];
     int type_in_index, type_out_index;
     int result = 0;
+
+    fprintf (stdout, "Ordering: ");
+    fflush (stdout);
 
     for (type_in_index = 0; pixel_info [type_in_index].type != SMOL_PIXEL_MAX; type_in_index++)
     {
@@ -215,6 +217,9 @@ verify_ordering (void)
                                                dir);
         }
     }
+
+    if (!result)
+        fprintf (stdout, "ok\n");
 
     return result;
 }
@@ -295,6 +300,98 @@ verify_unassociated_alpha (void)
     return result;
 }
 
+static int
+verify_saturation_dir (const unsigned char *input, int n_in, const PixelInfo *pinfo_in,
+                       unsigned char *output, int n_out, const PixelInfo *pinfo_out,
+                       int dir, int with_srgb)
+{
+    int result = 0;
+    unsigned char c = 0xff;
+    int i;
+
+    if (dir)
+        smol_scale_simple (input, pinfo_in->type, 1, n_in, pinfo_in->n_channels,
+                           output, pinfo_out->type, 1, n_out, pinfo_out->n_channels,
+                           with_srgb);
+    else
+        smol_scale_simple (input, pinfo_in->type, n_in, 1, n_in * pinfo_in->n_channels,
+                           output, pinfo_out->type, n_out, 1, n_out * pinfo_out->n_channels,
+                           with_srgb);
+
+    for (i = 0; i < n_out * pinfo_out->n_channels; i++)
+        c &= output [i];
+
+    if (c != 0xff)
+    {
+        fprintf (stdout, "%c %s%s (%d) -> %s (%d): ",
+                 dir ? 'V' : 'H',
+                 with_srgb ? "sRGB " : " ",
+                 pinfo_in->channels, n_in,
+                 pinfo_out->channels, n_out);
+        fprintf (stdout, "mismatch\n");
+        result = 1;
+    }
+
+    return result;
+}
+
+static int
+verify_saturation (void)
+{
+    unsigned char input [65536 * 4];
+    unsigned char output [65536 * 4];
+    int type_in_index, type_out_index;
+    int result = 0;
+
+    fprintf (stdout, "Saturation: ");
+    fflush (stdout);
+
+    memset (input, 0xff, sizeof (input));
+
+    for (type_in_index = 0; pixel_info [type_in_index].type != SMOL_PIXEL_MAX; type_in_index++)
+    {
+        const PixelInfo *pinfo_in = &pixel_info [type_in_index];
+
+        for (type_out_index = 0; pixel_info [type_out_index].type != SMOL_PIXEL_MAX; type_out_index++)
+        {
+            const PixelInfo *pinfo_out = &pixel_info [type_out_index];
+            int dir;
+
+            fprintf (stdout, "%s -> %s\n", pinfo_in->channels, pinfo_out->channels);
+            fflush (stdout);
+
+            for (dir = 0; dir <= 1; dir++)
+            {
+                int with_srgb;
+
+                for (with_srgb = 0; with_srgb <= 1; with_srgb++)
+                {
+                    result |= verify_saturation_dir (input, 1, pinfo_in,
+                                                     output, 65535, pinfo_out,
+                                                     dir, with_srgb);
+                    result |= verify_saturation_dir (input, 2, pinfo_in,
+                                                     output, 65535, pinfo_out,
+                                                     dir, with_srgb);
+                    result |= verify_saturation_dir (input, 65534, pinfo_in,
+                                                     output, 65535, pinfo_out,
+                                                     dir, with_srgb);
+                    result |= verify_saturation_dir (input, 65535, pinfo_in,
+                                                     output, 1, pinfo_out,
+                                                     dir, with_srgb);
+                    result |= verify_saturation_dir (input, 65535, pinfo_in,
+                                                     output, 65534, pinfo_out,
+                                                     dir, with_srgb);
+                }
+            }
+        }
+    }
+
+    if (!result)
+        fprintf (stdout, "ok\n");
+
+    return result;
+}
+
 int
 main (int argc, char *argv [])
 {
@@ -302,6 +399,7 @@ main (int argc, char *argv [])
 
     result += verify_ordering ();
     result += verify_unassociated_alpha ();
+    result += verify_saturation ();
 
     return result;
 }
