@@ -5,6 +5,7 @@
 #include <math.h>  /* stb_image_resize needs pow() */
 #include <sys/random.h>
 #include <glib.h>
+#include <glib/gprintf.h>
 #include <pixman.h>
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include <SDL/SDL_rotozoom.h> /* zoomSurface() from SDL_gfx */
@@ -51,7 +52,6 @@ ScaleParams;
 
 typedef enum
 {
-    SCALE_OP_BENCHMARK,
     SCALE_OP_BENCHMARK_PROP,
     SCALE_OP_CHECK,
     SCALE_OP_GENERATE
@@ -173,6 +173,201 @@ unpremultiply_alpha (guint32 *pixels, guint width, guint height)
 }
 
 #endif
+
+/* --- Benchmarking support --- */
+
+typedef struct
+{
+    gint width_in, height_in;
+    gint width_out, height_out;
+    gdouble elapsed_s;
+}
+Sample;
+
+typedef struct
+{
+    GArray *samples;
+}
+Benchmark;
+
+static gdouble
+sample_get_pps (const Sample *sample)
+{
+    return (sample->width_out * (gdouble) sample->height_out
+            + sample->width_in * (gdouble) sample->height_in) / sample->elapsed_s;
+}
+
+static Benchmark *
+benchmark_new (void)
+{
+    Benchmark *benchmark;
+
+    benchmark = g_new0 (Benchmark, 1);
+    benchmark->samples = g_array_new (FALSE, FALSE, sizeof (Sample));
+
+    return benchmark;
+}
+
+static void
+benchmark_destroy (Benchmark *benchmark)
+{
+    g_array_free (benchmark->samples, TRUE);
+}
+
+static void
+benchmark_add_sample (Benchmark *benchmark,
+                      gint width_in, gint height_in,
+                      gint width_out, gint height_out,
+                      gdouble elapsed_s)
+{
+    Sample m;
+
+    m.width_in = width_in;
+    m.height_in = height_in;
+    m.width_out = width_out;
+    m.height_out = height_out;
+    m.elapsed_s = elapsed_s;
+
+    g_array_append_val (benchmark->samples, m);
+}
+
+static gint
+samples_cmp (gconstpointer a, gconstpointer b)
+{
+    const Sample *ba = a, *bb = b;
+    gint64 diff_i;
+
+    diff_i = ba->width_in * ba->height_in
+        - (gint64) bb->width_in * bb->height_in;
+    if (diff_i != 0)
+        return diff_i;
+
+    diff_i = ba->width_out * ba->height_out
+        - (gint64) bb->width_out * bb->height_out;
+    if (diff_i != 0)
+        return diff_i;
+
+    if (ba->elapsed_s < bb->elapsed_s)
+        return -1;
+    else if (ba->elapsed_s > bb->elapsed_s)
+        return 1;
+
+    return 0;
+}
+
+static gint
+samples_cmp_params (gconstpointer a, gconstpointer b)
+{
+    const Sample *ba = a, *bb = b;
+    gint64 diff_i;
+
+    diff_i = ba->width_in * ba->height_in
+        - (gint64) bb->width_in * bb->height_in;
+    if (diff_i != 0)
+        return diff_i;
+
+    diff_i = ba->width_out * ba->height_out
+        - (gint64) bb->width_out * bb->height_out;
+    if (diff_i != 0)
+        return diff_i;
+
+    return 0;
+}
+
+static gint
+samples_cmp_elapsed (gconstpointer a, gconstpointer b)
+{
+    const Sample *ba = a, *bb = b;
+
+    if (ba->elapsed_s < bb->elapsed_s)
+        return -1;
+    else if (ba->elapsed_s > bb->elapsed_s)
+        return 1;
+
+    return 0;
+}
+
+static gint
+samples_cmp_pps (gconstpointer a, gconstpointer b)
+{
+    const Sample *ba = a, *bb = b;
+    gdouble pps_a, pps_b;
+
+    pps_a = sample_get_pps (a);
+    pps_b = sample_get_pps (b);
+
+    if (pps_a > pps_b)
+        return -1;
+    else if (pps_a < pps_b)
+        return 1;
+
+    return 0;
+}
+
+static void
+benchmark_postprocess (Benchmark *benchmark)
+{
+    GArray *samples_new;
+    guint i;
+
+    g_array_sort (benchmark->samples, samples_cmp);
+    samples_new = g_array_new (FALSE, FALSE, sizeof (Sample));
+
+    for (i = 0; i < benchmark->samples->len; i++)
+    {
+        const Sample *m = &g_array_index (benchmark->samples, Sample, i);
+
+        if (i == 0 || samples_cmp_params (m, &g_array_index (benchmark->samples, Sample, i - 1)) != 0)
+        {
+            g_array_append_val (samples_new, *m);
+        }
+    }
+
+    g_array_free (benchmark->samples, TRUE);
+    benchmark->samples = samples_new;
+}
+
+static void
+benchmark_print_samples (Benchmark *benchmark, FILE *f)
+{
+    guint i;
+
+    for (i = 0; i < benchmark->samples->len; i++)
+    {
+        const Sample *m = &g_array_index (benchmark->samples, Sample, i);
+
+        g_fprintf (f, "%u %u %.6lf %.1lf\n",
+                   m->width_out, m->height_out, m->elapsed_s,
+                   sample_get_pps (m));
+    }
+}
+
+static void
+benchmark_print_average (Benchmark *benchmark, FILE *f)
+{
+    GArray *samples_by_pps;
+    gdouble sum = 0.0;
+    gdouble ntiles [2];
+    guint i;
+
+    samples_by_pps = g_array_copy (benchmark->samples);
+    g_array_sort (samples_by_pps, samples_cmp_pps);
+
+    for (i = 0; i < samples_by_pps->len; i++)
+    {
+        const Sample *m = &g_array_index (samples_by_pps, Sample, i);
+
+        sum += sample_get_pps (m);
+    }
+
+    ntiles [0] = sample_get_pps (&g_array_index (samples_by_pps, const Sample,
+                                                 (gint) (samples_by_pps->len * 0.05)));
+    ntiles [1] = sample_get_pps (&g_array_index (samples_by_pps, const Sample,
+                                                 (gint) (samples_by_pps->len * 0.95)));
+
+    g_fprintf (f, "%.1lf %.1lf %.1lf\n", sum / (gdouble) samples_by_pps->len, ntiles [0], ntiles [1]);
+    g_array_free (samples_by_pps, TRUE);
+}
 
 /* --- Pixman --- */
 
@@ -782,13 +977,15 @@ run_benchmark_proportional (gpointer raw_data,
                             guint n_steps,
                             ScaleInitFunc init_func,
                             ScaleFiniFunc fini_func,
-                            ScaleDoFunc do_func)
+                            ScaleDoFunc do_func,
+                            Benchmark *benchmark)
 {
     gfloat width_step_size, height_step_size;
     guint step;
     guint rep;
     ScaleParams params = { 0 };
     gdouble *results;
+    gint i;
 
     if (n_steps > 1)
     {
@@ -818,7 +1015,11 @@ run_benchmark_proportional (gpointer raw_data,
             clock_gettime (CLOCK_MONOTONIC_RAW, &before);
             (*do_func) (&params, out_width, out_height);
             clock_gettime (CLOCK_MONOTONIC_RAW, &after);
-            results [step * n_repetitions + rep] = compute_elapsed (&before, &after);
+
+            benchmark_add_sample (benchmark,
+                                  in_width, in_height,
+                                  out_width, out_height,
+                                  compute_elapsed (&before, &after));
         }
 
         g_printerr ("*");
@@ -830,26 +1031,7 @@ run_benchmark_proportional (gpointer raw_data,
 
     (*fini_func) (&params);
 
-    for (step = 0; step < n_steps; step++)
-    {
-        gdouble best_time = 999999.9;
-        guint out_width, out_height;
-
-        for (rep = 0; rep < n_repetitions; rep++)
-        {
-            gdouble t = results [step * n_repetitions + rep];
-
-            if (t < best_time)
-                best_time = t;
-        }
-
-        out_width = out_width_min + step * width_step_size;
-        out_height = out_height_min + step * height_step_size;
-
-        g_print ("%u %u %.6lf %.3lf\n",
-                 out_width, out_height, best_time,
-                 (out_width * out_height + in_width * in_height) / (best_time * 1000000.0));
-    }
+    benchmark_postprocess (benchmark);
 }
 
 static void
@@ -1126,13 +1308,12 @@ print_usage (void)
                 "              <min_scale> <max_scale> <n_steps>\n"
                 "              <filename> ] |\n"
                 "            [ check ]\n"
-                "            [ proportional\n"
+                "            [ benchmark\n"
+                "              <n_repetitions>\n"
                 "              <in_width> <in_height>\n"
-                "              <min_scale> <max_scale> <n_steps> ] |\n"
-                "            [ <n_repetitions>\n"
-                "              <in_width> <in_height>\n"
-                "              <min_width> <max_width> <width_steps>\n"
-                "              <min_height> <max_height> <height_steps> ]\n");
+                "              <min_scale> <max_scale> <n_steps>\n"
+                "              [ <averages log file>\n"
+                "                [ <samples log file> ] ] ]\n");
 }
 
 #define DEFAULT_N_REPETITIONS 3
@@ -1144,6 +1325,8 @@ print_usage (void)
 #define DEFAULT_OUT_HEIGHT_MIN 2
 #define DEFAULT_OUT_HEIGHT_MAX 2048
 #define DEFAULT_OUT_HEIGHT_STEPS 4
+
+#define OUTPUT_FILE_MAX 16
 
 int
 main (int argc, char *argv [])
@@ -1157,8 +1340,10 @@ main (int argc, char *argv [])
     ScaleInitFunc init_func;
     ScaleFiniFunc fini_func;
     ScaleDoFunc do_func;
-    ScaleOperation scale_op = SCALE_OP_BENCHMARK;
+    ScaleOperation scale_op = SCALE_OP_CHECK;
     gchar *filename = NULL;
+    const gchar *output_fname [OUTPUT_FILE_MAX] = { NULL };
+    FILE *output_file [OUTPUT_FILE_MAX] = { NULL };
     gint i;
 
     if (argc < 2)
@@ -1239,7 +1424,7 @@ main (int argc, char *argv [])
 
     if (argc > 2)
     {
-        if (!strcasecmp (argv [2], "proportional"))
+        if (!strcasecmp (argv [2], "benchmark"))
             scale_op = SCALE_OP_BENCHMARK_PROP;
         else if (!strcasecmp (argv [2], "generate"))
             scale_op = SCALE_OP_GENERATE;
@@ -1247,32 +1432,11 @@ main (int argc, char *argv [])
             scale_op = SCALE_OP_CHECK;
     }
 
-    if (scale_op == SCALE_OP_BENCHMARK)
-    {
-        if (argc < 11)
-        {
-            g_printerr ("Missing arguments for stretch scaling.");
-            print_usage ();
-            return 1;
-        }
-
-        i = 2;
-
-        n_repetitions = strtoul (argv [i++], NULL, 10);
-        in_width = strtoul (argv [i++], NULL, 10);
-        in_height = strtoul (argv [i++], NULL, 10);
-        out_width_min = strtoul (argv [i++], NULL, 10);
-        out_width_max = strtoul (argv [i++], NULL, 10);
-        out_width_steps = strtoul (argv [i++], NULL, 10);
-        out_height_min = strtoul (argv [i++], NULL, 10);
-        out_height_max = strtoul (argv [i++], NULL, 10);
-        out_height_steps = strtoul (argv [i++], NULL, 10);
-    }
-    else if (scale_op == SCALE_OP_BENCHMARK_PROP)
+    if (scale_op == SCALE_OP_BENCHMARK_PROP)
     {
         if (argc < 9)
         {
-            g_printerr ("Missing arguments for proportional scaling.");
+            g_printerr ("Missing arguments for benchmarking.");
             print_usage ();
             return 1;
         }
@@ -1285,6 +1449,10 @@ main (int argc, char *argv [])
         scale_min = strtod (argv [i++], NULL);
         scale_max = strtod (argv [i++], NULL);
         scale_steps = strtoul (argv [i++], NULL, 10);
+        if (argc >= 10)
+            output_fname [0] = argv [i++];
+        if (argc >= 11)
+            output_fname [1] = argv [i++];
     }
     else if (scale_op == SCALE_OP_GENERATE)
     {
@@ -1303,28 +1471,33 @@ main (int argc, char *argv [])
         filename = g_strdup (argv [i++]);
     }
 
-    if (scale_op == SCALE_OP_BENCHMARK)
+    for (i = 0; i < OUTPUT_FILE_MAX && output_fname [i]; i++)
     {
-        gpointer raw_data = gen_random_canvas (in_width, in_height);
-        run_benchmark (raw_data,
-                       n_repetitions,
-                       in_width, in_height,
-                       out_width_min, out_width_max,
-                       out_height_min, out_height_max,
-                       out_width_steps, out_height_steps,
-                       init_func, fini_func, do_func);
-        g_free (raw_data);
+        output_file [i] = fopen (output_fname [i], "a");
+        if (!output_file [i])
+        {
+            g_printerr ("Failed to open output file '%s'.\n", output_fname [i]);
+            return 1;
+        }
     }
-    else if (scale_op == SCALE_OP_BENCHMARK_PROP)
+
+    if (scale_op == SCALE_OP_BENCHMARK_PROP)
     {
         gpointer raw_data = gen_random_canvas (in_width, in_height);
+        Benchmark *benchmark = benchmark_new ();
         run_benchmark_proportional (raw_data,
                                     n_repetitions,
                                     in_width, in_height,
                                     in_width * scale_min, in_width * scale_max,
                                     in_height * scale_min, in_height * scale_max,
                                     scale_steps,
-                                    init_func, fini_func, do_func);
+                                    init_func, fini_func, do_func,
+                                    benchmark);
+        if (output_file [0])
+            benchmark_print_average (benchmark, output_file [0]);
+        if (output_file [1])
+            benchmark_print_samples (benchmark, output_file [1]);
+        benchmark_destroy (benchmark);
         g_free (raw_data);
     }
     else if (scale_op == SCALE_OP_GENERATE)
@@ -1338,6 +1511,11 @@ main (int argc, char *argv [])
     else if (scale_op == SCALE_OP_CHECK)
     {
         run_check (init_func, fini_func, do_func);
+    }
+
+    for (i = 0; i < OUTPUT_FILE_MAX && output_file [i]; i++)
+    {
+        fclose (output_file [i]);
     }
 
     return 0;

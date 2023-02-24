@@ -61,9 +61,12 @@ for UNIT in $UNITS; do
     eval DESC=\${DESC_${UNIT}}
     eval TESTNAME=\${TESTNAME_${UNIT}}
 
-    echo \"${DESC}\" >>results/resize-$TEST.txt
-    ./test $TESTNAME proportional $(echo $TEST | sed 's/-/ /g') >>results/resize-$TEST.txt
-    echo >>results/resize-$TEST.txt
-    echo >>results/resize-$TEST.txt
+    echo \"${DESC}\" >>results/resize-$TEST-samples.txt
+    echo -n "\"${DESC}\" " >>results/resize-$TEST-average.txt
+    ./test $TESTNAME benchmark $(echo $TEST | sed 's/-/ /g') \
+      results/resize-$TEST-average.txt \
+      results/resize-$TEST-samples.txt
+    echo >>results/resize-$TEST-samples.txt
+    echo >>results/resize-$TEST-samples.txt
   done
 done
