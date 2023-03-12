@@ -20,12 +20,12 @@ from_srgb_pixel_axxx_128bpp (uint64_t * SMOL_RESTRICT pixel_inout)
     part = *pixel_inout;
     *(pixel_inout++) =
         (part & 0xffffffff00000000)
-        | smol_from_srgb_lut [part & 0xff];
+        | _smol_from_srgb_lut [part & 0xff];
 
     part = *pixel_inout;
     *pixel_inout =
-        ((uint64_t) smol_from_srgb_lut [part >> 32] << 32)
-        | smol_from_srgb_lut [part & 0xff];
+        ((uint64_t) _smol_from_srgb_lut [part >> 32] << 32)
+        | _smol_from_srgb_lut [part & 0xff];
 }
 
 static void
@@ -38,12 +38,12 @@ to_srgb_pixel_axxx_128bpp (uint64_t * SMOL_RESTRICT pixel_inout)
     part = *pixel_inout;
     *(pixel_inout++) =
         (part & 0xffffffff00000000)
-        | smol_to_srgb_lut [part & 0xffff];
+        | _smol_to_srgb_lut [part & 0xffff];
 
     part = *pixel_inout;
     *pixel_inout =
-        (((uint64_t) smol_to_srgb_lut [part >> 32]) << 32)
-        | smol_to_srgb_lut [part & 0xffff];
+        (((uint64_t) _smol_to_srgb_lut [part >> 32]) << 32)
+        | _smol_to_srgb_lut [part & 0xffff];
 }
 
 static void
@@ -55,12 +55,12 @@ from_srgb_pixel_xxxa_128bpp (uint64_t * SMOL_RESTRICT pixel_inout)
 
     part = *pixel_inout;
     *(pixel_inout++) =
-        ((uint64_t) smol_from_srgb_lut [part >> 32] << 32)
-        | smol_from_srgb_lut [part & 0xff];
+        ((uint64_t) _smol_from_srgb_lut [part >> 32] << 32)
+        | _smol_from_srgb_lut [part & 0xff];
 
     part = *pixel_inout;
     *pixel_inout =
-        ((uint64_t) smol_from_srgb_lut [part >> 32] << 32)
+        ((uint64_t) _smol_from_srgb_lut [part >> 32] << 32)
         | (part & 0xffffffff);
 }
 
@@ -73,12 +73,12 @@ to_srgb_pixel_xxxa_128bpp (uint64_t * SMOL_RESTRICT pixel_inout)
 
     part = *pixel_inout;
     *(pixel_inout++) =
-        (((uint64_t) smol_to_srgb_lut [part >> 32]) << 32)
-        | smol_to_srgb_lut [part & 0xffff];
+        (((uint64_t) _smol_to_srgb_lut [part >> 32]) << 32)
+        | _smol_to_srgb_lut [part & 0xffff];
 
     part = *pixel_inout;
     *pixel_inout =
-        (((uint64_t) smol_to_srgb_lut [part >> 32]) << 32)
+        (((uint64_t) _smol_to_srgb_lut [part >> 32]) << 32)
         | (part & 0xffffffff);
 }
 
@@ -98,12 +98,12 @@ from_srgb_row_128bpp (uint64_t * SMOL_RESTRICT row_parts_inout,
         uint64_t part = *row_parts_inout;
         *(row_parts_inout++) =
             (part & 0xffffffff00000000)
-            | smol_from_srgb_lut [part & 0xff];
+            | _smol_from_srgb_lut [part & 0xff];
 
         part = *row_parts_inout;
         *(row_parts_inout++) =
-            ((uint64_t) smol_from_srgb_lut [part >> 32] << 32)
-            | smol_from_srgb_lut [part & 0xff];
+            ((uint64_t) _smol_from_srgb_lut [part >> 32] << 32)
+            | _smol_from_srgb_lut [part & 0xff];
     }
 }
 
@@ -120,12 +120,12 @@ to_srgb_row_128bpp (uint64_t * SMOL_RESTRICT row_parts_inout,
         uint64_t part = *row_parts_inout;
         *(row_parts_inout++) =
             (part & 0xffffffff00000000)
-            | smol_to_srgb_lut [part & 0xffff];
+            | _smol_to_srgb_lut [part & 0xffff];
 
         part = *row_parts_inout;
         *(row_parts_inout++) =
-            (((uint64_t) smol_to_srgb_lut [part >> 32]) << 32)
-            | smol_to_srgb_lut [part & 0xffff];
+            (((uint64_t) _smol_to_srgb_lut [part >> 32]) << 32)
+            | _smol_to_srgb_lut [part & 0xffff];
     }
 }
 
@@ -138,9 +138,9 @@ unpremul_i_to_u_128bpp (const uint64_t * SMOL_RESTRICT in,
                         uint64_t * SMOL_RESTRICT out,
                         uint8_t alpha)
 {
-    out [0] = ((in [0] * (uint64_t) inverted_div_lut [alpha]
+    out [0] = ((in [0] * (uint64_t) _smol_inverted_div_lut [alpha]
                 + INVERTED_DIV_ROUNDING_128BPP) >> INVERTED_DIV_SHIFT);
-    out [1] = ((in [1] * (uint64_t) inverted_div_lut [alpha]
+    out [1] = ((in [1] * (uint64_t) _smol_inverted_div_lut [alpha]
                 + INVERTED_DIV_ROUNDING_128BPP) >> INVERTED_DIV_SHIFT);
 }
 
@@ -149,9 +149,9 @@ unpremul_p_to_u_128bpp (const uint64_t * SMOL_RESTRICT in,
                         uint64_t * SMOL_RESTRICT out,
                         uint8_t alpha)
 {
-    out [0] = (((in [0] << 8) * (uint64_t) inverted_div_lut [alpha])
+    out [0] = (((in [0] << 8) * (uint64_t) _smol_inverted_div_lut [alpha])
                >> INVERTED_DIV_SHIFT);
-    out [1] = (((in [1] << 8) * (uint64_t) inverted_div_lut [alpha])
+    out [1] = (((in [1] << 8) * (uint64_t) _smol_inverted_div_lut [alpha])
                >> INVERTED_DIV_SHIFT);
 }
 

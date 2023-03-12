@@ -302,13 +302,13 @@ struct SmolScaleCtx
 #define INVERTED_DIV_ROUNDING_128BPP \
     (((uint64_t) INVERTED_DIV_ROUNDING << 32) | INVERTED_DIV_ROUNDING)
 
-extern const uint32_t inverted_div_lut [256];
+extern const uint32_t _smol_inverted_div_lut [256];
 
 #define SRGB_LINEAR_BITS 11
 #define SRGB_LINEAR_MAX (1 << (SRGB_LINEAR_BITS))
 
-extern const uint16_t smol_from_srgb_lut [256];
-extern const uint8_t smol_to_srgb_lut [SRGB_LINEAR_MAX];
+extern const uint16_t _smol_from_srgb_lut [256];
+extern const uint8_t _smol_to_srgb_lut [SRGB_LINEAR_MAX];
 
 const SmolImplementation *_smol_get_generic_implementation (void);
 #ifdef SMOL_WITH_AVX2

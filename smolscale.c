@@ -20,7 +20,7 @@
  * As a side effect, the values in the lower range (first 35 indexes) are
  * off by < 2%. */
 
-const uint16_t smol_from_srgb_lut [256] =
+const uint16_t _smol_from_srgb_lut [256] =
 {
        0,    1,    2,    3,    4,    5,    6,    7,    8,    9,   10,   11, 
       12,   13,   14,   15,   16,   17,   18,   19,   20,   21,   22,   23, 
@@ -46,7 +46,7 @@ const uint16_t smol_from_srgb_lut [256] =
     1993, 2011, 2029, 2047, 
 };
 
-const uint8_t smol_to_srgb_lut [SRGB_LINEAR_MAX] =
+const uint8_t _smol_to_srgb_lut [SRGB_LINEAR_MAX] =
 {
       0,   1,   2,   3,   4,   5,   6,   7,   8,   9,  10,  11,  12,  13, 
      14,  15,  16,  17,  18,  19,  20,  21,  22,  23,  24,  25,  26,  27, 
@@ -211,7 +211,7 @@ const uint8_t smol_to_srgb_lut [SRGB_LINEAR_MAX] =
  * (1 << 20) is added for nearest rounding. It would've been nice to keep
  * this table in uint16_t, but alas, we need the extra bits for sufficient
  * precision. */
-const uint32_t inverted_div_lut [256] =
+const uint32_t _smol_inverted_div_lut [256] =
 {
          0,2097152,1048576, 699051, 524288, 419430, 349525, 299593,
     262144, 233017, 209715, 190650, 174763, 161319, 149797, 139810,
