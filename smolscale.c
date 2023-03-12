@@ -2783,12 +2783,10 @@ host_is_little_endian (void)
 static SmolPixelType
 get_host_pixel_type (SmolPixelType pixel_type)
 {
-    SmolPixelType host_pixel_type = SMOL_PIXEL_MAX;
+    if (host_is_little_endian ())
+        return pixel_type_u32_le [pixel_type];
 
-    if (!host_is_little_endian ())
-        return pixel_type;
-
-    return pixel_type_u32_le [pixel_type];
+    return pixel_type;
 }
 
 #ifdef SMOL_WITH_AVX2
