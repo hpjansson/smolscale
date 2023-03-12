@@ -2788,35 +2788,7 @@ get_host_pixel_type (SmolPixelType pixel_type)
     if (!host_is_little_endian ())
         return pixel_type;
 
-    /* We use a switch for this so the compiler can remind us
-     * to keep it in sync with the SmolPixelType enum. */
-    switch (pixel_type)
-    {
-        case SMOL_PIXEL_RGBA8_PREMULTIPLIED:
-            host_pixel_type = SMOL_PIXEL_ABGR8_PREMULTIPLIED; break;
-        case SMOL_PIXEL_BGRA8_PREMULTIPLIED:
-            host_pixel_type = SMOL_PIXEL_ARGB8_PREMULTIPLIED; break;
-        case SMOL_PIXEL_ARGB8_PREMULTIPLIED:
-            host_pixel_type = SMOL_PIXEL_BGRA8_PREMULTIPLIED; break;
-        case SMOL_PIXEL_ABGR8_PREMULTIPLIED:
-            host_pixel_type = SMOL_PIXEL_RGBA8_PREMULTIPLIED; break;
-        case SMOL_PIXEL_RGBA8_UNASSOCIATED:
-            host_pixel_type = SMOL_PIXEL_ABGR8_UNASSOCIATED; break;
-        case SMOL_PIXEL_BGRA8_UNASSOCIATED:
-            host_pixel_type = SMOL_PIXEL_ARGB8_UNASSOCIATED; break;
-        case SMOL_PIXEL_ARGB8_UNASSOCIATED:
-            host_pixel_type = SMOL_PIXEL_BGRA8_UNASSOCIATED; break;
-        case SMOL_PIXEL_ABGR8_UNASSOCIATED:
-            host_pixel_type = SMOL_PIXEL_RGBA8_UNASSOCIATED; break;
-        case SMOL_PIXEL_RGB8:
-            host_pixel_type = SMOL_PIXEL_RGB8; break;
-        case SMOL_PIXEL_BGR8:
-            host_pixel_type = SMOL_PIXEL_BGR8; break;
-        case SMOL_PIXEL_MAX:
-            host_pixel_type = SMOL_PIXEL_MAX; break;
-    }
-
-    return host_pixel_type;
+    return pixel_type_u32_le [pixel_type];
 }
 
 #ifdef SMOL_WITH_AVX2
