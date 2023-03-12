@@ -34,9 +34,9 @@ SKIA_CFLAGS=$(GENERAL_CFLAGS) -O3 -Iskia -Iskia/include/core
 
 ifeq ($(WITH_AVX2),yes)
   SMOL_CFLAGS+=-DSMOL_WITH_AVX2
-  SMOL_OBJ=smolscale.o smolscale-avx2.o
+  SMOL_OBJ=smolscale.o smolscale-generic.o smolscale-avx2.o
 else
-  SMOL_OBJ=smolscale.o
+  SMOL_OBJ=smolscale.o smolscale-generic.o
 endif
 
 SMOL_AVX2_CFLAGS=$(SMOL_CFLAGS) -fverbose-asm -mavx2
@@ -65,6 +65,9 @@ verify: Makefile smolscale.h $(VERIFY_SRC) $(SMOL_OBJ)
 
 smolscale.o: Makefile smolscale.c smolscale.h smolscale-private.h
 	$(CC) $(SMOL_CFLAGS) -c smolscale.c -o smolscale.o
+
+smolscale-generic.o: Makefile smolscale-generic.c smolscale.h smolscale-private.h
+	$(CC) $(SMOL_CFLAGS) -c smolscale-generic.c -o smolscale-generic.o
 
 smolscale-avx2.o: Makefile smolscale-avx2.c smolscale.h smolscale-private.h
 	$(CC) $(SMOL_AVX2_CFLAGS) -c smolscale-avx2.c -o smolscale-avx2.o

@@ -260,6 +260,7 @@ typedef struct
 {
     SmolHFilterFunc *hfilter_funcs [SMOL_STORAGE_MAX] [SMOL_FILTER_MAX];
     SmolVFilterFunc *vfilter_funcs [SMOL_STORAGE_MAX] [SMOL_FILTER_MAX];
+    const SmolRepackMeta *repack_meta;
 }
 SmolImplementation;
 
@@ -309,6 +310,7 @@ extern const uint32_t inverted_div_lut [256];
 extern const uint16_t smol_from_srgb_lut [256];
 extern const uint8_t smol_to_srgb_lut [SRGB_LINEAR_MAX];
 
+const SmolImplementation *_smol_get_generic_implementation (void);
 #ifdef SMOL_WITH_AVX2
 const SmolImplementation *_smol_get_avx2_implementation (void);
 #endif
