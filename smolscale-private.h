@@ -119,11 +119,20 @@ typedef enum
 
     SMOL_REORDER_1234_TO_1324,
     SMOL_REORDER_1234_TO_2314,
+    SMOL_REORDER_1234_TO_2431,
     SMOL_REORDER_1234_TO_4132,
+    SMOL_REORDER_1234_TO_4213,
     SMOL_REORDER_1234_TO_4231,
+    SMOL_REORDER_1234_TO_4312,
     SMOL_REORDER_1234_TO_132,
     SMOL_REORDER_1234_TO_231,
     SMOL_REORDER_123_TO_1324,
+
+    SMOL_REORDER_1234_TO_324,
+    SMOL_REORDER_1234_TO_423,
+
+    SMOL_REORDER_1234_TO_1423,
+    SMOL_REORDER_1234_TO_3241,
 
     SMOL_REORDER_MAX
 }
@@ -132,8 +141,8 @@ SmolReorderType;
 typedef enum
 {
     SMOL_ALPHA_UNASSOCIATED,
-    SMOL_ALPHA_PREMULTIPLIED,
-    SMOL_ALPHA_UPMULTIPLIED,
+    SMOL_ALPHA_PREMUL8,
+    SMOL_ALPHA_PREMUL16,
 
     SMOL_ALPHA_MAX
 }
@@ -191,6 +200,33 @@ typedef void (SmolVFilterFunc) (const SmolScaleCtx *scale_ctx,
                                 uint32_t outrow_index,
                                 uint32_t *row_out);
 
+#define SMOL_REPACK_SIGNATURE_GET_REORDER(sig) ((sig) >> (2 * (SMOL_GAMMA_BITS + SMOL_ALPHA_BITS + SMOL_STORAGE_BITS)))
+
+#define SMOL_REORDER_BITS 6
+#define SMOL_STORAGE_BITS 2
+#define SMOL_ALPHA_BITS 2
+#define SMOL_GAMMA_BITS 1
+
+#define SMOL_MAKE_REPACK_SIGNATURE_ANY_ORDER(storage_in, alpha_in, gamma_in, \
+                                             storage_out, alpha_out, gamma_out) \
+    (((storage_in) << (SMOL_GAMMA_BITS + SMOL_ALPHA_BITS + SMOL_STORAGE_BITS + SMOL_GAMMA_BITS + SMOL_ALPHA_BITS)) \
+     | ((alpha_in) << (SMOL_GAMMA_BITS + SMOL_ALPHA_BITS + SMOL_STORAGE_BITS + SMOL_GAMMA_BITS)) \
+     | ((gamma_in) << (SMOL_GAMMA_BITS + SMOL_ALPHA_BITS + SMOL_STORAGE_BITS)) \
+     | ((storage_out) << (SMOL_GAMMA_BITS + SMOL_ALPHA_BITS))           \
+     | ((alpha_out) << (SMOL_GAMMA_BITS))                               \
+     | ((gamma_out) << 0))                                              \
+
+#define MASK_ITEM(m, n_bits) ((m) ? (1 << (n_bits)) - 1 : 0)
+
+#define SMOL_REPACK_SIGNATURE_ANY_ORDER_MASK(storage_in, alpha_in, gamma_in, \
+                                             storage_out, alpha_out, gamma_out) \
+    SMOL_MAKE_REPACK_SIGNATURE_ANY_ORDER(MASK_ITEM (storage_in, SMOL_STORAGE_BITS), \
+                                         MASK_ITEM (alpha_in, SMOL_ALPHA_BITS), \
+                                         MASK_ITEM (gamma_in, SMOL_GAMMA_BITS), \
+                                         MASK_ITEM (storage_out, SMOL_STORAGE_BITS), \
+                                         MASK_ITEM (alpha_out, SMOL_ALPHA_BITS), \
+                                         MASK_ITEM (gamma_out, SMOL_GAMMA_BITS))
+
 #define SMOL_REPACK_META(order_in, storage_in, alpha_in, gamma_in,      \
                          order_out, storage_out, alpha_out, gamma_out)  \
     { (((SMOL_REORDER_##order_in##_TO_##order_out) << 10)               \
@@ -222,34 +258,10 @@ SmolRepackMeta;
 
 #define SMOL_REPACK_ROW_DEF_END }
 
-
-#define SMOL_CONV_UNDEFINED { 0, NULL, NULL }
-#define SMOL_CONV(un_from_order, un_from_type, un_to_order, un_to_type, pk_from_order, pk_from_type, pk_to_order, pk_to_type, storage_bits) \
-{ storage_bits / 8, (SmolUnpackRowFunc *) unpack_row_##un_from_order##_##un_from_type##_to_##un_to_order##_##un_to_type##_##storage_bits##bpp, \
-(SmolPackRowFunc *) pack_row_##pk_from_order##_##pk_from_type##_to_##pk_to_order##_##pk_to_type##_##storage_bits##bpp }
-
-typedef struct
-{
-    uint8_t n_bytes_per_pixel;
-    SmolUnpackRowFunc *unpack_row_func;
-    SmolPackRowFunc *pack_row_func;
-}
-SmolConversion;
-
-typedef struct
-{
-    SmolConversion conversions [SMOL_STORAGE_MAX] [SMOL_PIXEL_MAX] [SMOL_PIXEL_MAX];
-}
-SmolConversionTable;
-
 typedef struct
 {
     SmolHFilterFunc *hfilter_funcs [SMOL_STORAGE_MAX] [SMOL_FILTER_MAX];
     SmolVFilterFunc *vfilter_funcs [SMOL_STORAGE_MAX] [SMOL_FILTER_MAX];
-
-    /* Can be a NULL pointer if the implementation does not override any
-     * conversions. */
-    const SmolConversionTable *ctab;
 }
 SmolImplementation;
 
@@ -266,8 +278,8 @@ struct SmolScaleCtx
     SmolFilterType filter_h, filter_v;
     SmolStorageType storage_type;
 
-    SmolUnpackRowFunc *unpack_row_func;
-    SmolPackRowFunc *pack_row_func;
+    SmolRepackRowFunc *unpack_row_func;
+    SmolRepackRowFunc *pack_row_func;
     SmolHFilterFunc *hfilter_func;
     SmolVFilterFunc *vfilter_func;
 
