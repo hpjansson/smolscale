@@ -8,7 +8,9 @@
 #include <limits.h>
 #include "smolscale-private.h"
 
-/* --- sRGB/linear conversion --- */
+/* ---------------------- *
+ * sRGB/linear conversion *
+ * ---------------------- */
 
 static void
 from_srgb_pixel_axxx_128bpp (uint64_t * SMOL_RESTRICT pixel_inout)
@@ -129,7 +131,9 @@ to_srgb_row_128bpp (uint64_t * SMOL_RESTRICT row_parts_inout,
     }
 }
 
-/* --- Premultiplication --- */
+/* ----------------- *
+ * Premultiplication *
+ * ----------------- */
 
 /* Masking and shifting out the results is left to the caller. In
  * and out may not overlap. */
@@ -186,7 +190,9 @@ premul_u_to_p_128bpp (uint64_t * SMOL_RESTRICT inout,
     inout [1] = ((inout [1] * ((uint16_t) alpha + 1)) >> 8) & 0x00ffffff00ffffff;
 }
 
-/* --- Packing --- */
+/* --------- *
+ * Repacking *
+ * --------- */
 
 /* It's nice to be able to shift by a negative amount */
 #define SHIFT_S(in, s) ((s >= 0) ? (in) << (s) : (in) >> -(s))
@@ -227,7 +233,9 @@ premul_u_to_p_128bpp (uint64_t * SMOL_RESTRICT inout,
                 ((SWAP_2_AND_3 (d) - 1) & 1) * 32 + 24 - 56) & 0x000000ff))
 #endif
 
-/* 24/32 -> 64 */
+/* ---------------------- *
+ * Repacking: 24/32 -> 64 *
+ * ---------------------- */
 
 static SMOL_INLINE uint64_t
 unpack_pixel_123_p_to_132a_p_64bpp (const uint8_t *p)
@@ -345,7 +353,9 @@ SMOL_REPACK_ROW_DEF (1234, 32, 32, UNASSOCIATED, COMPRESSED,
     }
 } SMOL_REPACK_ROW_DEF_END
 
-/* 24/32 -> 128 */
+/* ----------------------- *
+ * Repacking: 24/32 -> 128 *
+ * ----------------------- */
 
 static SMOL_INLINE void
 unpack_pixel_123_p_to_123a_p_128bpp (const uint8_t *in,
@@ -628,7 +638,9 @@ SMOL_REPACK_ROW_DEF (1234,  32, 32, UNASSOCIATED, COMPRESSED,
     }
 } SMOL_REPACK_ROW_DEF_END
 
-/* 64 -> 24/32 */
+/* ---------------------- *
+ * Repacking: 64 -> 24/32 *
+ * ---------------------- */
 
 static SMOL_INLINE uint32_t
 pack_pixel_1234_p_to_1324_p_64bpp (uint64_t in)
@@ -788,7 +800,9 @@ DEF_REPACK_FROM_1234_64BPP_TO_32BPP (2, 3, 1, 4)
 DEF_REPACK_FROM_1234_64BPP_TO_32BPP (4, 1, 3, 2)
 DEF_REPACK_FROM_1234_64BPP_TO_32BPP (4, 2, 3, 1)
 
-/* 128 -> 24/32 */
+/* ----------------------- *
+ * Repacking: 128 -> 24/32 *
+ * ----------------------- */
 
 SMOL_REPACK_ROW_DEF (1234, 128, 64, PREMUL8,       COMPRESSED, \
                      123,   24,  8, PREMUL8,       COMPRESSED) { \
@@ -910,7 +924,9 @@ DEF_REPACK_FROM_1234_128BPP_TO_32BPP (3, 2, 1, 4)
 DEF_REPACK_FROM_1234_128BPP_TO_32BPP (4, 1, 2, 3)
 DEF_REPACK_FROM_1234_128BPP_TO_32BPP (4, 3, 2, 1)
 
-/* --- Filter helpers --- */
+/* -------------- *
+ * Filter helpers *
+ * -------------- */
 
 static SMOL_INLINE const char *
 inrow_ofs_to_pointer (const SmolScaleCtx *scale_ctx,
@@ -1028,7 +1044,9 @@ add_parts (const uint64_t * SMOL_RESTRICT parts_in,
         *(parts_acc_out++) += *(parts_in++);
 }
 
-/* --- Horizontal scaling --- */
+/* ------------------ *
+ * Horizontal scaling *
+ * ------------------ */
 
 #define DEF_INTERP_HORIZONTAL_BILINEAR(n_halvings)                      \
 static void                                                             \
@@ -1386,7 +1404,9 @@ scale_horizontal (const SmolScaleCtx *scale_ctx,
                              row_parts_out);
 }
 
-/* --- Vertical scaling --- */
+/* ---------------- *
+ * Vertical scaling *
+ * ---------------- */
 
 static void
 update_vertical_ctx_bilinear (const SmolScaleCtx *scale_ctx,
@@ -2072,7 +2092,9 @@ scale_outrow_copy (const SmolScaleCtx *scale_ctx,
     scale_ctx->pack_row_func (vertical_ctx->parts_row [0], row_out, scale_ctx->width_out);
 }
 
-/* --- Conversion tables --- */
+/* --------------- *
+ * Function tables *
+ * --------------- */
 
 #define R SMOL_REPACK_META
 

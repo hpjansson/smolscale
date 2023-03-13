@@ -10,52 +10,9 @@
 #include <immintrin.h>
 #include "smolscale-private.h"
 
-/* --- Linear interpolation helpers --- */
-
-#define LERP_SIMD256_EPI32(a, b, f)                                     \
-    _mm256_add_epi32 (                                                  \
-    _mm256_srli_epi32 (                                                 \
-    _mm256_mullo_epi32 (                                                \
-    _mm256_sub_epi32 ((a), (b)), factors), 8), (b))
-
-#define LERP_SIMD128_EPI32(a, b, f)                                     \
-    _mm_add_epi32 (                                                     \
-    _mm_srli_epi32 (                                                    \
-    _mm_mullo_epi32 (                                                   \
-    _mm_sub_epi32 ((a), (b)), factors), 8), (b))
-
-#define LERP_SIMD256_EPI32_AND_MASK(a, b, f, mask)                      \
-    _mm256_and_si256 (LERP_SIMD256_EPI32 ((a), (b), (f)), (mask))
-
-#define LERP_SIMD128_EPI32_AND_MASK(a, b, f, mask)                      \
-    _mm_and_si128 (LERP_SIMD128_EPI32 ((a), (b), (f)), (mask))
-
-/* PACK_SHUF_MM256_EPI8() 
- *
- * Generates a shuffling register for packing 8bpc pixel channels in the
- * provided order. The order (1, 2, 3, 4) is neutral and corresponds to
- *
- * _mm256_set_epi8 (13,12,15,14, 9,8,11,10, 5,4,7,6, 1,0,3,2,
- *                  13,12,15,14, 9,8,11,10, 5,4,7,6, 1,0,3,2);
- */
-#define SHUF_ORDER 0x01000302U
-#define SHUF_CH(n) ((char) (SHUF_ORDER >> ((4 - (n)) * 8)))
-#define SHUF_QUAD_CH(q, n) (4 * (q) + SHUF_CH (n))
-#define SHUF_QUAD(q, a, b, c, d) \
-    SHUF_QUAD_CH ((q), (a)), \
-    SHUF_QUAD_CH ((q), (b)), \
-    SHUF_QUAD_CH ((q), (c)), \
-    SHUF_QUAD_CH ((q), (d))
-#define PACK_SHUF_EPI8_LANE(a, b, c, d) \
-    SHUF_QUAD (3, (a), (b), (c), (d)), \
-    SHUF_QUAD (2, (a), (b), (c), (d)), \
-    SHUF_QUAD (1, (a), (b), (c), (d)), \
-    SHUF_QUAD (0, (a), (b), (c), (d))
-#define PACK_SHUF_MM256_EPI8(a, b, c, d) _mm256_set_epi8 ( \
-    PACK_SHUF_EPI8_LANE ((a), (b), (c), (d)), \
-    PACK_SHUF_EPI8_LANE ((a), (b), (c), (d)))
-
-/* --- sRGB/linear conversion --- */
+/* ---------------------- *
+ * sRGB/linear conversion *
+ * ---------------------- */
 
 static void
 from_srgb_pixel_axxx_128bpp (uint64_t * SMOL_RESTRICT pixel_inout)
@@ -176,7 +133,9 @@ to_srgb_row_128bpp (uint64_t * SMOL_RESTRICT row_parts_inout,
     }
 }
 
-/* --- Premultiplication --- */
+/* ----------------- *
+ * Premultiplication *
+ * ----------------- */
 
 /* Masking and shifting out the results is left to the caller. In
  * and out may not overlap. */
@@ -233,7 +192,34 @@ premul_u_to_p_128bpp (uint64_t * SMOL_RESTRICT inout,
     inout [1] = ((inout [1] * ((uint16_t) alpha + 1)) >> 8) & 0x00ffffff00ffffff;
 }
 
-/* --- Packing --- */
+/* --------- *
+ * Repacking *
+ * --------- */
+
+/* PACK_SHUF_MM256_EPI8() 
+ *
+ * Generates a shuffling register for packing 8bpc pixel channels in the
+ * provided order. The order (1, 2, 3, 4) is neutral and corresponds to
+ *
+ * _mm256_set_epi8 (13,12,15,14, 9,8,11,10, 5,4,7,6, 1,0,3,2,
+ *                  13,12,15,14, 9,8,11,10, 5,4,7,6, 1,0,3,2);
+ */
+#define SHUF_ORDER 0x01000302U
+#define SHUF_CH(n) ((char) (SHUF_ORDER >> ((4 - (n)) * 8)))
+#define SHUF_QUAD_CH(q, n) (4 * (q) + SHUF_CH (n))
+#define SHUF_QUAD(q, a, b, c, d) \
+    SHUF_QUAD_CH ((q), (a)), \
+    SHUF_QUAD_CH ((q), (b)), \
+    SHUF_QUAD_CH ((q), (c)), \
+    SHUF_QUAD_CH ((q), (d))
+#define PACK_SHUF_EPI8_LANE(a, b, c, d) \
+    SHUF_QUAD (3, (a), (b), (c), (d)), \
+    SHUF_QUAD (2, (a), (b), (c), (d)), \
+    SHUF_QUAD (1, (a), (b), (c), (d)), \
+    SHUF_QUAD (0, (a), (b), (c), (d))
+#define PACK_SHUF_MM256_EPI8(a, b, c, d) _mm256_set_epi8 ( \
+    PACK_SHUF_EPI8_LANE ((a), (b), (c), (d)), \
+    PACK_SHUF_EPI8_LANE ((a), (b), (c), (d)))
 
 /* It's nice to be able to shift by a negative amount */
 #define SHIFT_S(in, s) ((s >= 0) ? (in) << (s) : (in) >> -(s))
@@ -274,7 +260,9 @@ premul_u_to_p_128bpp (uint64_t * SMOL_RESTRICT inout,
                 ((SWAP_2_AND_3 (d) - 1) & 1) * 32 + 24 - 56) & 0x000000ff))
 #endif
 
-/* 24/32 -> 64 */
+/* ---------------------- *
+ * Repacking: 24/32 -> 64 *
+ * ---------------------- */
 
 static SMOL_INLINE uint64_t
 unpack_pixel_123_p_to_132a_p_64bpp (const uint8_t *p)
@@ -392,7 +380,9 @@ SMOL_REPACK_ROW_DEF (1234, 32, 32, UNASSOCIATED, COMPRESSED,
     }
 } SMOL_REPACK_ROW_DEF_END
 
-/* 24/32 -> 128 */
+/* ----------------------- *
+ * Repacking: 24/32 -> 128 *
+ * ----------------------- */
 
 static void
 unpack_8x_xxxx_u_to_123a_i_128bpp (const uint32_t * SMOL_RESTRICT *in,
@@ -757,7 +747,9 @@ SMOL_REPACK_ROW_DEF (1234,  32, 32, UNASSOCIATED, COMPRESSED,
     }
 } SMOL_REPACK_ROW_DEF_END
 
-/* 64 -> 24/32 */
+/* ---------------------- *
+ * Repacking: 64 -> 24/32 *
+ * ---------------------- */
 
 static SMOL_INLINE uint32_t
 pack_pixel_1234_p_to_1324_p_64bpp (uint64_t in)
@@ -917,7 +909,9 @@ DEF_REPACK_FROM_1234_64BPP_TO_32BPP (2, 3, 1, 4)
 DEF_REPACK_FROM_1234_64BPP_TO_32BPP (4, 1, 3, 2)
 DEF_REPACK_FROM_1234_64BPP_TO_32BPP (4, 2, 3, 1)
 
-/* 128 -> 24/32 */
+/* ----------------------- *
+ * Repacking: 128 -> 24/32 *
+ * ----------------------- */
 
 static void
 pack_8x_123a_i_to_xxxx_u_128bpp (const uint64_t * SMOL_RESTRICT *in,
@@ -1140,7 +1134,27 @@ DEF_REPACK_FROM_1234_128BPP_TO_32BPP (3, 2, 1, 4)
 DEF_REPACK_FROM_1234_128BPP_TO_32BPP (4, 1, 2, 3)
 DEF_REPACK_FROM_1234_128BPP_TO_32BPP (4, 3, 2, 1)
 
-/* --- Filter helpers --- */
+/* -------------- *
+ * Filter helpers *
+ * -------------- */
+
+#define LERP_SIMD256_EPI32(a, b, f)                                     \
+    _mm256_add_epi32 (                                                  \
+    _mm256_srli_epi32 (                                                 \
+    _mm256_mullo_epi32 (                                                \
+    _mm256_sub_epi32 ((a), (b)), factors), 8), (b))
+
+#define LERP_SIMD128_EPI32(a, b, f)                                     \
+    _mm_add_epi32 (                                                     \
+    _mm_srli_epi32 (                                                    \
+    _mm_mullo_epi32 (                                                   \
+    _mm_sub_epi32 ((a), (b)), factors), 8), (b))
+
+#define LERP_SIMD256_EPI32_AND_MASK(a, b, f, mask)                      \
+    _mm256_and_si256 (LERP_SIMD256_EPI32 ((a), (b), (f)), (mask))
+
+#define LERP_SIMD128_EPI32_AND_MASK(a, b, f, mask)                      \
+    _mm_and_si128 (LERP_SIMD128_EPI32 ((a), (b), (f)), (mask))
 
 static SMOL_INLINE const char *
 inrow_ofs_to_pointer (const SmolScaleCtx *scale_ctx,
@@ -1271,7 +1285,9 @@ add_parts (const uint64_t * SMOL_RESTRICT parts_in,
         *(parts_acc_out++) += *(parts_in++);
 }
 
-/* --- Horizontal scaling --- */
+/* ------------------ *
+ * Horizontal scaling *
+ * ------------------ */
 
 #define DEF_INTERP_HORIZONTAL_BILINEAR(n_halvings)                      \
 static void                                                             \
@@ -1679,7 +1695,9 @@ scale_horizontal (const SmolScaleCtx *scale_ctx,
                              row_parts_out);
 }
 
-/* --- Vertical scaling --- */
+/* ---------------- *
+ * Vertical scaling *
+ * ---------------- */
 
 static void
 update_vertical_ctx_bilinear (const SmolScaleCtx *scale_ctx,
@@ -2461,7 +2479,9 @@ scale_outrow_copy (const SmolScaleCtx *scale_ctx,
     scale_ctx->pack_row_func (vertical_ctx->parts_row [0], row_out, scale_ctx->width_out);
 }
 
-/* --- Conversion tables --- */
+/* --------------- *
+ * Function tables *
+ * --------------- */
 
 #define R SMOL_REPACK_META
 
