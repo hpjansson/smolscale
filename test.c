@@ -1304,10 +1304,10 @@ static void
 print_usage (void)
 {
     g_printerr ("Usage: test <smol|libswscale|pixman|gdk_pixbuf|sdl|skia|stb>\n"
+                "            [ check ] |\n"
                 "            [ generate\n"
                 "              <min_scale> <max_scale> <n_steps>\n"
                 "              <filename> ] |\n"
-                "            [ check ]\n"
                 "            [ benchmark\n"
                 "              <n_repetitions>\n"
                 "              <in_width> <in_height>\n"
