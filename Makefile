@@ -55,7 +55,7 @@ TEST_SRC=png.c test.c
 all: verify test
 
 clean: FORCE
-	rm -f test $(SMOL_OBJ) $(SKIA_OBJ)
+	rm -f test verify $(SMOL_OBJ) $(SKIA_OBJ)
 
 test: Makefile smolscale.h stb_image_resize.h $(TEST_SRC) $(SMOL_OBJ) $(SKIA_OBJ)
 	$(CC) $(TEST_SRC) $(TEST_CFLAGS) $(TEST_LDFLAGS) $(TEST_SYSDEPS_FLAGS) $(SMOL_OBJ) -o test
