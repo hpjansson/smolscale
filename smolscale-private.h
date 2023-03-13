@@ -68,7 +68,10 @@ typedef unsigned int SmolBool;
 
 #define SMOL_ALIGNMENT 64
 
-#define SMOL_ASSUME_ALIGNED_TO(x, t, n) (x) = (t) __builtin_assume_aligned ((x), (n))
+#define SMOL_ASSIGN_ALIGNED_TO(x, t, n) (t) __builtin_assume_aligned ((x), (n))
+#define SMOL_ASSIGN_ALIGNED(x, t) SMOL_ASSIGN_ALIGNED_TO ((x), t, SMOL_ALIGNMENT)
+
+#define SMOL_ASSUME_ALIGNED_TO(x, t, n) (x) = SMOL_ASSIGN_ALIGNED_TO ((x), t, (n))
 #define SMOL_ASSUME_ALIGNED(x, t) SMOL_ASSUME_ALIGNED_TO ((x), t, SMOL_ALIGNMENT)
 
 /* Pointer to beginning of storage is stored in *r. This must be passed to smol_free() later. */

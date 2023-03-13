@@ -1760,17 +1760,14 @@ interp_vertical_bilinear_store_64bpp (uint64_t F,
 
 static void
 interp_vertical_bilinear_add_64bpp (uint16_t F,
-                                    const uint64_t * SMOL_RESTRICT top_row_parts_in,
-                                    const uint64_t * SMOL_RESTRICT bottom_row_parts_in,
-                                    uint64_t * SMOL_RESTRICT accum_out,
+                                    const uint64_t *top_row_parts_in,
+                                    const uint64_t *bottom_row_parts_in,
+                                    uint64_t *accum_out,
                                     uint32_t width)
 {
-    SMOL_ASSUME_ALIGNED (top_row_parts_in, const uint64_t *);
-    SMOL_ASSUME_ALIGNED (bottom_row_parts_in, const uint64_t *);
-    SMOL_ASSUME_ALIGNED (accum_out, uint64_t *);
-    const uint16_t * SMOL_RESTRICT top_row_parts_in_u16 = top_row_parts_in;
-    const uint16_t * SMOL_RESTRICT bottom_row_parts_in_u16 = bottom_row_parts_in;
-    uint16_t * SMOL_RESTRICT accum_out_u16 = accum_out;
+    const uint16_t * SMOL_RESTRICT top_row_parts_in_u16 = SMOL_ASSIGN_ALIGNED (top_row_parts_in, const uint16_t *);
+    const uint16_t * SMOL_RESTRICT bottom_row_parts_in_u16 = SMOL_ASSIGN_ALIGNED (bottom_row_parts_in, const uint16_t *);
+    uint16_t * SMOL_RESTRICT accum_out_u16 = SMOL_ASSIGN_ALIGNED (accum_out, uint16_t *);
     int i, j;
 
     /* This produces good AVX2 code with -O3, even with gcc 11.2 */
