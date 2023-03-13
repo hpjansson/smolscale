@@ -30,6 +30,9 @@
 #define CORRECTNESS_WIDTH_STEP_SIZE (((CORRECTNESS_WIDTH_MAX) - (CORRECTNESS_WIDTH_MIN)) / (CORRECTNESS_WIDTH_STEPS))
 #define CORRECTNESS_HEIGHT_STEP_SIZE (((CORRECTNESS_HEIGHT_MAX) - (CORRECTNESS_HEIGHT_MIN)) / (CORRECTNESS_HEIGHT_STEPS))
 
+#define BENCHMARK_CONV_WIDTH 3840
+#define BENCHMARK_CONV_HEIGHT 2160
+
 /* Defined in png.c */
 gboolean smoltest_load_image (const gchar *file_name,
                               guint *width_out,
@@ -42,6 +45,9 @@ void smoltest_save_image (const gchar *prefix,
 
 /* --- Common --- */
 
+static SmolPixelType smol_ptype_in = PIXEL_TYPE_SMOL;
+static SmolPixelType smol_ptype_out = PIXEL_TYPE_SMOL;
+
 typedef struct
 {
     guint in_width, in_height;
@@ -53,6 +59,7 @@ ScaleParams;
 typedef enum
 {
     SCALE_OP_BENCHMARK_PROP,
+    SCALE_OP_BENCHMARK_CONV,
     SCALE_OP_CHECK,
     SCALE_OP_GENERATE
 }
@@ -61,6 +68,25 @@ ScaleOperation;
 typedef void (*ScaleInitFunc) (ScaleParams *, gconstpointer, guint, guint);
 typedef void (*ScaleFiniFunc) (ScaleParams *);
 typedef void (*ScaleDoFunc) (ScaleParams *, guint, guint);
+
+static const gchar * const smol_pixel_type_names [SMOL_PIXEL_MAX] =
+{
+    /* Premultiplied */
+    "RGBA8",
+    "BGRA8",
+    "ARGB8",
+    "ABGR8",
+
+    /* Unassociated */
+    "rgbA8",
+    "bgrA8",
+    "Argb8",
+    "Abgr8",
+
+    /* No alpha */
+    "rgb8",
+    "bgr8"
+};
 
 static gpointer
 gen_color_canvas (guint width, guint height, guint32 color)
@@ -367,6 +393,104 @@ benchmark_print_average (Benchmark *benchmark, FILE *f)
 
     g_fprintf (f, "%.1lf %.1lf %.1lf\n", sum / (gdouble) samples_by_pps->len, ntiles [0], ntiles [1]);
     g_array_free (samples_by_pps, TRUE);
+}
+
+/* --- Conversion benchmarks --- */
+
+typedef struct
+{
+    Benchmark *bm [SMOL_PIXEL_MAX] [SMOL_PIXEL_MAX];
+}
+ConvBenchmark;
+
+static ConvBenchmark *
+conv_benchmark_new (void)
+{
+    ConvBenchmark *conv_bm;
+    gint i, j;
+
+    conv_bm = g_new0 (ConvBenchmark, 1);
+
+    for (i = 0; i < SMOL_PIXEL_MAX; i++)
+    {
+        for (j = 0; j < SMOL_PIXEL_MAX; j++)
+        {
+            conv_bm->bm [i] [j] = benchmark_new ();
+        }
+    }
+
+    return conv_bm;
+}
+
+static void
+conv_benchmark_destroy (ConvBenchmark *conv_bm)
+{
+    gint i, j;
+
+    for (i = 0; i < SMOL_PIXEL_MAX; i++)
+    {
+        for (j = 0; j < SMOL_PIXEL_MAX; j++)
+        {
+            benchmark_destroy (conv_bm->bm [i] [j]);
+        }
+    }
+
+    g_free (conv_bm);
+}
+
+static void
+conv_benchmark_add_sample (ConvBenchmark *conv_bm,
+                           SmolPixelType ptype_in, SmolPixelType ptype_out,
+                           gint width_in, gint height_in,
+                           gint width_out, gint height_out,
+                           gdouble elapsed_s)
+{
+    benchmark_add_sample (conv_bm->bm [ptype_in] [ptype_out],
+                          width_in, height_in,
+                          width_out, height_out,
+                          elapsed_s);
+}
+
+static void
+conv_benchmark_postprocess (ConvBenchmark *conv_bm)
+{
+    gint i, j;
+
+    for (i = 0; i < SMOL_PIXEL_MAX; i++)
+    {
+        for (j = 0; j < SMOL_PIXEL_MAX; j++)
+            benchmark_postprocess (conv_bm->bm [i] [j]);
+    }
+}
+
+static void
+conv_benchmark_print (ConvBenchmark *conv_bm, FILE *f)
+{
+    gint i, j;
+
+    fprintf (f, "Repack  ");
+
+    for (j = 0; j < SMOL_PIXEL_MAX; j++)
+    {
+        fprintf (f, "%7.7s ", smol_pixel_type_names [j]);
+    }
+
+    fputc ('\n', f);
+
+    for (i = 0; i < SMOL_PIXEL_MAX; i++)
+    {
+        fprintf (f, "%7.7s ", smol_pixel_type_names [i]);
+
+        for (j = 0; j < SMOL_PIXEL_MAX; j++)
+        {
+            const Sample *sample;
+
+            sample = &g_array_index (conv_bm->bm [i] [j]->samples, Sample, 0);
+            fprintf (f, "%1.5lf ", sample->elapsed_s);
+        }
+
+        fputc ('\n', f);
+    }
 }
 
 /* --- Pixman --- */
@@ -684,11 +808,11 @@ scale_do_smol (ScaleParams *params, guint out_width, guint out_height)
 
     scaled = g_new (guint32, out_width * out_height);
     smol_scale_simple (params->in_data,
-                       PIXEL_TYPE_SMOL,
+                       smol_ptype_in,
                        params->in_width, params->in_height,
                        params->in_width * sizeof (guint32),
                        scaled,
-                       PIXEL_TYPE_SMOL,
+                       smol_ptype_out,
                        out_width, out_height,
                        out_width * sizeof (guint32),
                        FALSE);
@@ -743,10 +867,10 @@ scale_do_smol_threaded (ScaleParams *params, guint out_width, guint out_height)
     scaled = g_new (guint32, out_width * out_height);
 
     scale_ctx = smol_scale_new (params->in_data,
-                                PIXEL_TYPE_SMOL,
+                                smol_ptype_in,
                                 params->in_width, params->in_height, params->in_width * sizeof (guint32),
                                 scaled,
-                                PIXEL_TYPE_SMOL,
+                                smol_ptype_out,
                                 out_width, out_height, out_width * sizeof (guint32),
                                 FALSE);
 
@@ -1035,6 +1159,62 @@ run_benchmark_proportional (gpointer raw_data,
 }
 
 static void
+run_benchmark_conv (gpointer raw_data,
+                    guint in_width, guint in_height,
+                    ScaleInitFunc init_func,
+                    ScaleFiniFunc fini_func,
+                    ScaleDoFunc do_func,
+                    ConvBenchmark *conv_bm)
+{
+    ScaleParams params = { 0 };
+    gdouble *results;
+    gint n_repetitions = 20;
+    gint rep;
+    SmolPixelType ptype_in, ptype_out;
+    gint i;
+
+    (*init_func) (&params, raw_data, in_width, in_height);
+
+    for (rep = 0; rep < n_repetitions; rep++)
+    {
+        for (ptype_in = 0; ptype_in < SMOL_PIXEL_MAX; ptype_in++)
+        {
+            for (ptype_out = 0; ptype_out < SMOL_PIXEL_MAX; ptype_out++)
+            {
+                struct timespec before, after;
+                guint out_width, out_height;
+
+                out_width = in_width - 1;
+                out_height = in_height - 1;
+
+                smol_ptype_in = ptype_in;
+                smol_ptype_out = ptype_out;
+
+                clock_gettime (CLOCK_MONOTONIC_RAW, &before);
+                (*do_func) (&params, out_width, out_height);
+                clock_gettime (CLOCK_MONOTONIC_RAW, &after);
+
+                conv_benchmark_add_sample (conv_bm,
+                                           ptype_in, ptype_out,
+                                           in_width, in_height,
+                                           out_width, out_height,
+                                           compute_elapsed (&before, &after));
+            }
+        }
+
+        g_printerr ("*");
+        fflush (stderr);
+    }
+
+    g_printerr ("\n");
+    fflush (stderr);
+
+    (*fini_func) (&params);
+
+    conv_benchmark_postprocess (conv_bm);
+}
+
+static void
 remove_extension (gchar *filename)
 {
     gchar *p0 = strrchr (filename, '.');
@@ -1313,7 +1493,8 @@ print_usage (void)
                 "              <in_width> <in_height>\n"
                 "              <min_scale> <max_scale> <n_steps>\n"
                 "              [ <averages log file>\n"
-                "                [ <samples log file> ] ] ]\n");
+                "                [ <samples log file> ] ] ] |\n"
+                "            [ benchmark-conv\n ]");
 }
 
 #define DEFAULT_N_REPETITIONS 3
@@ -1426,6 +1607,8 @@ main (int argc, char *argv [])
     {
         if (!strcasecmp (argv [2], "benchmark"))
             scale_op = SCALE_OP_BENCHMARK_PROP;
+        else if (!strcasecmp (argv [2], "benchmark-conv"))
+            scale_op = SCALE_OP_BENCHMARK_CONV;
         else if (!strcasecmp (argv [2], "generate"))
             scale_op = SCALE_OP_GENERATE;
         else if (!strcasecmp (argv [2], "check"))
@@ -1453,6 +1636,16 @@ main (int argc, char *argv [])
             output_fname [0] = argv [i++];
         if (argc >= 11)
             output_fname [1] = argv [i++];
+    }
+    if (scale_op == SCALE_OP_BENCHMARK_CONV)
+    {
+        if (strcasecmp (argv [1], "smol")
+            && strcasecmp (argv [1], "smol-mt"))
+        {
+            g_printerr ("Operation benchmark-conv is only defined for modules 'smol' and 'smol-mt'.");
+            print_usage ();
+            return 1;
+        }
     }
     else if (scale_op == SCALE_OP_GENERATE)
     {
@@ -1498,6 +1691,18 @@ main (int argc, char *argv [])
         if (output_file [1])
             benchmark_print_samples (benchmark, output_file [1]);
         benchmark_destroy (benchmark);
+        g_free (raw_data);
+    }
+    else if (scale_op == SCALE_OP_BENCHMARK_CONV)
+    {
+        gpointer raw_data = gen_random_canvas (BENCHMARK_CONV_WIDTH, BENCHMARK_CONV_HEIGHT);
+        ConvBenchmark *conv_bm = conv_benchmark_new ();
+        run_benchmark_conv (raw_data,
+                            BENCHMARK_CONV_WIDTH, BENCHMARK_CONV_HEIGHT,
+                            init_func, fini_func, do_func,
+                            conv_bm);
+        conv_benchmark_print (conv_bm, stdout);
+        conv_benchmark_destroy (conv_bm);
         g_free (raw_data);
     }
     else if (scale_op == SCALE_OP_GENERATE)
