@@ -602,10 +602,7 @@ unpack_pixel_a234_u_to_234a_i_128bpp (uint32_t p,
 
 SMOL_REPACK_ROW_DEF (1234,  32, 32, UNASSOCIATED, COMPRESSED,
                      2341, 128, 64, PREMUL16,     COMPRESSED) {
-    const __m256i channel_shuf = _mm256_set_epi8 (
-        12,15,14,13, 8,11,10,9, 4,7,6,5, 0,3,2,1,
-        12,15,14,13, 8,11,10,9, 4,7,6,5, 0,3,2,1);
-
+    const __m256i channel_shuf = PACK_SHUF_MM256_EPI8 (2, 3, 4, 1);
     unpack_8x_xxxx_u_to_123a_i_128bpp (&row_in, &row_out, row_out_max,
                                        channel_shuf);
 
@@ -707,10 +704,7 @@ unpack_pixel_123a_u_to_123a_i_128bpp (uint32_t p,
 
 SMOL_REPACK_ROW_DEF (1234,  32, 32, UNASSOCIATED, COMPRESSED,
                      1234, 128, 64, PREMUL16,     COMPRESSED) {
-    const __m256i channel_shuf = _mm256_set_epi8 (
-        13,12,15,14, 9,8,11,10, 5,4,7,6, 1,0,3,2,
-        13,12,15,14, 9,8,11,10, 5,4,7,6, 1,0,3,2);
-
+    const __m256i channel_shuf = PACK_SHUF_MM256_EPI8 (1, 2, 3, 4);
     unpack_8x_xxxx_u_to_123a_i_128bpp (&row_in, &row_out, row_out_max,
                                        channel_shuf);
 
