@@ -227,288 +227,6 @@ premul_u_to_p_128bpp (uint64_t * SMOL_RESTRICT inout,
                 ((SWAP_2_AND_3 (d) - 1) & 1) * 32 + 24 - 56) & 0x000000ff))
 #endif
 
-/* 64 -> 24/32 */
-
-static SMOL_INLINE uint32_t
-pack_pixel_1234_p_to_1324_p_64bpp (uint64_t in)
-{
-    return in | (in >> 24);
-}
-
-SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
-                     132,  24,  8, PREMUL8,       COMPRESSED) {
-    while (row_out != row_out_max)
-    {
-        /* FIXME: Would be faster to shift directly */
-        uint32_t p = pack_pixel_1234_p_to_1324_p_64bpp (*(row_in++));
-        *(row_out++) = p >> 24;
-        *(row_out++) = p >> 16;
-        *(row_out++) = p >> 8;
-    }
-} SMOL_REPACK_ROW_DEF_END
-
-SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
-                     132,  24,  8, UNASSOCIATED,  COMPRESSED) {
-    while (row_out != row_out_max)
-    {
-        uint8_t alpha = *row_in;
-        uint64_t t = (unpremul_p_to_u_64bpp (*row_in, alpha) & 0xffffffffffffff00ULL) | alpha;
-        /* FIXME: Would be faster to shift directly */
-        uint32_t p = pack_pixel_1234_p_to_1324_p_64bpp (t);
-        *(row_out++) = p >> 24;
-        *(row_out++) = p >> 16;
-        *(row_out++) = p >> 8;
-        row_in++;
-    }
-} SMOL_REPACK_ROW_DEF_END
-
-SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
-                     231,  24,  8, PREMUL8,       COMPRESSED) {
-    while (row_out != row_out_max)
-    {
-        /* FIXME: Would be faster to shift directly */
-        uint32_t p = pack_pixel_1234_p_to_1324_p_64bpp (*(row_in++));
-        *(row_out++) = p >> 8;
-        *(row_out++) = p >> 16;
-        *(row_out++) = p >> 24;
-    }
-} SMOL_REPACK_ROW_DEF_END
-
-SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
-                     231,  24,  8, UNASSOCIATED,  COMPRESSED) {
-    while (row_out != row_out_max)
-    {
-        uint8_t alpha = *row_in;
-        uint64_t t = (unpremul_p_to_u_64bpp (*row_in, alpha) & 0xffffffffffffff00ULL) | alpha;
-        /* FIXME: Would be faster to shift directly */
-        uint32_t p = pack_pixel_1234_p_to_1324_p_64bpp (t);
-        *(row_out++) = p >> 8;
-        *(row_out++) = p >> 16;
-        *(row_out++) = p >> 24;
-        row_in++;
-    }
-} SMOL_REPACK_ROW_DEF_END
-
-SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
-                     324,  24,  8, PREMUL8,       COMPRESSED) {
-    while (row_out != row_out_max)
-    {
-        /* FIXME: Would be faster to shift directly */
-        uint32_t p = pack_pixel_1234_p_to_1324_p_64bpp (*(row_in++));
-        *(row_out++) = p >> 16;
-        *(row_out++) = p >> 8;
-        *(row_out++) = p;
-    }
-} SMOL_REPACK_ROW_DEF_END
-
-SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
-                     324,  24,  8, UNASSOCIATED,  COMPRESSED) {
-    while (row_out != row_out_max)
-    {
-        uint8_t alpha = *row_in >> 24;
-        uint64_t t = (unpremul_p_to_u_64bpp (*row_in, alpha) & 0xffffffffffffff00ULL) | alpha;
-        /* FIXME: Would be faster to shift directly */
-        uint32_t p = pack_pixel_1234_p_to_1324_p_64bpp (t);
-        *(row_out++) = p >> 16;
-        *(row_out++) = p >> 8;
-        *(row_out++) = p;
-        row_in++;
-    }
-} SMOL_REPACK_ROW_DEF_END
-
-SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
-                     423,  24,  8, PREMUL8,       COMPRESSED) {
-    while (row_out != row_out_max)
-    {
-        /* FIXME: Would be faster to shift directly */
-        uint32_t p = pack_pixel_1234_p_to_1324_p_64bpp (*(row_in++));
-        *(row_out++) = p;
-        *(row_out++) = p >> 8;
-        *(row_out++) = p >> 16;
-    }
-} SMOL_REPACK_ROW_DEF_END
-
-SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
-                     423,  24,  8, UNASSOCIATED,  COMPRESSED) {
-    while (row_out != row_out_max)
-    {
-        uint8_t alpha = *row_in >> 24;
-        uint64_t t = (unpremul_p_to_u_64bpp (*row_in, alpha) & 0xffffffffffffff00ULL) | alpha;
-        /* FIXME: Would be faster to shift directly */
-        uint32_t p = pack_pixel_1234_p_to_1324_p_64bpp (t);
-        *(row_out++) = p;
-        *(row_out++) = p >> 8;
-        *(row_out++) = p >> 16;
-        row_in++;
-    }
-} SMOL_REPACK_ROW_DEF_END
-
-SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
-                     1324, 32, 32, PREMUL8,       COMPRESSED) {
-    while (row_out != row_out_max)
-    {
-        *(row_out++) = pack_pixel_1234_p_to_1324_p_64bpp (*(row_in++));
-    }
-} SMOL_REPACK_ROW_DEF_END
-
-SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
-                     1324, 32, 32, UNASSOCIATED,  COMPRESSED) {
-    while (row_out != row_out_max)
-    {
-        uint8_t alpha = *row_in;
-        uint64_t t = (unpremul_p_to_u_64bpp (*row_in, alpha) & 0xffffffffffffff00ULL) | alpha;
-        *(row_out++) = pack_pixel_1234_p_to_1324_p_64bpp (t);
-        row_in++;
-    }
-} SMOL_REPACK_ROW_DEF_END
-
-#define DEF_REPACK_FROM_1234_64BPP_TO_32BPP(a, b, c, d) \
-    SMOL_REPACK_ROW_DEF (1234,       64, 64, PREMUL8,       COMPRESSED, \
-                         a##b##c##d, 32, 32, PREMUL8,       COMPRESSED) { \
-        while (row_out != row_out_max) \
-        { \
-            *(row_out++) = PACK_FROM_1234_64BPP (*row_in, a, b, c, d); \
-            row_in++; \
-        } \
-    } SMOL_REPACK_ROW_DEF_END \
-    SMOL_REPACK_ROW_DEF (1234,       64, 64, PREMUL8,       COMPRESSED, \
-                         a##b##c##d, 32, 32, UNASSOCIATED,  COMPRESSED) { \
-        while (row_out != row_out_max) \
-        { \
-            uint8_t alpha = *row_in; \
-            uint64_t t = (unpremul_p_to_u_64bpp (*row_in, alpha) & 0xffffffffffffff00ULL) | alpha; \
-            *(row_out++) = PACK_FROM_1234_64BPP (t, a, b, c, d); \
-            row_in++; \
-        } \
-    } SMOL_REPACK_ROW_DEF_END
-
-DEF_REPACK_FROM_1234_64BPP_TO_32BPP (1, 4, 2, 3)
-DEF_REPACK_FROM_1234_64BPP_TO_32BPP (2, 3, 1, 4)
-DEF_REPACK_FROM_1234_64BPP_TO_32BPP (4, 1, 3, 2)
-DEF_REPACK_FROM_1234_64BPP_TO_32BPP (4, 2, 3, 1)
-
-/* 128 -> 24/32 */
-
-SMOL_REPACK_ROW_DEF (1234, 128, 64, PREMUL8,       COMPRESSED, \
-                     123,   24,  8, PREMUL8,       COMPRESSED) { \
-    while (row_out != row_out_max) \
-    { \
-        *(row_out++) = *row_in >> 32; \
-        *(row_out++) = *(row_in++); \
-        *(row_out++) = *(row_in++) >> 32; \
-    } \
-} SMOL_REPACK_ROW_DEF_END
-
-SMOL_REPACK_ROW_DEF (1234, 128, 64, PREMUL8,       COMPRESSED, \
-                     123,   24,  8, UNASSOCIATED,  COMPRESSED) { \
-    while (row_out != row_out_max) \
-    { \
-        uint64_t t [2]; \
-        uint8_t alpha = row_in [1]; \
-        unpremul_p_to_u_128bpp (row_in, t, alpha); \
-        t [1] = (t [1] & 0xffffffff00000000ULL) | alpha; \
-        *(row_out++) = t [0] >> 32; \
-        *(row_out++) = t [0]; \
-        *(row_out++) = t [1] >> 32; \
-        row_in += 2; \
-    } \
-} SMOL_REPACK_ROW_DEF_END
-
-SMOL_REPACK_ROW_DEF (1234, 128, 64, PREMUL16,      COMPRESSED, \
-                     123,   24,  8, UNASSOCIATED,  COMPRESSED) { \
-    while (row_out != row_out_max) \
-    { \
-        uint64_t t [2]; \
-        uint8_t alpha = row_in [1]; \
-        unpremul_i_to_u_128bpp (row_in, t, alpha); \
-        t [1] = (t [1] & 0xffffffff00000000ULL) | alpha; \
-        *(row_out++) = t [0] >> 32; \
-        *(row_out++) = t [0]; \
-        *(row_out++) = t [1] >> 32; \
-        row_in += 2; \
-    } \
-} SMOL_REPACK_ROW_DEF_END
-
-SMOL_REPACK_ROW_DEF (1234, 128, 64, PREMUL8,       COMPRESSED, \
-                     321,   24,  8, PREMUL8,       COMPRESSED) { \
-    while (row_out != row_out_max) \
-    { \
-        *(row_out++) = row_in [1] >> 32; \
-        *(row_out++) = row_in [0]; \
-        *(row_out++) = row_in [0] >> 32; \
-        row_in += 2; \
-    } \
-} SMOL_REPACK_ROW_DEF_END
-
-SMOL_REPACK_ROW_DEF (1234, 128, 64, PREMUL8,       COMPRESSED, \
-                     321,   24,  8, UNASSOCIATED,  COMPRESSED) { \
-    while (row_out != row_out_max) \
-    { \
-        uint64_t t [2]; \
-        uint8_t alpha = row_in [1]; \
-        unpremul_p_to_u_128bpp (row_in, t, alpha); \
-        t [1] = (t [1] & 0xffffffff00000000ULL) | alpha; \
-        *(row_out++) = t [1] >> 32; \
-        *(row_out++) = t [0]; \
-        *(row_out++) = t [0] >> 32; \
-        row_in += 2; \
-    } \
-} SMOL_REPACK_ROW_DEF_END
-
-SMOL_REPACK_ROW_DEF (1234, 128, 64, PREMUL16,      COMPRESSED, \
-                     321,   24,  8, UNASSOCIATED,  COMPRESSED) { \
-    while (row_out != row_out_max) \
-    { \
-        uint64_t t [2]; \
-        uint8_t alpha = row_in [1] >> 8; \
-        unpremul_i_to_u_128bpp (row_in, t, alpha); \
-        t [1] = (t [1] & 0xffffffff00000000ULL) | alpha; \
-        *(row_out++) = t [1] >> 32; \
-        *(row_out++) = t [0]; \
-        *(row_out++) = t [0] >> 32; \
-        row_in += 2; \
-    } \
-} SMOL_REPACK_ROW_DEF_END
-
-#define DEF_REPACK_FROM_1234_128BPP_TO_32BPP(a, b, c, d) \
-    SMOL_REPACK_ROW_DEF (1234,       128, 64, PREMUL8,       COMPRESSED, \
-                         a##b##c##d,  32, 32, PREMUL8,       COMPRESSED) { \
-        while (row_out != row_out_max) \
-        { \
-            *(row_out++) = PACK_FROM_1234_128BPP (row_in, a, b, c, d); \
-            row_in += 2; \
-        } \
-    } SMOL_REPACK_ROW_DEF_END \
-    SMOL_REPACK_ROW_DEF (1234,       128, 64, PREMUL8,       COMPRESSED, \
-                         a##b##c##d,  32, 32, UNASSOCIATED,  COMPRESSED) { \
-        while (row_out != row_out_max) \
-        { \
-            uint64_t t [2]; \
-            uint8_t alpha = row_in [1]; \
-            unpremul_p_to_u_128bpp (row_in, t, alpha); \
-            t [1] = (t [1] & 0xffffffff00000000ULL) | alpha; \
-            *(row_out++) = PACK_FROM_1234_128BPP (t, a, b, c, d); \
-            row_in += 2; \
-        } \
-    } SMOL_REPACK_ROW_DEF_END \
-    SMOL_REPACK_ROW_DEF (1234,       128, 64, PREMUL16,      COMPRESSED, \
-                         a##b##c##d,  32, 32, UNASSOCIATED,  COMPRESSED) { \
-        while (row_out != row_out_max) \
-        { \
-            uint64_t t [2]; \
-            uint8_t alpha = row_in [1] >> 8; \
-            unpremul_i_to_u_128bpp (row_in, t, alpha); \
-            t [1] = (t [1] & 0xffffffff00000000ULL) | alpha; \
-            *(row_out++) = PACK_FROM_1234_128BPP (t, a, b, c, d); \
-            row_in += 2; \
-        } \
-    } SMOL_REPACK_ROW_DEF_END
-
-DEF_REPACK_FROM_1234_128BPP_TO_32BPP (1, 2, 3, 4)
-DEF_REPACK_FROM_1234_128BPP_TO_32BPP (3, 2, 1, 4)
-DEF_REPACK_FROM_1234_128BPP_TO_32BPP (4, 1, 2, 3)
-DEF_REPACK_FROM_1234_128BPP_TO_32BPP (4, 3, 2, 1)
-
 /* 24/32 -> 64 */
 
 static SMOL_INLINE uint64_t
@@ -909,6 +627,288 @@ SMOL_REPACK_ROW_DEF (1234,  32, 32, UNASSOCIATED, COMPRESSED,
         row_out += 2;
     }
 } SMOL_REPACK_ROW_DEF_END
+
+/* 64 -> 24/32 */
+
+static SMOL_INLINE uint32_t
+pack_pixel_1234_p_to_1324_p_64bpp (uint64_t in)
+{
+    return in | (in >> 24);
+}
+
+SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
+                     132,  24,  8, PREMUL8,       COMPRESSED) {
+    while (row_out != row_out_max)
+    {
+        /* FIXME: Would be faster to shift directly */
+        uint32_t p = pack_pixel_1234_p_to_1324_p_64bpp (*(row_in++));
+        *(row_out++) = p >> 24;
+        *(row_out++) = p >> 16;
+        *(row_out++) = p >> 8;
+    }
+} SMOL_REPACK_ROW_DEF_END
+
+SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
+                     132,  24,  8, UNASSOCIATED,  COMPRESSED) {
+    while (row_out != row_out_max)
+    {
+        uint8_t alpha = *row_in;
+        uint64_t t = (unpremul_p_to_u_64bpp (*row_in, alpha) & 0xffffffffffffff00ULL) | alpha;
+        /* FIXME: Would be faster to shift directly */
+        uint32_t p = pack_pixel_1234_p_to_1324_p_64bpp (t);
+        *(row_out++) = p >> 24;
+        *(row_out++) = p >> 16;
+        *(row_out++) = p >> 8;
+        row_in++;
+    }
+} SMOL_REPACK_ROW_DEF_END
+
+SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
+                     231,  24,  8, PREMUL8,       COMPRESSED) {
+    while (row_out != row_out_max)
+    {
+        /* FIXME: Would be faster to shift directly */
+        uint32_t p = pack_pixel_1234_p_to_1324_p_64bpp (*(row_in++));
+        *(row_out++) = p >> 8;
+        *(row_out++) = p >> 16;
+        *(row_out++) = p >> 24;
+    }
+} SMOL_REPACK_ROW_DEF_END
+
+SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
+                     231,  24,  8, UNASSOCIATED,  COMPRESSED) {
+    while (row_out != row_out_max)
+    {
+        uint8_t alpha = *row_in;
+        uint64_t t = (unpremul_p_to_u_64bpp (*row_in, alpha) & 0xffffffffffffff00ULL) | alpha;
+        /* FIXME: Would be faster to shift directly */
+        uint32_t p = pack_pixel_1234_p_to_1324_p_64bpp (t);
+        *(row_out++) = p >> 8;
+        *(row_out++) = p >> 16;
+        *(row_out++) = p >> 24;
+        row_in++;
+    }
+} SMOL_REPACK_ROW_DEF_END
+
+SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
+                     324,  24,  8, PREMUL8,       COMPRESSED) {
+    while (row_out != row_out_max)
+    {
+        /* FIXME: Would be faster to shift directly */
+        uint32_t p = pack_pixel_1234_p_to_1324_p_64bpp (*(row_in++));
+        *(row_out++) = p >> 16;
+        *(row_out++) = p >> 8;
+        *(row_out++) = p;
+    }
+} SMOL_REPACK_ROW_DEF_END
+
+SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
+                     324,  24,  8, UNASSOCIATED,  COMPRESSED) {
+    while (row_out != row_out_max)
+    {
+        uint8_t alpha = *row_in >> 24;
+        uint64_t t = (unpremul_p_to_u_64bpp (*row_in, alpha) & 0xffffffffffffff00ULL) | alpha;
+        /* FIXME: Would be faster to shift directly */
+        uint32_t p = pack_pixel_1234_p_to_1324_p_64bpp (t);
+        *(row_out++) = p >> 16;
+        *(row_out++) = p >> 8;
+        *(row_out++) = p;
+        row_in++;
+    }
+} SMOL_REPACK_ROW_DEF_END
+
+SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
+                     423,  24,  8, PREMUL8,       COMPRESSED) {
+    while (row_out != row_out_max)
+    {
+        /* FIXME: Would be faster to shift directly */
+        uint32_t p = pack_pixel_1234_p_to_1324_p_64bpp (*(row_in++));
+        *(row_out++) = p;
+        *(row_out++) = p >> 8;
+        *(row_out++) = p >> 16;
+    }
+} SMOL_REPACK_ROW_DEF_END
+
+SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
+                     423,  24,  8, UNASSOCIATED,  COMPRESSED) {
+    while (row_out != row_out_max)
+    {
+        uint8_t alpha = *row_in >> 24;
+        uint64_t t = (unpremul_p_to_u_64bpp (*row_in, alpha) & 0xffffffffffffff00ULL) | alpha;
+        /* FIXME: Would be faster to shift directly */
+        uint32_t p = pack_pixel_1234_p_to_1324_p_64bpp (t);
+        *(row_out++) = p;
+        *(row_out++) = p >> 8;
+        *(row_out++) = p >> 16;
+        row_in++;
+    }
+} SMOL_REPACK_ROW_DEF_END
+
+SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
+                     1324, 32, 32, PREMUL8,       COMPRESSED) {
+    while (row_out != row_out_max)
+    {
+        *(row_out++) = pack_pixel_1234_p_to_1324_p_64bpp (*(row_in++));
+    }
+} SMOL_REPACK_ROW_DEF_END
+
+SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
+                     1324, 32, 32, UNASSOCIATED,  COMPRESSED) {
+    while (row_out != row_out_max)
+    {
+        uint8_t alpha = *row_in;
+        uint64_t t = (unpremul_p_to_u_64bpp (*row_in, alpha) & 0xffffffffffffff00ULL) | alpha;
+        *(row_out++) = pack_pixel_1234_p_to_1324_p_64bpp (t);
+        row_in++;
+    }
+} SMOL_REPACK_ROW_DEF_END
+
+#define DEF_REPACK_FROM_1234_64BPP_TO_32BPP(a, b, c, d) \
+    SMOL_REPACK_ROW_DEF (1234,       64, 64, PREMUL8,       COMPRESSED, \
+                         a##b##c##d, 32, 32, PREMUL8,       COMPRESSED) { \
+        while (row_out != row_out_max) \
+        { \
+            *(row_out++) = PACK_FROM_1234_64BPP (*row_in, a, b, c, d); \
+            row_in++; \
+        } \
+    } SMOL_REPACK_ROW_DEF_END \
+    SMOL_REPACK_ROW_DEF (1234,       64, 64, PREMUL8,       COMPRESSED, \
+                         a##b##c##d, 32, 32, UNASSOCIATED,  COMPRESSED) { \
+        while (row_out != row_out_max) \
+        { \
+            uint8_t alpha = *row_in; \
+            uint64_t t = (unpremul_p_to_u_64bpp (*row_in, alpha) & 0xffffffffffffff00ULL) | alpha; \
+            *(row_out++) = PACK_FROM_1234_64BPP (t, a, b, c, d); \
+            row_in++; \
+        } \
+    } SMOL_REPACK_ROW_DEF_END
+
+DEF_REPACK_FROM_1234_64BPP_TO_32BPP (1, 4, 2, 3)
+DEF_REPACK_FROM_1234_64BPP_TO_32BPP (2, 3, 1, 4)
+DEF_REPACK_FROM_1234_64BPP_TO_32BPP (4, 1, 3, 2)
+DEF_REPACK_FROM_1234_64BPP_TO_32BPP (4, 2, 3, 1)
+
+/* 128 -> 24/32 */
+
+SMOL_REPACK_ROW_DEF (1234, 128, 64, PREMUL8,       COMPRESSED, \
+                     123,   24,  8, PREMUL8,       COMPRESSED) { \
+    while (row_out != row_out_max) \
+    { \
+        *(row_out++) = *row_in >> 32; \
+        *(row_out++) = *(row_in++); \
+        *(row_out++) = *(row_in++) >> 32; \
+    } \
+} SMOL_REPACK_ROW_DEF_END
+
+SMOL_REPACK_ROW_DEF (1234, 128, 64, PREMUL8,       COMPRESSED, \
+                     123,   24,  8, UNASSOCIATED,  COMPRESSED) { \
+    while (row_out != row_out_max) \
+    { \
+        uint64_t t [2]; \
+        uint8_t alpha = row_in [1]; \
+        unpremul_p_to_u_128bpp (row_in, t, alpha); \
+        t [1] = (t [1] & 0xffffffff00000000ULL) | alpha; \
+        *(row_out++) = t [0] >> 32; \
+        *(row_out++) = t [0]; \
+        *(row_out++) = t [1] >> 32; \
+        row_in += 2; \
+    } \
+} SMOL_REPACK_ROW_DEF_END
+
+SMOL_REPACK_ROW_DEF (1234, 128, 64, PREMUL16,      COMPRESSED, \
+                     123,   24,  8, UNASSOCIATED,  COMPRESSED) { \
+    while (row_out != row_out_max) \
+    { \
+        uint64_t t [2]; \
+        uint8_t alpha = row_in [1]; \
+        unpremul_i_to_u_128bpp (row_in, t, alpha); \
+        t [1] = (t [1] & 0xffffffff00000000ULL) | alpha; \
+        *(row_out++) = t [0] >> 32; \
+        *(row_out++) = t [0]; \
+        *(row_out++) = t [1] >> 32; \
+        row_in += 2; \
+    } \
+} SMOL_REPACK_ROW_DEF_END
+
+SMOL_REPACK_ROW_DEF (1234, 128, 64, PREMUL8,       COMPRESSED, \
+                     321,   24,  8, PREMUL8,       COMPRESSED) { \
+    while (row_out != row_out_max) \
+    { \
+        *(row_out++) = row_in [1] >> 32; \
+        *(row_out++) = row_in [0]; \
+        *(row_out++) = row_in [0] >> 32; \
+        row_in += 2; \
+    } \
+} SMOL_REPACK_ROW_DEF_END
+
+SMOL_REPACK_ROW_DEF (1234, 128, 64, PREMUL8,       COMPRESSED, \
+                     321,   24,  8, UNASSOCIATED,  COMPRESSED) { \
+    while (row_out != row_out_max) \
+    { \
+        uint64_t t [2]; \
+        uint8_t alpha = row_in [1]; \
+        unpremul_p_to_u_128bpp (row_in, t, alpha); \
+        t [1] = (t [1] & 0xffffffff00000000ULL) | alpha; \
+        *(row_out++) = t [1] >> 32; \
+        *(row_out++) = t [0]; \
+        *(row_out++) = t [0] >> 32; \
+        row_in += 2; \
+    } \
+} SMOL_REPACK_ROW_DEF_END
+
+SMOL_REPACK_ROW_DEF (1234, 128, 64, PREMUL16,      COMPRESSED, \
+                     321,   24,  8, UNASSOCIATED,  COMPRESSED) { \
+    while (row_out != row_out_max) \
+    { \
+        uint64_t t [2]; \
+        uint8_t alpha = row_in [1] >> 8; \
+        unpremul_i_to_u_128bpp (row_in, t, alpha); \
+        t [1] = (t [1] & 0xffffffff00000000ULL) | alpha; \
+        *(row_out++) = t [1] >> 32; \
+        *(row_out++) = t [0]; \
+        *(row_out++) = t [0] >> 32; \
+        row_in += 2; \
+    } \
+} SMOL_REPACK_ROW_DEF_END
+
+#define DEF_REPACK_FROM_1234_128BPP_TO_32BPP(a, b, c, d) \
+    SMOL_REPACK_ROW_DEF (1234,       128, 64, PREMUL8,       COMPRESSED, \
+                         a##b##c##d,  32, 32, PREMUL8,       COMPRESSED) { \
+        while (row_out != row_out_max) \
+        { \
+            *(row_out++) = PACK_FROM_1234_128BPP (row_in, a, b, c, d); \
+            row_in += 2; \
+        } \
+    } SMOL_REPACK_ROW_DEF_END \
+    SMOL_REPACK_ROW_DEF (1234,       128, 64, PREMUL8,       COMPRESSED, \
+                         a##b##c##d,  32, 32, UNASSOCIATED,  COMPRESSED) { \
+        while (row_out != row_out_max) \
+        { \
+            uint64_t t [2]; \
+            uint8_t alpha = row_in [1]; \
+            unpremul_p_to_u_128bpp (row_in, t, alpha); \
+            t [1] = (t [1] & 0xffffffff00000000ULL) | alpha; \
+            *(row_out++) = PACK_FROM_1234_128BPP (t, a, b, c, d); \
+            row_in += 2; \
+        } \
+    } SMOL_REPACK_ROW_DEF_END \
+    SMOL_REPACK_ROW_DEF (1234,       128, 64, PREMUL16,      COMPRESSED, \
+                         a##b##c##d,  32, 32, UNASSOCIATED,  COMPRESSED) { \
+        while (row_out != row_out_max) \
+        { \
+            uint64_t t [2]; \
+            uint8_t alpha = row_in [1] >> 8; \
+            unpremul_i_to_u_128bpp (row_in, t, alpha); \
+            t [1] = (t [1] & 0xffffffff00000000ULL) | alpha; \
+            *(row_out++) = PACK_FROM_1234_128BPP (t, a, b, c, d); \
+            row_in += 2; \
+        } \
+    } SMOL_REPACK_ROW_DEF_END
+
+DEF_REPACK_FROM_1234_128BPP_TO_32BPP (1, 2, 3, 4)
+DEF_REPACK_FROM_1234_128BPP_TO_32BPP (3, 2, 1, 4)
+DEF_REPACK_FROM_1234_128BPP_TO_32BPP (4, 1, 2, 3)
+DEF_REPACK_FROM_1234_128BPP_TO_32BPP (4, 3, 2, 1)
 
 /* --- Filter helpers --- */
 
