@@ -1397,8 +1397,6 @@ scale_horizontal (const SmolScaleCtx *scale_ctx,
     scale_ctx->unpack_row_func ((const uint32_t *) row_in,
                                 unpacked_in,
                                 scale_ctx->width_in);
-    if (scale_ctx->with_srgb)
-        from_srgb_row_128bpp (unpacked_in, scale_ctx->width_in);
     scale_ctx->hfilter_func (scale_ctx,
                              unpacked_in,
                              row_parts_out);
@@ -1675,8 +1673,6 @@ scale_outrow_bilinear_##n_halvings##h_128bpp (const SmolScaleCtx *scale_ctx, \
                                                            vertical_ctx->parts_row [2], \
                                                            scale_ctx->width_out * 2); \
                                                                         \
-    if (scale_ctx->with_srgb)                                           \
-        to_srgb_row_128bpp (vertical_ctx->parts_row [2], scale_ctx->width_out); \
     scale_ctx->pack_row_func (vertical_ctx->parts_row [2], row_out, scale_ctx->width_out); \
 }
 
@@ -1707,8 +1703,6 @@ scale_outrow_bilinear_0h_128bpp (const SmolScaleCtx *scale_ctx,
                                            vertical_ctx->parts_row [1],
                                            vertical_ctx->parts_row [2],
                                            scale_ctx->width_out * 2);
-    if (scale_ctx->with_srgb)
-        to_srgb_row_128bpp (vertical_ctx->parts_row [2], scale_ctx->width_out);
     scale_ctx->pack_row_func (vertical_ctx->parts_row [2], row_out, scale_ctx->width_out);
 }
 
@@ -1759,8 +1753,6 @@ scale_outrow_bilinear_1h_128bpp (const SmolScaleCtx *scale_ctx,
                                               vertical_ctx->parts_row [1],
                                               vertical_ctx->parts_row [2],
                                               scale_ctx->width_out * 2);
-    if (scale_ctx->with_srgb)
-        to_srgb_row_128bpp (vertical_ctx->parts_row [2], scale_ctx->width_out);
     scale_ctx->pack_row_func (vertical_ctx->parts_row [2], row_out, scale_ctx->width_out);
 }
 
@@ -2025,8 +2017,6 @@ scale_outrow_box_128bpp (const SmolScaleCtx *scale_ctx,
                               scale_ctx->span_mul_y,
                               vertical_ctx->parts_row [1],
                               scale_ctx->width_out);
-    if (scale_ctx->with_srgb)
-        to_srgb_row_128bpp (vertical_ctx->parts_row [1], scale_ctx->width_out);
     scale_ctx->pack_row_func (vertical_ctx->parts_row [1], row_out, scale_ctx->width_out);
 }
 
@@ -2068,8 +2058,6 @@ scale_outrow_one_128bpp (const SmolScaleCtx *scale_ctx,
                           vertical_ctx,
                           inrow_ofs_to_pointer (scale_ctx, 0),
                           vertical_ctx->parts_row [0]);
-        if (scale_ctx->with_srgb)
-            to_srgb_row_128bpp (vertical_ctx->parts_row [0], scale_ctx->width_out);
         vertical_ctx->in_ofs = 0;
     }
 
@@ -2087,8 +2075,6 @@ scale_outrow_copy (const SmolScaleCtx *scale_ctx,
                       inrow_ofs_to_pointer (scale_ctx, row_index),
                       vertical_ctx->parts_row [0]);
 
-    if (scale_ctx->with_srgb)
-        to_srgb_row_128bpp (vertical_ctx->parts_row [0], scale_ctx->width_out);
     scale_ctx->pack_row_func (vertical_ctx->parts_row [0], row_out, scale_ctx->width_out);
 }
 
