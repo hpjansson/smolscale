@@ -12,10 +12,12 @@
 #include <limits.h>
 #include "smolscale-private.h"
 
-/* --- sRGB/linear conversion --- */
+/* ----------------------------------- *
+ * sRGB/linear conversion: Shared code *
+ * ----------------------------------- */
 
 /* These tables are manually tweaked to be reversible without information
- * loss; smol_to_srgb_lut [smol_from_srgb_lut [i]] == i.
+ * loss; _smol_to_srgb_lut [_smol_from_srgb_lut [i]] == i.
  *
  * As a side effect, the values in the lower range (first 35 indexes) are
  * off by < 2%. */
@@ -197,7 +199,9 @@ const uint8_t _smol_to_srgb_lut [SRGB_LINEAR_MAX] =
     255, 255, 255, 255, 
 };
 
-/* --- Premultiplication --- */
+/* ------------------------------ *
+ * Premultiplication: Shared code *
+ * ------------------------------ */
 
 /* This table is used to divide by an integer [1..255] using only a lookup,
  * multiplication and a shift. This is faster than plain division on most
@@ -247,7 +251,9 @@ const uint32_t _smol_inverted_div_lut [256] =
       8456,   8422,   8389,   8355,   8322,   8289,   8257,   8224,
 };
 
-/* --- Precalculation --- */
+/* -------------- *
+ * Precalculation *
+ * -------------- */
 
 static void
 pick_filter_params (uint32_t dim_in,
@@ -420,7 +426,9 @@ precalc_boxes_array (uint16_t *array,
     *(pu16++) = 0;
 }
 
-/* --- Scaling --- */
+/* ------------------- *
+ * Scaling: Outer loop *
+ * ------------------- */
 
 static SMOL_INLINE char *
 outrow_ofs_to_pointer (const SmolScaleCtx *scale_ctx,
@@ -486,7 +494,9 @@ do_rows (const SmolScaleCtx *scale_ctx,
         smol_free (vertical_ctx.in_aligned_storage);
 }
 
-/* --- Conversion tables --- */
+/* ----------------- *
+ * Conversion tables *
+ * ----------------- */
 
 /* Keep in sync with the private SmolReorderType enum */
 static const SmolReorderMeta reorder_meta [SMOL_REORDER_MAX] =
@@ -917,7 +927,9 @@ smol_scale_finalize (SmolScaleCtx *scale_ctx)
     free (scale_ctx->offsets_x);
 }
 
-/* --- Public API --- */
+/* ---------- *
+ * Public API *
+ * ---------- */
 
 SmolScaleCtx *
 smol_scale_new (const void *pixels_in,
