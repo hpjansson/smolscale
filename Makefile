@@ -19,11 +19,11 @@ WITH_SKIA=no
 
 GENERAL_CFLAGS=-Wall -Wextra -g
 
-SMOL_CFLAGS=$(GENERAL_CFLAGS) -O3
+SMOL_CFLAGS=$(GENERAL_CFLAGS) -O2
 
 VERIFY_CFLAGS=$(GENERAL_CFLAGS)
 
-TEST_CFLAGS=$(GENERAL_CFLAGS) -O3
+TEST_CFLAGS=$(GENERAL_CFLAGS) -O2
 TEST_DEBUG_CFLAGS=$(GENERAL_CFLAGS) -Og -g -fno-inline -fno-omit-frame-pointer
 TEST_SYSDEPS_FLAGS=`pkg-config --libs --cflags glib-2.0 libpng pixman-1 gdk-pixbuf-2.0 SDL_gfx libswscale`
 
