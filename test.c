@@ -88,7 +88,7 @@ static const gchar * const smol_pixel_type_names [SMOL_PIXEL_MAX] =
     "bgr8"
 };
 
-static gpointer
+static gpointer G_GNUC_UNUSED
 gen_color_canvas (guint width, guint height, guint32 color)
 {
     guint32 *canvas;
@@ -301,22 +301,8 @@ samples_cmp_params (gconstpointer a, gconstpointer b)
 }
 
 static gint
-samples_cmp_elapsed (gconstpointer a, gconstpointer b)
-{
-    const Sample *ba = a, *bb = b;
-
-    if (ba->elapsed_s < bb->elapsed_s)
-        return -1;
-    else if (ba->elapsed_s > bb->elapsed_s)
-        return 1;
-
-    return 0;
-}
-
-static gint
 samples_cmp_pps (gconstpointer a, gconstpointer b)
 {
-    const Sample *ba = a, *bb = b;
     gdouble pps_a, pps_b;
 
     pps_a = sample_get_pps (a);
@@ -918,7 +904,6 @@ scale_fini_libswscale (G_GNUC_UNUSED ScaleParams *params)
 static void
 scale_do_libswscale (ScaleParams *params, guint out_width, guint out_height)
 {
-    SwsFilter src_filter, dest_filter;
     struct SwsContext *ctx;
     const uint8_t *src_planes;
     uint8_t *dest_planes;
@@ -978,7 +963,6 @@ scale_fini_stb (G_GNUC_UNUSED ScaleParams *params)
 static void
 scale_do_stb (ScaleParams *params, guint out_width, guint out_height)
 {
-    gdouble fscale_x, fscale_y;
     gpointer scaled;
 
     if (params->priv)
@@ -1007,92 +991,6 @@ scale_do_stb (ScaleParams *params, guint out_width, guint out_height)
 /* --- Benchmarks --- */
 
 static void
-run_benchmark (gpointer raw_data,
-               guint n_repetitions,
-               guint in_width, guint in_height,
-               guint out_width_min, guint out_width_max,
-               guint out_height_min, guint out_height_max,
-               guint n_width_steps, guint n_height_steps,
-               ScaleInitFunc init_func,
-               ScaleFiniFunc fini_func,
-               ScaleDoFunc do_func)
-{
-    gfloat width_step_size, height_step_size;
-    guint width_step, height_step;
-    guint rep;
-    gdouble *results;
-    ScaleParams params = { 0 };
-
-    if (n_width_steps > 1)
-        width_step_size = (out_width_max - out_width_min) / ((gfloat) n_width_steps - 1.0);
-    else
-        width_step_size = 99999.0;
-
-    if (n_height_steps > 1)
-        height_step_size = (out_height_max - out_height_min) / ((gfloat) n_height_steps - 1.0);
-    else
-        height_step_size = 99999.0;
-
-    results = alloca (n_width_steps * n_height_steps * n_repetitions * sizeof (gdouble));
-
-    (*init_func) (&params, raw_data, in_width, in_height);
-
-    for (rep = 0; rep < n_repetitions; rep++)
-    {
-        for (height_step = 0; height_step < n_height_steps; height_step++)
-        {
-            for (width_step = 0; width_step < n_width_steps; width_step++)
-            {
-                struct timespec before, after;
-
-                clock_gettime (CLOCK_MONOTONIC_RAW, &before);
-                (*do_func) (&params,
-                            out_width_min + width_step * width_step_size,
-                            out_height_min + height_step * height_step_size);
-                clock_gettime (CLOCK_MONOTONIC_RAW, &after);
-                results [width_step * n_height_steps * n_repetitions
-                         + height_step * n_repetitions
-                         + rep] = compute_elapsed (&before, &after);
-            }
-
-            g_printerr ("*");
-            fflush (stderr);
-        }
-    }
-
-    g_printerr ("\n");
-    fflush (stderr);
-
-    (*fini_func) (&params);
-
-    for (width_step = 0; width_step < n_width_steps; width_step++)
-    {
-        for (height_step = 0; height_step < n_height_steps; height_step++)
-        {
-            gdouble best_time = 999999.9;
-            guint out_width, out_height;
-
-            for (rep = 0; rep < n_repetitions; rep++)
-            {
-                gdouble t = results [width_step * n_height_steps * n_repetitions
-                                     + height_step * n_repetitions
-                                     + rep];
-
-                if (t < best_time)
-                    best_time = t;
-            }
-
-            out_width = out_width_min + width_step * width_step_size;
-            out_height = out_height_min + height_step * height_step_size;
-
-            g_print ("%u %u %.6lf %.3lf\n",
-                     out_width, out_height, best_time,
-                     (out_width * out_height + in_width * in_height) / (best_time * 1000000.0));
-        }
-    }
-}
-
-static void
 run_benchmark_proportional (gpointer raw_data,
                             guint n_repetitions,
                             guint in_width, guint in_height,
@@ -1108,8 +1006,6 @@ run_benchmark_proportional (gpointer raw_data,
     guint step;
     guint rep;
     ScaleParams params = { 0 };
-    gdouble *results;
-    gint i;
 
     if (n_steps > 1)
     {
@@ -1121,8 +1017,6 @@ run_benchmark_proportional (gpointer raw_data,
         width_step_size = 99999.0;
         height_step_size = 99999.0;
     }
-
-    results = alloca (n_steps * n_repetitions * sizeof (gdouble));
 
     (*init_func) (&params, raw_data, in_width, in_height);
 
@@ -1167,11 +1061,9 @@ run_benchmark_conv (gpointer raw_data,
                     ConvBenchmark *conv_bm)
 {
     ScaleParams params = { 0 };
-    gdouble *results;
     gint n_repetitions = 20;
     gint rep;
     SmolPixelType ptype_in, ptype_out;
-    gint i;
 
     (*init_func) (&params, raw_data, in_width, in_height);
 
@@ -1514,8 +1406,6 @@ main (int argc, char *argv [])
 {
     guint n_repetitions;
     guint in_width, in_height;
-    guint out_width_min, out_width_max, out_width_steps;
-    guint out_height_min, out_height_max, out_height_steps;
     gdouble scale_min = 1.0, scale_max = 1.0;
     guint scale_steps = 1;
     ScaleInitFunc init_func;
@@ -1536,12 +1426,6 @@ main (int argc, char *argv [])
     n_repetitions = DEFAULT_N_REPETITIONS;
     in_width = DEFAULT_IN_WIDTH;
     in_height = DEFAULT_IN_HEIGHT;
-    out_width_min = DEFAULT_OUT_WIDTH_MIN;
-    out_width_max = DEFAULT_OUT_WIDTH_MAX;
-    out_width_steps = DEFAULT_OUT_WIDTH_STEPS;
-    out_height_min = DEFAULT_OUT_HEIGHT_MIN;
-    out_height_max = DEFAULT_OUT_HEIGHT_MAX;
-    out_height_steps = DEFAULT_OUT_HEIGHT_STEPS;
 
     if (!strcasecmp (argv [1], "smol"))
     {
