@@ -1735,12 +1735,33 @@ interp_vertical_bilinear_store_64bpp (uint64_t F,
                                       uint32_t width)
 {
     uint64_t *parts_out_last = parts_out + width;
+    __m256i F256;
 
     SMOL_ASSUME_ALIGNED (top_row_parts_in, const uint64_t *);
     SMOL_ASSUME_ALIGNED (bottom_row_parts_in, const uint64_t *);
     SMOL_ASSUME_ALIGNED (parts_out, uint64_t *);
 
-    do
+    F256 = _mm256_set1_epi16 ((uint16_t) F);
+
+    while (parts_out + 4 <= parts_out_last)
+    {
+        __m256i m0, m1;
+
+        m0 = _mm256_load_si256 ((const __m256i *) top_row_parts_in);
+        top_row_parts_in += 4;
+        m1 = _mm256_load_si256 ((const __m256i *) bottom_row_parts_in);
+        bottom_row_parts_in += 4;
+
+        m0 = _mm256_sub_epi16 (m0, m1);
+        m0 = _mm256_mullo_epi16 (m0, F256);
+        m0 = _mm256_srli_epi16 (m0, 8);
+        m0 = _mm256_add_epi16 (m0, m1);
+
+        _mm256_store_si256 ((__m256i *) parts_out, m0);
+        parts_out += 4;
+    }
+
+    while (parts_out != parts_out_last)
     {
         uint64_t p, q;
 
@@ -1749,7 +1770,6 @@ interp_vertical_bilinear_store_64bpp (uint64_t F,
 
         *(parts_out++) = ((((p - q) * F) >> 8) + q) & 0x00ff00ff00ff00ffULL;
     }
-    while (parts_out != parts_out_last);
 }
 
 static void
@@ -1759,41 +1779,44 @@ interp_vertical_bilinear_add_64bpp (uint16_t F,
                                     uint64_t *accum_out,
                                     uint32_t width)
 {
-    const uint16_t * SMOL_RESTRICT top_row_parts_in_u16 = SMOL_ASSIGN_ALIGNED (top_row_parts_in, const uint16_t *);
-    const uint16_t * SMOL_RESTRICT bottom_row_parts_in_u16 = SMOL_ASSIGN_ALIGNED (bottom_row_parts_in, const uint16_t *);
-    uint16_t * SMOL_RESTRICT accum_out_u16 = SMOL_ASSIGN_ALIGNED (accum_out, uint16_t *);
-    int i, j;
+    uint64_t *accum_out_last = accum_out + width;
+    __m256i F256;
 
-    /* This produces good AVX2 code with -O3, even with gcc 11.2 */
-#define SIMD_BATCH 4
-#define N_CH 4
-#define STRIDE (SIMD_BATCH * N_CH)
-    for (i = 0; i + STRIDE < width * N_CH; i += STRIDE)
+    SMOL_ASSUME_ALIGNED (top_row_parts_in, const uint64_t *);
+    SMOL_ASSUME_ALIGNED (bottom_row_parts_in, const uint64_t *);
+    SMOL_ASSUME_ALIGNED (accum_out, uint64_t *);
+
+    F256 = _mm256_set1_epi16 ((uint16_t) F);
+
+    while (accum_out + 4 <= accum_out_last)
     {
-        uint16_t t [STRIDE];
+        __m256i m0, m1, o0;
 
-        for (j = 0; j < STRIDE; j++) t [j] = top_row_parts_in_u16 [i + j];
-        for (j = 0; j < STRIDE; j++) t [j] -= bottom_row_parts_in_u16 [i + j];
-        for (j = 0; j < STRIDE; j++) t [j] *= F;
-        for (j = 0; j < STRIDE; j++) t [j] >>= 8;
-        for (j = 0; j < STRIDE; j++) t [j] += bottom_row_parts_in_u16 [i + j];
-        for (j = 0; j < STRIDE; j++) accum_out_u16 [i + j] += t [j];
+        m0 = _mm256_load_si256 ((const __m256i *) top_row_parts_in);
+        top_row_parts_in += 4;
+        m1 = _mm256_load_si256 ((const __m256i *) bottom_row_parts_in);
+        bottom_row_parts_in += 4;
+        o0 = _mm256_load_si256 ((const __m256i *) accum_out);
+
+        m0 = _mm256_sub_epi16 (m0, m1);
+        m0 = _mm256_mullo_epi16 (m0, F256);
+        m0 = _mm256_srli_epi16 (m0, 8);
+        m0 = _mm256_add_epi16 (m0, m1);
+
+        o0 = _mm256_add_epi16 (o0, m0);
+        _mm256_store_si256 ((__m256i *) accum_out, o0);
+        accum_out += 4;
     }
 
-    /* Epilogue. Unfortunately gcc wants to vectorize this one too, and the
-     * result is huge and terrible. Can we dissuade it? */
-    for (i /= N_CH; i < width; i++)
+    while (accum_out != accum_out_last)
     {
         uint64_t p, q;
 
-        p = top_row_parts_in [i];
-        q = bottom_row_parts_in [i];
+        p = *(top_row_parts_in++);
+        q = *(bottom_row_parts_in++);
 
-        accum_out [i] += ((((p - q) * F) >> 8) + q) & 0x00ff00ff00ff00ffULL;
+        *(accum_out++) += ((((p - q) * F) >> 8) + q) & 0x00ff00ff00ff00ffULL;
     }
-#undef STRIDE
-#undef N_CH
-#undef SIMD_BATCH
 }
 
 static void
@@ -1929,12 +1952,37 @@ interp_vertical_bilinear_final_##n_halvings##h_64bpp (uint64_t F,               
                                                       uint32_t width)   \
 {                                                                       \
     uint64_t *accum_inout_last = accum_inout + width;                   \
+    __m256i F256;                                                       \
                                                                         \
     SMOL_ASSUME_ALIGNED (top_row_parts_in, const uint64_t *);           \
     SMOL_ASSUME_ALIGNED (bottom_row_parts_in, const uint64_t *);        \
     SMOL_ASSUME_ALIGNED (accum_inout, uint64_t *);                      \
                                                                         \
-    do                                                                  \
+    F256 = _mm256_set1_epi16 ((uint16_t) F);                            \
+                                                                        \
+    while (accum_inout + 4 <= accum_inout_last)                         \
+    {                                                                   \
+        __m256i m0, m1, o0;                                             \
+                                                                        \
+        m0 = _mm256_load_si256 ((const __m256i *) top_row_parts_in);    \
+        top_row_parts_in += 4;                                          \
+        m1 = _mm256_load_si256 ((const __m256i *) bottom_row_parts_in); \
+        bottom_row_parts_in += 4;                                       \
+        o0 = _mm256_load_si256 ((const __m256i *) accum_inout);         \
+                                                                        \
+        m0 = _mm256_sub_epi16 (m0, m1);                                 \
+        m0 = _mm256_mullo_epi16 (m0, F256);                             \
+        m0 = _mm256_srli_epi16 (m0, 8);                                 \
+        m0 = _mm256_add_epi16 (m0, m1);                                 \
+                                                                        \
+        o0 = _mm256_add_epi16 (o0, m0);                                 \
+        o0 = _mm256_srli_epi16 (o0, n_halvings);                        \
+                                                                        \
+        _mm256_store_si256 ((__m256i *) accum_inout, o0);               \
+        accum_inout += 4;                                               \
+    }                                                                   \
+                                                                        \
+    while (accum_inout != accum_inout_last)                             \
     {                                                                   \
         uint64_t p, q;                                                  \
                                                                         \
@@ -1946,7 +1994,6 @@ interp_vertical_bilinear_final_##n_halvings##h_64bpp (uint64_t F,               
                                                                         \
         *(accum_inout++) = p;                                           \
     }                                                                   \
-    while (accum_inout != accum_inout_last);                            \
 }                                                                       \
                                                                         \
 static void                                                             \
