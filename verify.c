@@ -394,6 +394,125 @@ verify_saturation (void)
     return result;
 }
 
+static int
+verify_preunmul_dir (const unsigned char *input, int n_in,
+                     unsigned char *output, int n_out,
+                     uint8_t alpha,
+                     int dir, int with_srgb)
+{
+    int result = 0;
+    unsigned char c;
+    int i;
+
+    if (dir)
+        smol_scale_simple (input, SMOL_PIXEL_ARGB8_PREMULTIPLIED, 1, n_in, 4,
+                           output, SMOL_PIXEL_ARGB8_UNASSOCIATED, 1, n_out, 4,
+                           with_srgb);
+    else
+        smol_scale_simple (input, SMOL_PIXEL_ARGB8_PREMULTIPLIED, n_in, 1, n_in * 4,
+                           output, SMOL_PIXEL_ARGB8_UNASSOCIATED, n_out, 1, n_out * 4,
+                           with_srgb);
+
+    for (i = 0; i < n_out * 4; i += 4)
+    {
+        int j;
+
+        c = output [i];
+        if (c != alpha)
+        {
+            fprintf (stdout, "%c %s(%d) -> (%d): ",
+                     dir ? 'V' : 'H',
+                     with_srgb ? "sRGB " : " ",
+                     n_in,
+                     n_out);
+            fprintf (stdout, "preunmul mismatch, alpha is %02x (want 0x%02x)\n",
+                     c, alpha);
+        }
+
+        for (j = 1; j < 4; j++)
+        {
+            c = output [i + j];
+
+            if (c != 0xff)
+            {
+                fprintf (stdout, "%c %s(%d) -> (%d): ",
+                         dir ? 'V' : 'H',
+                         with_srgb ? "sRGB " : " ",
+                         n_in,
+                         n_out);
+                fprintf (stdout, "preunmul mismatch, chan %d is %02x (want 0xff), alpha=0x%02x\n",
+                         j, c, alpha);
+                result = 1;
+            }
+        }
+    }
+
+    return result;
+}
+
+static void
+memset_4x (void *dest, uint32_t src, int n)
+{
+    uint32_t *dest_u32 = dest;
+    int i;
+
+    for (i = 0; i < n; i++)
+        *(dest_u32++) = src;
+}
+
+static int
+verify_preunmul (void)
+{
+    unsigned char input [65536 * 4];
+    unsigned char output [65536 * 4];
+    uint8_t pixel_in [4] = { 0xff, 0xff, 0xff, 0xff };
+    int result = 0;
+    int i;
+
+    fprintf (stdout, "Pre/unmul: ");
+    fflush (stdout);
+
+    for (i = 1; i <= 0xff; i++)
+    {
+        int dir;
+
+        pixel_in [0] = i;
+        pixel_in [1] = i;
+        pixel_in [2] = i;
+        pixel_in [3] = i;
+        memset_4x (input, *((uint32_t *) pixel_in), 65536);
+
+        for (dir = 0; dir <= 1; dir++)
+        {
+            int with_srgb;
+
+            for (with_srgb = 0; with_srgb <= 1; with_srgb++)
+            {
+                result |= verify_preunmul_dir (input, 1,
+                                               output, 65535,
+                                               i, dir, with_srgb);
+                result |= verify_preunmul_dir (input, 2,
+                                               output, 65535,
+                                               i, dir, with_srgb);
+                result |= verify_preunmul_dir (input, 65534,
+                                               output, 65535,
+                                               i, dir, with_srgb);
+                result |= verify_preunmul_dir (input, 65535,
+                                               output, 1,
+                                               i, dir, with_srgb);
+                result |= verify_preunmul_dir (input, 65535,
+                                               output, 65534,
+                                               i, dir, with_srgb);
+            }
+        }
+    }
+
+    if (!result)
+        fprintf (stdout, "ok\n");
+
+    return result;
+}
+
 int
 main (int argc, char *argv [])
 {
@@ -402,6 +521,7 @@ main (int argc, char *argv [])
     result += verify_ordering ();
     result += verify_unassociated_alpha ();
     result += verify_saturation ();
+    result += verify_preunmul ();
 
     return result;
 }
