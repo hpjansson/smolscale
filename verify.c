@@ -319,18 +319,23 @@ verify_saturation_dir (const unsigned char *input, int n_in, const PixelInfo *pi
                            with_srgb);
 
     for (i = 0; i < n_out * pinfo_out->n_channels; i++)
-        c &= output [i];
-
-    if (c != 0xff)
     {
-        fprintf (stdout, "%c %s%s (%d) -> %s (%d): ",
-                 dir ? 'V' : 'H',
-                 with_srgb ? "sRGB " : " ",
-                 pinfo_in->channels, n_in,
-                 pinfo_out->channels, n_out);
-        fprintf (stdout, "mismatch\n");
-        result = 1;
+        c = output [i];
+
+        if (c != 0xff)
+        {
+            fprintf (stdout, "%c %s%s (%d) -> %s (%d): ",
+                     dir ? 'V' : 'H',
+                     with_srgb ? "sRGB " : " ",
+                     pinfo_in->channels, n_in,
+                     pinfo_out->channels, n_out);
+            fprintf (stdout, "sat mismatch, chan %d is %02x (want 0xff)\n",
+                     i % pinfo_out->n_channels,
+                     c);
+            result = 1;
+        }
     }
+
 
     return result;
 }
@@ -356,9 +361,6 @@ verify_saturation (void)
         {
             const PixelInfo *pinfo_out = &pixel_info [type_out_index];
             int dir;
-
-            fprintf (stdout, "%s -> %s\n", pinfo_in->channels, pinfo_out->channels);
-            fflush (stdout);
 
             for (dir = 0; dir <= 1; dir++)
             {
