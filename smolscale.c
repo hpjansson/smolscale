@@ -796,15 +796,29 @@ get_implementations (SmolScaleCtx *scale_ctx)
         internal_alpha = SMOL_ALPHA_PREMUL16;
         scale_ctx->storage_type = SMOL_STORAGE_128BPP;
     }
-
 #if 0
-    printf ("\n%d -> %d\n", ptype_in, ptype_out);
+    else if (pmeta_out->alpha == SMOL_ALPHA_UNASSOCIATED)
+    {
+        scale_ctx->storage_type = SMOL_STORAGE_128BPP;
+    }
 #endif
+
+    if (scale_ctx->width_in > scale_ctx->width_out * 8191
+        || scale_ctx->height_in > scale_ctx->height_out * 8191)
+    {
+        /* Even with 128bpp, there's only enough bits to store 11-bit linearized
+         * times 13 bits of summed pixels plus 8 bits of scratch space for
+         * multiplying with an 8-bit weight -> 32 bits total per channel.
+         *
+         * For now, just turn off sRGB linearization if the input is bigger
+         * than the output by a factor of 2^13 or more. */
+        scale_ctx->gamma_type = SMOL_GAMMA_SRGB_COMPRESSED;
+    }
 
     find_repacks (implementations,
                   pmeta_in->storage, scale_ctx->storage_type, pmeta_out->storage,
                   pmeta_in->alpha, internal_alpha, pmeta_out->alpha,
-                  SMOL_GAMMA_SRGB_COMPRESSED, SMOL_GAMMA_SRGB_COMPRESSED, SMOL_GAMMA_SRGB_COMPRESSED,
+                  SMOL_GAMMA_SRGB_COMPRESSED, scale_ctx->gamma_type, SMOL_GAMMA_SRGB_COMPRESSED,
                   pmeta_in, pmeta_out,
                   &rmeta_in, &rmeta_out);
 
@@ -864,7 +878,7 @@ smol_scale_init (SmolScaleCtx *scale_ctx,
     scale_ctx->width_out = width_out;
     scale_ctx->height_out = height_out;
     scale_ctx->rowstride_out = rowstride_out;
-    scale_ctx->with_srgb = with_srgb;
+    scale_ctx->gamma_type = with_srgb ? SMOL_GAMMA_SRGB_LINEAR : SMOL_GAMMA_SRGB_COMPRESSED;
 
     scale_ctx->post_row_func = post_row_func;
     scale_ctx->user_data = user_data;

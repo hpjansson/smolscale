@@ -279,6 +279,7 @@ struct SmolScaleCtx
     SmolPixelType pixel_type_in, pixel_type_out;
     SmolFilterType filter_h, filter_v;
     SmolStorageType storage_type;
+    SmolGammaType gamma_type;
 
     SmolRepackRowFunc *unpack_row_func;
     SmolRepackRowFunc *pack_row_func;
@@ -296,8 +297,6 @@ struct SmolScaleCtx
 
     uint32_t width_bilin_out, height_bilin_out;
     unsigned int width_halvings, height_halvings;
-
-    unsigned int with_srgb : 1;
 };
 
 #define INVERTED_DIV_SHIFT 21
