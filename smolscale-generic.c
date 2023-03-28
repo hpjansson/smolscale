@@ -2361,3 +2361,318 @@ _smol_get_generic_implementation (void)
 {
     return &implementation;
 }
+
+#ifdef UNITTESTS
+
+/* ---------- *
+ * Unit tests *
+ * ---------- */
+
+/* To build and run:
+ *
+ * gcc -DUNITTESTS smolscale.c smolscale-generic.c -o generic-tests
+ * ./generic-tests | grep Err
+ */
+
+#include <stdio.h>
+
+static void
+unpack_128bpp (const uint64_t *p, uint16_t *t)
+{
+    t [0] = p [0] >> 32;
+    t [1] = p [0] & 0x00000000ffffffffULL;
+    t [2] = p [1] >> 32;
+    t [3] = p [1] & 0x00000000ffffffffULL;
+}
+
+static void
+unpack_64bpp (uint64_t p, uint16_t *t)
+{
+    t [0] = p & 0xff;
+    t [1] = (p >> 16) & 0xff;
+    t [2] = (p >> 32) & 0xff;
+    t [3] = (p >> 48) & 0xff;
+}
+
+static int
+cmp_channels_8bit (int a, int b, int alpha)
+{
+    if (alpha == 0 && b == 0)
+        return 0;
+
+    if ((abs (a - b) > 0)
+        || a > 0xff || b > 0xff)
+        return 1;
+
+    return 0;
+}
+
+static int
+cmp_channels_8bit_fuzzy (int a, int b, int alpha)
+{
+    if (alpha == 0 && b == 0)
+        return 0;
+
+    if ((alpha > 16 && abs (a - b) > 15)
+        || a > 0xff || b > 0xff)
+        return 1;
+
+    return 0;
+}
+
+static int
+cmp_channels_11bit (int a, int b, int alpha)
+{
+    if (alpha == 0 && b == 0)
+        return 0;
+
+    if ((abs (a - b) > 0)
+        || a > 0x7ff || b > 0x7ff)
+        return 1;
+
+    return 0;
+}
+
+static int
+cmp_channels_11bit_fuzzy (int a, int b, int alpha)
+{
+    if (alpha == 0 && b == 0)
+        return 0;
+
+    if ((alpha > 16 && abs (a - b) > 15)
+        || a > 0x7ff || b > 0x7ff)
+        return 1;
+
+    return 0;
+}
+
+static void
+test_p8 (void)
+{
+    uint64_t i;
+
+    for (i = 0; i < 0x100; i++)
+    {
+        uint64_t p [3] [2];
+        uint16_t t [3] [4];
+        unsigned int alpha;
+
+        p [0] [0] = (i << 32) | i;
+        p [0] [1] = (i << 32);
+
+        for (alpha = 0; alpha < 256; alpha++)
+        {
+            int is_good;
+
+            memcpy (p [1], p [0], sizeof (uint64_t) * 2);
+            premul_u_to_p8_128bpp (p [1], alpha);
+            unpremul_p8_to_u_128bpp (p [1], p [2], alpha);
+
+            unpack_128bpp (p [0], t [0]);
+            unpack_128bpp (p [1], t [1]);
+            unpack_128bpp (p [2], t [2]);
+
+            is_good = !(cmp_channels_8bit_fuzzy (t [0] [0], t [2] [0], alpha)
+                        | cmp_channels_8bit_fuzzy (t [0] [1], t [2] [1], alpha)
+                        | cmp_channels_8bit_fuzzy (t [0] [2], t [2] [2], alpha)
+                        | cmp_channels_8bit_fuzzy (t [0] [3], t [2] [3], alpha));
+
+            printf ("%s   %016lx/%016lx -> %016lx/%016lx\n"
+                    "     -> %016lx/%016lx (a=%02x)\n\n",
+                    is_good ? "     " : "Err: ",
+                    p [0] [0], p [0] [1],
+                    p [1] [0], p [1] [1],
+                    p [2] [0], p [2] [1],
+                    alpha);
+        }
+    }
+}
+
+static void
+test_p8_64bpp (void)
+{
+    uint64_t i;
+
+    for (i = 0; i < 0x100; i++)
+    {
+        uint64_t p [3];
+        uint16_t t [3] [4];
+        unsigned int alpha;
+
+        p [0] = (i << 48) | (i << 32) | (i << 16);
+
+        for (alpha = 0; alpha < 256; alpha++)
+        {
+            int is_good;
+
+            p [1] = premul_u_to_p8_64bpp (p [0], alpha);
+            p [2] = unpremul_p8_to_u_64bpp (p [1], alpha);
+
+            unpack_64bpp (p [0], t [0]);
+            unpack_64bpp (p [1], t [1]);
+            unpack_64bpp (p [2], t [2]);
+
+            is_good = !(cmp_channels_8bit_fuzzy (t [0] [0], t [2] [0], alpha)
+                        | cmp_channels_8bit_fuzzy (t [0] [1], t [2] [1], alpha)
+                        | cmp_channels_8bit_fuzzy (t [0] [2], t [2] [2], alpha)
+                        | cmp_channels_8bit_fuzzy (t [0] [3], t [2] [3], alpha));
+
+            printf ("%s   %016lx -> %016lx\n"
+                    "     -> %016lx (a=%02x)\n\n",
+                    is_good ? "     " : "Err: ",
+                    p [0],
+                    p [1],
+                    p [2],
+                    alpha);
+        }
+    }
+}
+static void
+test_p8l (void)
+{
+    uint64_t i;
+
+    for (i = 0; i < 0x800; i++)
+    {
+        uint64_t p [3] [2];
+        uint16_t t [3] [4];
+        unsigned int alpha;
+
+        p [0] [0] = (i << 32) | i;
+        p [0] [1] = (i << 32);
+
+        for (alpha = 0; alpha < 256; alpha++)
+        {
+            int is_good;
+
+            memcpy (p [1], p [0], sizeof (uint64_t) * 2);
+            premul_ul_to_p8l_128bpp (p [1], alpha);
+            unpremul_p8l_to_ul_128bpp (p [1], p [2], alpha);
+
+            unpack_128bpp (p [0], t [0]);
+            unpack_128bpp (p [1], t [1]);
+            unpack_128bpp (p [2], t [2]);
+
+            is_good = !(cmp_channels_11bit_fuzzy (t [0] [0], t [2] [0], alpha)
+                        | cmp_channels_11bit_fuzzy (t [0] [1], t [2] [1], alpha)
+                        | cmp_channels_11bit_fuzzy (t [0] [2], t [2] [2], alpha)
+                        | cmp_channels_11bit_fuzzy (t [0] [3], t [2] [3], alpha));
+
+            printf ("%s   %016lx/%016lx -> %016lx/%016lx\n"
+                    "     -> %016lx/%016lx (a=%02x)\n\n",
+                    is_good ? "     " : "Err: ",
+                    p [0] [0], p [0] [1],
+                    p [1] [0], p [1] [1],
+                    p [2] [0], p [2] [1],
+                    alpha);
+        }
+    }
+}
+
+static void
+test_p16 (void)
+{
+    uint64_t i;
+
+    for (i = 0; i < 0x100; i++)
+    {
+        uint64_t p [3] [2];
+        uint16_t t [3] [4];
+        unsigned int alpha;
+
+        p [0] [0] = (i << 32) | i;
+        p [0] [1] = (i << 32);
+
+        for (alpha = 0; alpha < 256; alpha++)
+        {
+            int is_good;
+
+            memcpy (p [1], p [0], sizeof (uint64_t) * 2);
+
+            premul_u_to_p16_128bpp (p [1], alpha);
+            p [1] [0] &= 0x0000ffff0000ffffULL;
+            p [1] [1] &= 0x0000ffff00000000ULL;
+
+            unpremul_p16_to_u_128bpp (p [1], p [2], alpha);
+            p [2] [0] &= 0x000000ff000000ffULL;
+            p [2] [1] &= 0x000000ff00000000ULL;
+
+            unpack_128bpp (p [0], t [0]);
+            unpack_128bpp (p [1], t [1]);
+            unpack_128bpp (p [2], t [2]);
+
+            is_good = !(cmp_channels_8bit (t [0] [0], t [2] [0], alpha)
+                        | cmp_channels_8bit (t [0] [1], t [2] [1], alpha)
+                        | cmp_channels_8bit (t [0] [2], t [2] [2], alpha)
+                        | cmp_channels_8bit (t [0] [3], t [2] [3], alpha));
+
+            printf ("%s   %016lx/%016lx -> %016lx/%016lx\n"
+                    "     -> %016lx/%016lx (a=%02x)\n\n",
+                    is_good ? "     " : "Err: ",
+                    p [0] [0], p [0] [1],
+                    p [1] [0], p [1] [1],
+                    p [2] [0], p [2] [1],
+                    alpha);
+        }
+    }
+}
+
+static void
+test_p16l (void)
+{
+    uint64_t i;
+
+    for (i = 0; i < 0x800; i++)
+    {
+        uint64_t p [3] [2];
+        uint16_t t [3] [4];
+        unsigned int alpha;
+
+        p [0] [0] = (i << 32) | i;
+        p [0] [1] = (i << 32);
+
+        for (alpha = 0; alpha < 256; alpha++)
+        {
+            int is_good;
+
+            memcpy (p [1], p [0], sizeof (uint64_t) * 2);
+
+            premul_ul_to_p16l_128bpp (p [1], alpha);
+            p [1] [0] &= 0x0007ffff0007ffffULL;
+            p [1] [1] &= 0x0007ffff00000000ULL;
+
+            unpremul_p16l_to_ul_128bpp (p [1], p [2], alpha);
+            p [2] [0] &= 0x000007ff000007ffULL;
+            p [2] [1] &= 0x000007ff00000000ULL;
+
+            unpack_128bpp (p [0], t [0]);
+            unpack_128bpp (p [1], t [1]);
+            unpack_128bpp (p [2], t [2]);
+
+            is_good = !(cmp_channels_11bit (t [0] [0], t [2] [0], alpha)
+                        | cmp_channels_11bit (t [0] [1], t [2] [1], alpha)
+                        | cmp_channels_11bit (t [0] [2], t [2] [2], alpha)
+                        | cmp_channels_11bit (t [0] [3], t [2] [3], alpha));
+
+            printf ("%s   %016lx/%016lx -> %016lx/%016lx\n"
+                    "     -> %016lx/%016lx (a=%02x)\n\n",
+                    is_good ? "     " : "Err: ",
+                    p [0] [0], p [0] [1],
+                    p [1] [0], p [1] [1],
+                    p [2] [0], p [2] [1],
+                    alpha);
+        }
+    }
+}
+
+int
+main (int argc, char *argv [])
+{
+    test_p8_64bpp ();
+    test_p8 ();
+    test_p8l ();
+    test_p16 ();
+    test_p16l ();
+}
+
+#endif
