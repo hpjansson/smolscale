@@ -2,7 +2,6 @@
 
 /* Copyright © 2019-2023 Hans Petter Jansson. See COPYING for details. */
 
-#include <assert.h> /* assert */
 #include <stdlib.h> /* malloc, free, alloca */
 #include <string.h> /* memset */
 #include <limits.h>
