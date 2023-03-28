@@ -10,129 +10,6 @@
 #include <immintrin.h>
 #include "smolscale-private.h"
 
-/* ---------------------- *
- * sRGB/linear conversion *
- * ---------------------- */
-
-static void
-from_srgb_pixel_axxx_128bpp (uint64_t * SMOL_RESTRICT pixel_inout)
-{
-    uint64_t part;
-
-    SMOL_ASSUME_ALIGNED (pixel_inout, uint64_t *);
-
-    part = *pixel_inout;
-    *(pixel_inout++) =
-        (part & 0xffffffff00000000)
-        | _smol_from_srgb_lut [part & 0xff];
-
-    part = *pixel_inout;
-    *pixel_inout =
-        ((uint64_t) _smol_from_srgb_lut [part >> 32] << 32)
-        | _smol_from_srgb_lut [part & 0xff];
-}
-
-static void
-to_srgb_pixel_axxx_128bpp (uint64_t * SMOL_RESTRICT pixel_inout)
-{
-    uint64_t part;
-
-    SMOL_ASSUME_ALIGNED (pixel_inout, uint64_t *);
-
-    part = *pixel_inout;
-    *(pixel_inout++) =
-        (part & 0xffffffff00000000)
-        | _smol_to_srgb_lut [part & 0xffff];
-
-    part = *pixel_inout;
-    *pixel_inout =
-        (((uint64_t) _smol_to_srgb_lut [part >> 32]) << 32)
-        | _smol_to_srgb_lut [part & 0xffff];
-}
-
-static void
-from_srgb_pixel_xxxa_128bpp (uint64_t * SMOL_RESTRICT pixel_inout)
-{
-    uint64_t part;
-
-    SMOL_ASSUME_ALIGNED (pixel_inout, uint64_t *);
-
-    part = *pixel_inout;
-    *(pixel_inout++) =
-        ((uint64_t) _smol_from_srgb_lut [part >> 32] << 32)
-        | _smol_from_srgb_lut [part & 0xff];
-
-    part = *pixel_inout;
-    *pixel_inout =
-        ((uint64_t) _smol_from_srgb_lut [part >> 32] << 32)
-        | (part & 0xffffffff);
-}
-
-static void
-to_srgb_pixel_xxxa_128bpp (uint64_t * SMOL_RESTRICT pixel_inout)
-{
-    uint64_t part;
-
-    SMOL_ASSUME_ALIGNED (pixel_inout, uint64_t *);
-
-    part = *pixel_inout;
-    *(pixel_inout++) =
-        (((uint64_t) _smol_to_srgb_lut [part >> 32]) << 32)
-        | _smol_to_srgb_lut [part & 0xffff];
-
-    part = *pixel_inout;
-    *pixel_inout =
-        (((uint64_t) _smol_to_srgb_lut [part >> 32]) << 32)
-        | (part & 0xffffffff);
-}
-
-/* --- DEPRECATED --- */
-
-/* FIXME: Fails with internally premultiplied (16-bit values) */
-static void
-from_srgb_row_128bpp (uint64_t * SMOL_RESTRICT row_parts_inout,
-                      uint32_t n_pixels)
-{
-    uint64_t *row_parts_inout_max = row_parts_inout + n_pixels * 2;
-
-    SMOL_ASSUME_ALIGNED (row_parts_inout, uint64_t *);
-
-    while (row_parts_inout != row_parts_inout_max)
-    {
-        uint64_t part = *row_parts_inout;
-        *(row_parts_inout++) =
-            (part & 0xffffffff00000000)
-            | _smol_from_srgb_lut [part & 0xff];
-
-        part = *row_parts_inout;
-        *(row_parts_inout++) =
-            ((uint64_t) _smol_from_srgb_lut [part >> 32] << 32)
-            | _smol_from_srgb_lut [part & 0xff];
-    }
-}
-
-static void
-to_srgb_row_128bpp (uint64_t * SMOL_RESTRICT row_parts_inout,
-                    uint32_t n_pixels)
-{
-    uint64_t *row_parts_inout_max = row_parts_inout + n_pixels * 2;
-
-    SMOL_ASSUME_ALIGNED (row_parts_inout, uint64_t *);
-
-    while (row_parts_inout != row_parts_inout_max)
-    {
-        uint64_t part = *row_parts_inout;
-        *(row_parts_inout++) =
-            (part & 0xffffffff00000000)
-            | _smol_to_srgb_lut [part & 0xffff];
-
-        part = *row_parts_inout;
-        *(row_parts_inout++) =
-            (((uint64_t) _smol_to_srgb_lut [part >> 32]) << 32)
-            | _smol_to_srgb_lut [part & 0xffff];
-    }
-}
-
 /* ----------------- *
  * Premultiplication *
  * ----------------- */
@@ -479,17 +356,6 @@ SMOL_REPACK_ROW_DEF (123,   24,  8, PREMUL8, COMPRESSED,
     }
 } SMOL_REPACK_ROW_DEF_END
 
-SMOL_REPACK_ROW_DEF (123,   24,  8, PREMUL8, COMPRESSED,
-                     1234, 128, 64, PREMUL8, LINEAR) {
-    while (row_out != row_out_max)
-    {
-        unpack_pixel_123_p8_to_123a_p8_128bpp (row_in, row_out);
-        from_srgb_pixel_xxxa_128bpp (row_out);
-        row_in += 3;
-        row_out += 2;
-    }
-} SMOL_REPACK_ROW_DEF_END
-
 static SMOL_INLINE void
 unpack_pixel_123a_p8_to_123a_p8_128bpp (uint32_t p,
                                         uint64_t *out)
@@ -504,16 +370,6 @@ SMOL_REPACK_ROW_DEF (1234,  32, 32, PREMUL8, COMPRESSED,
     while (row_out != row_out_max)
     {
         unpack_pixel_123a_p8_to_123a_p8_128bpp (*(row_in++), row_out);
-        row_out += 2;
-    }
-} SMOL_REPACK_ROW_DEF_END
-
-SMOL_REPACK_ROW_DEF (1234,  32, 32, PREMUL8, COMPRESSED,
-                     1234, 128, 64, PREMUL8, LINEAR) {
-    while (row_out != row_out_max)
-    {
-        unpack_pixel_123a_p8_to_123a_p8_128bpp (*(row_in++), row_out);
-        from_srgb_pixel_xxxa_128bpp (row_out);
         row_out += 2;
     }
 } SMOL_REPACK_ROW_DEF_END
@@ -536,16 +392,6 @@ SMOL_REPACK_ROW_DEF (1234,  32, 32, PREMUL8, COMPRESSED,
     }
 } SMOL_REPACK_ROW_DEF_END
 
-SMOL_REPACK_ROW_DEF (1234,  32, 32, PREMUL8, COMPRESSED,
-                     2341, 128, 64, PREMUL8, LINEAR) {
-    while (row_out != row_out_max)
-    {
-        unpack_pixel_a234_p8_to_234a_p8_128bpp (*(row_in++), row_out);
-        from_srgb_pixel_xxxa_128bpp (row_out);
-        row_out += 2;
-    }
-} SMOL_REPACK_ROW_DEF_END
-
 static SMOL_INLINE void
 unpack_pixel_a234_u_to_234a_p8_128bpp (uint32_t p,
                                        uint64_t *out)
@@ -563,37 +409,6 @@ SMOL_REPACK_ROW_DEF (1234,  32, 32, UNASSOCIATED, COMPRESSED,
     while (row_out != row_out_max)
     {
         unpack_pixel_a234_u_to_234a_p8_128bpp (*(row_in++), row_out);
-        row_out += 2;
-    }
-} SMOL_REPACK_ROW_DEF_END
-
-static SMOL_INLINE void
-unpack_pixel_a234_u_to_234a_pl_128bpp (uint32_t p,
-                                       uint64_t *out)
-{
-    uint64_t p64 = p;
-    uint8_t alpha = p >> 24;
-
-    /* FIXME: It should be possible to improve this by packing three channels in
-     * 64 bits (alpha is not needed). Each channel needs 12 bits (for srgb) plus
-     * 8 bits (for premul) = 20 bits. Times three makes 60 bits. This allows us
-     * to do premul with a single 64-bit operation. Then we shift things out into
-     * 128bpp and merge alpha back in afterwards. */
-
-    out [0] = ((p64 & 0x00ff0000) << 16) | ((p64 & 0x0000ff00) >> 8);
-    out [1] = ((p64 & 0x000000ff) << 32);
-
-    from_srgb_pixel_xxxa_128bpp (out);
-    premul_u_to_p8_128bpp (out, alpha);
-
-    out [1] |= (uint64_t) alpha;
-}
-
-SMOL_REPACK_ROW_DEF (1234,  32, 32, UNASSOCIATED, COMPRESSED,
-                     2341, 128, 64, PREMUL8,      LINEAR) {
-    while (row_out != row_out_max)
-    {
-        unpack_pixel_a234_u_to_234a_pl_128bpp (*(row_in++), row_out);
         row_out += 2;
     }
 } SMOL_REPACK_ROW_DEF_END
@@ -623,32 +438,6 @@ SMOL_REPACK_ROW_DEF (1234,  32, 32, UNASSOCIATED, COMPRESSED,
 } SMOL_REPACK_ROW_DEF_END
 
 static SMOL_INLINE void
-unpack_pixel_a234_u_to_234a_il_128bpp (uint32_t p,
-                                       uint64_t *out)
-{
-    uint64_t p64 = p;
-    uint64_t alpha = p >> 24;
-
-    out [0] = ((p64 & 0x00ff0000) << 16) | ((p64 & 0x0000ff00) >> 8);
-    out [1] = ((p64 & 0x000000ff) << 32);
-
-    from_srgb_pixel_xxxa_128bpp (out);
-    out [0] *= alpha;
-    out [1] *= alpha;
-
-    out [1] |= (alpha << 8) | 0x80;
-}
-
-SMOL_REPACK_ROW_DEF (1234,  32, 32, UNASSOCIATED, COMPRESSED,
-                     2341, 128, 64, PREMUL16,     LINEAR) {
-    while (row_out != row_out_max)
-    {
-        unpack_pixel_a234_u_to_234a_il_128bpp (*(row_in++), row_out);
-        row_out += 2;
-    }
-} SMOL_REPACK_ROW_DEF_END
-
-static SMOL_INLINE void
 unpack_pixel_123a_u_to_123a_p8_128bpp (uint32_t p,
                                        uint64_t *out)
 {
@@ -665,37 +454,6 @@ SMOL_REPACK_ROW_DEF (1234,  32, 32, UNASSOCIATED, COMPRESSED,
     while (row_out != row_out_max)
     {
         unpack_pixel_123a_u_to_123a_p8_128bpp (*(row_in++), row_out);
-        row_out += 2;
-    }
-} SMOL_REPACK_ROW_DEF_END
-
-static SMOL_INLINE void
-unpack_pixel_123a_u_to_123a_pl_128bpp (uint32_t p,
-                                       uint64_t *out)
-{
-    uint64_t p64 = p;
-    uint8_t alpha = p & 0xff;
-
-    /* FIXME: It should be possible to improve this by packing three channels in
-     * 64 bits (alpha is not needed). Each channel needs 12 bits (for srgb) plus
-     * 8 bits (for premul) = 20 bits. Times three makes 60 bits. This allows us
-     * to do premul with a single 64-bit operation. Then we shift things out into
-     * 128bpp and merge alpha back in afterwards. */
-
-    out [0] = ((p64 & 0xff000000) << 8) | ((p64 & 0x00ff0000) >> 16);
-    out [1] = ((p64 & 0x0000ff00) << 24);
-
-    from_srgb_pixel_xxxa_128bpp (out);
-    premul_u_to_p8_128bpp (out, alpha);
-
-    out [1] |= alpha;
-}
-
-SMOL_REPACK_ROW_DEF (1234,  32, 32, UNASSOCIATED, COMPRESSED,
-                     1234, 128, 64, PREMUL8,      LINEAR) {
-    while (row_out != row_out_max)
-    {
-        unpack_pixel_123a_u_to_123a_pl_128bpp (*(row_in++), row_out);
         row_out += 2;
     }
 } SMOL_REPACK_ROW_DEF_END
@@ -720,32 +478,6 @@ SMOL_REPACK_ROW_DEF (1234,  32, 32, UNASSOCIATED, COMPRESSED,
     while (row_out != row_out_max)
     {
         unpack_pixel_123a_u_to_123a_p16_128bpp (*(row_in++), row_out);
-        row_out += 2;
-    }
-} SMOL_REPACK_ROW_DEF_END
-
-static SMOL_INLINE void
-unpack_pixel_123a_u_to_123a_il_128bpp (uint32_t p,
-                                       uint64_t *out)
-{
-    uint64_t p64 = p;
-    uint64_t alpha = p & 0xff;
-
-    out [0] = ((p64 & 0xff000000) << 8) | ((p64 & 0x00ff0000) >> 16);
-    out [1] = ((p64 & 0x0000ff00) << 24);
-
-    from_srgb_pixel_xxxa_128bpp (out);
-    out [0] *= alpha;
-    out [1] *= alpha;
-
-    out [1] |= (alpha << 8) | 0x80;
-}
-
-SMOL_REPACK_ROW_DEF (1234,  32, 32, UNASSOCIATED, COMPRESSED,
-                     1234, 128, 64, PREMUL16,     LINEAR) {
-    while (row_out != row_out_max)
-    {
-        unpack_pixel_123a_u_to_123a_il_128bpp (*(row_in++), row_out);
         row_out += 2;
     }
 } SMOL_REPACK_ROW_DEF_END
