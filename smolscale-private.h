@@ -299,18 +299,21 @@ struct SmolScaleCtx
     unsigned int width_halvings, height_halvings;
 };
 
-#define INVERTED_DIV_SHIFT 21
-#define INVERTED_DIV_ROUNDING (1U << (INVERTED_DIV_SHIFT - 1))
-#define INVERTED_DIV_ROUNDING_128BPP \
-    (((uint64_t) INVERTED_DIV_ROUNDING << 32) | INVERTED_DIV_ROUNDING)
-
-extern const uint32_t _smol_inverted_div_lut [256];
-
 #define SRGB_LINEAR_BITS 11
 #define SRGB_LINEAR_MAX (1 << (SRGB_LINEAR_BITS))
 
 extern const uint16_t _smol_from_srgb_lut [256];
 extern const uint8_t _smol_to_srgb_lut [SRGB_LINEAR_MAX];
+
+#define INVERTED_DIV_SHIFT_P8 (21 - 8)
+#define INVERTED_DIV_SHIFT_P8L (27 - SRGB_LINEAR_BITS)
+#define INVERTED_DIV_SHIFT_P16 (24 - 8)
+#define INVERTED_DIV_SHIFT_P16L (30 - SRGB_LINEAR_BITS)
+
+extern const uint32_t _smol_inv_div_p8_lut [256];
+extern const uint32_t _smol_inv_div_p8l_lut [256];
+extern const uint32_t _smol_inv_div_p16_lut [256];
+extern const uint32_t _smol_inv_div_p16l_lut [256];
 
 const SmolImplementation *_smol_get_generic_implementation (void);
 #ifdef SMOL_WITH_AVX2

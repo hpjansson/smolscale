@@ -44,44 +44,15 @@ to_srgb_pixel_xxxa_128bpp (const uint64_t *pixel_in, uint64_t *pixel_out)
  * Premultiplication *
  * ----------------- */
 
-/* Masking and shifting out the results is left to the caller. In
- * and out may not overlap. */
 static SMOL_INLINE void
-unpremul_p16_to_u_128bpp (const uint64_t * SMOL_RESTRICT in,
-                          uint64_t * SMOL_RESTRICT out,
-                          uint8_t alpha)
+premul_u_to_p8_128bpp (uint64_t * SMOL_RESTRICT inout,
+                       uint8_t alpha)
 {
-#if 0
-    printf ("Alpha: %02x\n", alpha);
-    printf ("Unpre: %016lx, %016lx -> ", in [0], in [1]);
-#endif
-    out [0] = ((in [0] * (uint64_t) _smol_inverted_div_lut [alpha]
-                + INVERTED_DIV_ROUNDING_128BPP) >> INVERTED_DIV_SHIFT);
-    out [1] = ((in [1] * (uint64_t) _smol_inverted_div_lut [alpha]
-                + INVERTED_DIV_ROUNDING_128BPP) >> INVERTED_DIV_SHIFT);
-#if 0
-    printf ("%016lx, %016lx\n", out [0], out [1]);
-#endif
-}
-
-static SMOL_INLINE void
-unpremul_p16l_to_ul_128bpp (const uint64_t * SMOL_RESTRICT in,
-                            uint64_t * SMOL_RESTRICT out,
-                            uint8_t alpha)
-{
-#if 0
-    printf ("Alpha: %02x\n", alpha);
-    printf ("Unpre: %016lx, %016lx -> ", in [0], in [1]);
-#endif
-    out [0] = ((in [0] * (uint64_t) _smol_inverted_div_lut [alpha]
-                + INVERTED_DIV_ROUNDING_128BPP) >> INVERTED_DIV_SHIFT)
-        & 0x000007ff000007ff;
-    out [1] = ((in [1] * (uint64_t) _smol_inverted_div_lut [alpha]
-                + INVERTED_DIV_ROUNDING_128BPP) >> INVERTED_DIV_SHIFT)
-        & 0x000007ff000007ff;
-#if 0
-    printf ("%016lx, %016lx\n", out [0], out [1]);
-#endif
+    /* FIXME: Use same approach as 64-bit version? */
+    inout [0] = ((inout [0] * (((uint16_t) alpha << 8) | alpha) + 0x00007fff00007fff)
+                 >> 16) & 0x000000ff000000ff;
+    inout [1] = ((inout [1] * (((uint16_t) alpha << 8) | alpha) + 0x00007fff00007fff)
+                 >> 16) & 0x000000ff000000ff;
 }
 
 static SMOL_INLINE void
@@ -89,49 +60,18 @@ unpremul_p8_to_u_128bpp (const uint64_t *in,
                          uint64_t *out,
                          uint8_t alpha)
 {
-#if 0
-    printf ("Unpre alpha: %02x\n", alpha);
-    printf ("Unpre: %016lx, %016lx -> ", in [0], in [1]);
-#endif
-
-#if 0
-    out [0] = (((in [0] << 8) * (uint64_t) _smol_inverted_div_lut [alpha])
-               >> INVERTED_DIV_SHIFT) & 0x000000ff000000ff;
-    out [1] = (((in [1] << 8) * (uint64_t) _smol_inverted_div_lut [alpha])
-               >> INVERTED_DIV_SHIFT) & 0x000000ff000000ff;
-#else
-    out [0] = ((((in [0] << 8) * (uint64_t) _smol_inverted_div_lut [alpha])
-                - INVERTED_DIV_ROUNDING_128BPP + 0x0001ffff0001ffffULL)
-               >> INVERTED_DIV_SHIFT) & 0x000000ff000000ff;
-    out [1] = ((((in [1] << 8) * (uint64_t) _smol_inverted_div_lut [alpha])
-                - INVERTED_DIV_ROUNDING_128BPP + 0x0001ffff0001ffffULL)
-               >> INVERTED_DIV_SHIFT) & 0x000000ff000000ff;
-#endif
-
-#if 0
-    printf ("%016lx, %016lx\n", out [0], out [1]);
-#endif
+    out [0] = ((in [0] * _smol_inv_div_p8_lut [alpha])
+               >> INVERTED_DIV_SHIFT_P8) & 0x000000ff000000ff;
+    out [1] = ((in [1] * _smol_inv_div_p8_lut [alpha])
+               >> INVERTED_DIV_SHIFT_P8) & 0x000000ff000000ff;
 }
 
-static SMOL_INLINE void
-unpremul_p8l_to_ul_128bpp (const uint64_t *in,
-                           uint64_t *out,
-                           uint8_t alpha)
+static SMOL_INLINE uint64_t
+premul_u_to_p8_64bpp (const uint64_t in,
+                      uint8_t alpha)
 {
-#if 0
-    printf ("Unpre alpha: %02x\n", alpha);
-    printf ("Unpre: %016lx, %016lx -> ", in [0], in [1]);
-#endif
-
-    out [0] = ((((in [0] << 5) * (uint64_t) _smol_inverted_div_lut [alpha])
-                - (INVERTED_DIV_ROUNDING_128BPP << 1))
-               >> (INVERTED_DIV_SHIFT - 3)) & 0x000007ff000007ff;
-    out [1] = (((((in [1] << 5) * (uint64_t) _smol_inverted_div_lut [alpha])
-                 - (INVERTED_DIV_ROUNDING_128BPP << 1))
-                >> (INVERTED_DIV_SHIFT - 3)) & 0x000007ff00000000) | alpha;
-#if 0
-    printf ("%016lx, %016lx\n", out [0], out [1]);
-#endif
+    return (((in + 0x0001000100010001) * ((uint16_t) alpha + 1) - 0x0001000100010001)
+            >> 8) & 0x00ff00ff00ff00ff;
 }
 
 static SMOL_INLINE uint64_t
@@ -146,45 +86,66 @@ unpremul_p8_to_u_64bpp (const uint64_t in,
 
     unpremul_p8_to_u_128bpp (in_128bpp, out_128bpp, alpha);
 
-    return (out_128bpp [0] & 0x000000ff000000ff)
-           | ((out_128bpp [1] & 0x000000ff000000ff) << 16);
-}
-
-static SMOL_INLINE uint64_t
-premul_u_to_p8_64bpp (const uint64_t in,
-                      uint8_t alpha)
-{
-    return ((in * ((uint16_t) alpha + 1)) >> 8) & 0x00ff00ff00ff00ff;
-}
-
-static SMOL_INLINE void
-premul_u_to_p8_128bpp (uint64_t * SMOL_RESTRICT inout,
-                       uint8_t alpha)
-{
-#if 0
-    printf ("Pre alpha: %02x\n", alpha);
-    printf ("Pre: %016lx, %016lx -> ", inout [0], inout [1]);
-#endif
-    inout [0] = ((inout [0] * ((uint16_t) alpha + 1)) >> 8) & 0x00ffffff00ffffff;
-    inout [1] = ((inout [1] * ((uint16_t) alpha + 1)) >> 8) & 0x00ffffff00ffffff;
-#if 0
-    printf ("%016lx, %016lx\n", inout [0], inout [1]);
-#endif
+    return out_128bpp [0] | (out_128bpp [1] << 16);
 }
 
 static SMOL_INLINE void
 premul_ul_to_p8l_128bpp (uint64_t * SMOL_RESTRICT inout,
                          uint8_t alpha)
 {
-#if 0
-    printf ("Pre (l) alpha: %02x\n", alpha);
-    printf ("Pre (l): %016lx, %016lx -> ", inout [0], inout [1]);
-#endif
-    inout [0] = ((inout [0] * (((uint32_t) alpha << 8) + alpha) + 0x00001fff00001fffULL) >> 16) & 0x0000ffff0000ffff;
-    inout [1] = ((inout [1] * (((uint32_t) alpha << 8) + alpha) + 0x00001fff00001fffULL) >> 16) & 0x0000ffff0000ffff;
-#if 0
-    printf ("%016lx, %016lx\n", inout [0], inout [1]);
-#endif
+    inout [0] = ((inout [0] * ((((uint32_t) alpha) << 8) | alpha) + 0x00007fff00007fff)
+                 >> 16) & 0x000007ff000007ff;
+    inout [1] = ((inout [1] * ((((uint32_t) alpha) << 8) | alpha) + 0x00007fff00007fff)
+                 >> 16) & 0x000007ff000007ff;
+}
+
+static SMOL_INLINE void
+unpremul_p8l_to_ul_128bpp (const uint64_t *in,
+                           uint64_t *out,
+                           uint8_t alpha)
+{
+    out [0] = ((in [0] * _smol_inv_div_p8l_lut [alpha])
+               >> INVERTED_DIV_SHIFT_P8L) & 0x000007ff000007ff;
+    out [1] = ((in [1] * _smol_inv_div_p8l_lut [alpha])
+               >> INVERTED_DIV_SHIFT_P8L) & 0x000007ff000007ff;
+}
+
+static SMOL_INLINE void
+premul_u_to_p16_128bpp (uint64_t *inout,
+                        uint8_t alpha)
+{
+    inout [0] = inout [0] * alpha;
+    inout [1] = inout [1] * alpha;
+}
+
+static SMOL_INLINE void
+unpremul_p16_to_u_128bpp (const uint64_t * SMOL_RESTRICT in,
+                          uint64_t * SMOL_RESTRICT out,
+                          uint8_t alpha)
+{
+    out [0] = ((in [0] * _smol_inv_div_p16_lut [alpha])
+               >> INVERTED_DIV_SHIFT_P16) & 0x000000ff000000ffULL;
+    out [1] = ((in [1] * _smol_inv_div_p16_lut [alpha])
+               >> INVERTED_DIV_SHIFT_P16) & 0x000000ff000000ffULL;
+}
+
+static SMOL_INLINE void
+premul_ul_to_p16l_128bpp (uint64_t *inout,
+                          uint8_t alpha)
+{
+    inout [0] = inout [0] * alpha;
+    inout [1] = inout [1] * alpha;
+}
+
+static SMOL_INLINE void
+unpremul_p16l_to_ul_128bpp (const uint64_t * SMOL_RESTRICT in,
+                            uint64_t * SMOL_RESTRICT out,
+                            uint8_t alpha)
+{
+    out [0] = ((in [0] * _smol_inv_div_p16l_lut [alpha])
+               >> INVERTED_DIV_SHIFT_P16L) & 0x000007ff000007ffULL;
+    out [1] = ((in [1] * _smol_inv_div_p16l_lut [alpha])
+               >> INVERTED_DIV_SHIFT_P16L) & 0x000007ff000007ffULL;
 }
 
 /* --------- *
@@ -305,7 +266,7 @@ unpack_pixel_a234_u_to_324a_p8_64bpp (uint32_t p)
     uint64_t p64 = (((uint64_t) p & 0x0000ff00) << 40) | (((uint64_t) p & 0x00ff00ff) << 16);
     uint8_t alpha = p >> 24;
 
-    return premul_u_to_p8_64bpp (p64, alpha) | alpha;
+    return (premul_u_to_p8_64bpp (p64, alpha) & 0xffffffffffffff00ULL) | alpha;
 }
 
 SMOL_REPACK_ROW_DEF (1234, 32, 32, UNASSOCIATED, COMPRESSED,
@@ -322,7 +283,7 @@ unpack_pixel_1234_u_to_2431_p8_64bpp (uint32_t p)
     uint64_t p64 = (((uint64_t) p & 0x00ff00ff) << 32) | (((uint64_t) p & 0x0000ff00) << 8);
     uint8_t alpha = p >> 24;
 
-    return premul_u_to_p8_64bpp (p64, alpha) | alpha;
+    return (premul_u_to_p8_64bpp (p64, alpha) & 0xffffffffffffff00ULL) | alpha;
 }
 
 SMOL_REPACK_ROW_DEF (1234, 32, 32, UNASSOCIATED, COMPRESSED,
@@ -339,7 +300,7 @@ unpack_pixel_123a_u_to_132a_p8_64bpp (uint32_t p)
     uint64_t p64 = (((uint64_t) p & 0xff00ff00) << 24) | (p & 0x00ff0000);
     uint8_t alpha = p & 0xff;
 
-    return premul_u_to_p8_64bpp (p64, alpha) | alpha;
+    return (premul_u_to_p8_64bpp (p64, alpha) & 0xffffffffffffff00ULL) | alpha;
 }
 
 SMOL_REPACK_ROW_DEF (1234, 32, 32, UNASSOCIATED, COMPRESSED,
@@ -461,7 +422,7 @@ unpack_pixel_a234_u_to_234a_p8_128bpp (uint32_t p,
     uint64_t p64 = (((uint64_t) p & 0x00ff00ff) << 32) | (((uint64_t) p & 0x0000ff00) << 8);
     uint8_t alpha = p >> 24;
 
-    p64 = premul_u_to_p8_64bpp (p64, alpha) | alpha;
+    p64 = (premul_u_to_p8_64bpp (p64, alpha) & 0xffffffffffffff00) | alpha;
     out [0] = (p64 >> 16) & 0x000000ff000000ff;
     out [1] = p64 & 0x000000ff000000ff;
 }
@@ -494,7 +455,7 @@ unpack_pixel_a234_u_to_234a_pl_128bpp (uint32_t p,
     from_srgb_pixel_xxxa_128bpp (out);
     premul_ul_to_p8l_128bpp (out, alpha);
 
-    out [1] |= (uint64_t) alpha;
+    out [1] = (out [1] & 0xffffffffffffff00ULL) | alpha;
 }
 
 SMOL_REPACK_ROW_DEF (1234,  32, 32, UNASSOCIATED, COMPRESSED,
@@ -511,10 +472,10 @@ unpack_pixel_a234_u_to_234a_p16_128bpp (uint32_t p,
                                         uint64_t *out)
 {
     uint64_t p64 = p;
-    uint64_t alpha = p >> 24;
+    uint8_t alpha = p >> 24;
 
     out [0] = (((((p64 & 0x00ff0000) << 16) | ((p64 & 0x0000ff00) >> 8)) * alpha));
-    out [1] = (((((p64 & 0x000000ff) << 32) * alpha))) | (alpha << 8) | 0x80;
+    out [1] = (((((p64 & 0x000000ff) << 32) * alpha))) | ((uint16_t) alpha << 8) | 0x80;
 }
 
 SMOL_REPACK_ROW_DEF (1234,  32, 32, UNASSOCIATED, COMPRESSED,
@@ -531,7 +492,7 @@ unpack_pixel_a234_u_to_234a_p16l_128bpp (uint32_t p,
                                          uint64_t *out)
 {
     uint64_t p64 = p;
-    uint64_t alpha = p >> 24;
+    uint8_t alpha = p >> 24;
 
     out [0] = ((p64 & 0x00ff0000) << 16) | ((p64 & 0x0000ff00) >> 8);
     out [1] = ((p64 & 0x000000ff) << 32);
@@ -540,7 +501,7 @@ unpack_pixel_a234_u_to_234a_p16l_128bpp (uint32_t p,
     out [0] *= alpha;
     out [1] *= alpha;
 
-    out [1] |= (alpha << 8) | 0x80;
+    out [1] = (out [1] & 0xffffffff00000000ULL) | (alpha << 8) | 0x80;
 }
 
 SMOL_REPACK_ROW_DEF (1234,  32, 32, UNASSOCIATED, COMPRESSED,
@@ -557,9 +518,9 @@ unpack_pixel_123a_u_to_123a_p8_128bpp (uint32_t p,
                                        uint64_t *out)
 {
     uint64_t p64 = (((uint64_t) p & 0xff00ff00) << 24) | (p & 0x00ff0000);
-    uint8_t alpha = p & 0xff;
+    uint8_t alpha = p;
 
-    p64 = premul_u_to_p8_64bpp (p64, alpha) | ((uint64_t) alpha);
+    p64 = (premul_u_to_p8_64bpp (p64, alpha) & 0xffffffffffffff00ULL) | alpha;
     out [0] = (p64 >> 16) & 0x000000ff000000ff;
     out [1] = p64 & 0x000000ff000000ff;
 }
@@ -578,7 +539,7 @@ unpack_pixel_123a_u_to_123a_pl_128bpp (uint32_t p,
                                        uint64_t *out)
 {
     uint64_t p64 = p;
-    uint8_t alpha = p & 0xff;
+    uint8_t alpha = p;
 
     /* FIXME: It should be possible to improve this by packing three channels in
      * 64 bits (alpha is not needed). Each channel needs 12 bits (for srgb) plus
@@ -592,7 +553,7 @@ unpack_pixel_123a_u_to_123a_pl_128bpp (uint32_t p,
     from_srgb_pixel_xxxa_128bpp (out);
     premul_ul_to_p8l_128bpp (out, alpha);
 
-    out [1] |= alpha;
+    out [1] = (out [1] & 0xffffffffffffff00) | alpha;
 }
 
 SMOL_REPACK_ROW_DEF (1234,  32, 32, UNASSOCIATED, COMPRESSED,
@@ -609,10 +570,10 @@ unpack_pixel_123a_u_to_123a_p16_128bpp (uint32_t p,
                                         uint64_t *out)
 {
     uint64_t p64 = p;
-    uint64_t alpha = p & 0xff;
+    uint8_t alpha = p;
 
     out [0] = (((((p64 & 0xff000000) << 8) | ((p64 & 0x00ff0000) >> 16)) * alpha));
-    out [1] = (((((p64 & 0x0000ff00) << 24) * alpha))) | (alpha << 8) | 0x80;
+    out [1] = (((((p64 & 0x0000ff00) << 24) * alpha))) | ((uint16_t) alpha << 8) | 0x80;
 }
 
 SMOL_REPACK_ROW_DEF (1234,  32, 32, UNASSOCIATED, COMPRESSED,
@@ -629,7 +590,7 @@ unpack_pixel_123a_u_to_123a_p16l_128bpp (uint32_t p,
                                          uint64_t *out)
 {
     uint64_t p64 = p;
-    uint64_t alpha = p & 0xff;
+    uint8_t alpha = p;
 
     out [0] = ((p64 & 0xff000000) << 8) | ((p64 & 0x00ff0000) >> 16);
     out [1] = ((p64 & 0x0000ff00) << 24);
@@ -638,7 +599,7 @@ unpack_pixel_123a_u_to_123a_p16l_128bpp (uint32_t p,
     out [0] *= alpha;
     out [1] *= alpha;
 
-    out [1] |= (alpha << 8) | 0x80;
+    out [1] = (out [1] & 0xffffffffffffff00ULL) | ((uint16_t) alpha << 8) | 0x80;
 }
 
 SMOL_REPACK_ROW_DEF (1234,  32, 32, UNASSOCIATED, COMPRESSED,
@@ -877,7 +838,7 @@ SMOL_REPACK_ROW_DEF (1234, 128, 64, PREMUL16,      COMPRESSED,
     while (row_out != row_out_max)
     {
         uint64_t t [2];
-        uint8_t alpha = row_in [1];
+        uint8_t alpha = row_in [1] >> 8;
         unpremul_p16_to_u_128bpp (row_in, t, alpha);
         t [1] = (t [1] & 0xffffffff00000000ULL) | alpha;
         *(row_out++) = t [0] >> 32;
@@ -892,7 +853,7 @@ SMOL_REPACK_ROW_DEF (1234, 128, 64, PREMUL16,      LINEAR,
     while (row_out != row_out_max)
     {
         uint64_t t [2];
-        uint8_t alpha = row_in [1];
+        uint8_t alpha = row_in [1] >> 8;
         unpremul_p16_to_u_128bpp (row_in, t, alpha);
         to_srgb_pixel_xxxa_128bpp (t, t);
         t [1] = (t [1] & 0xffffffff00000000ULL) | alpha;

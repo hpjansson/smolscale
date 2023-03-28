@@ -137,28 +137,34 @@ to_srgb_row_128bpp (uint64_t * SMOL_RESTRICT row_parts_inout,
  * Premultiplication *
  * ----------------- */
 
-/* Masking and shifting out the results is left to the caller. In
- * and out may not overlap. */
 static SMOL_INLINE void
-unpremul_p16_to_u_128bpp (const uint64_t * SMOL_RESTRICT in,
-                          uint64_t * SMOL_RESTRICT out,
-                          uint8_t alpha)
+premul_u_to_p8_128bpp (uint64_t * SMOL_RESTRICT inout,
+                       uint8_t alpha)
 {
-    out [0] = ((in [0] * (uint64_t) _smol_inverted_div_lut [alpha]
-                + INVERTED_DIV_ROUNDING_128BPP) >> INVERTED_DIV_SHIFT);
-    out [1] = ((in [1] * (uint64_t) _smol_inverted_div_lut [alpha]
-                + INVERTED_DIV_ROUNDING_128BPP) >> INVERTED_DIV_SHIFT);
+    /* FIXME: Use same approach as 64-bit version? */
+    inout [0] = ((inout [0] * (((uint16_t) alpha << 8) | alpha) + 0x00007fff00007fff)
+                 >> 16) & 0x000000ff000000ff;
+    inout [1] = ((inout [1] * (((uint16_t) alpha << 8) | alpha) + 0x00007fff00007fff)
+                 >> 16) & 0x000000ff000000ff;
 }
 
 static SMOL_INLINE void
-unpremul_p8_to_u_128bpp (const uint64_t * SMOL_RESTRICT in,
-                         uint64_t * SMOL_RESTRICT out,
+unpremul_p8_to_u_128bpp (const uint64_t *in,
+                         uint64_t *out,
                          uint8_t alpha)
 {
-    out [0] = (((in [0] << 8) * (uint64_t) _smol_inverted_div_lut [alpha])
-               >> INVERTED_DIV_SHIFT);
-    out [1] = (((in [1] << 8) * (uint64_t) _smol_inverted_div_lut [alpha])
-               >> INVERTED_DIV_SHIFT);
+    out [0] = ((in [0] * _smol_inv_div_p8_lut [alpha])
+               >> INVERTED_DIV_SHIFT_P8) & 0x000000ff000000ff;
+    out [1] = ((in [1] * _smol_inv_div_p8_lut [alpha])
+               >> INVERTED_DIV_SHIFT_P8) & 0x000000ff000000ff;
+}
+
+static SMOL_INLINE uint64_t
+premul_u_to_p8_64bpp (const uint64_t in,
+                      uint8_t alpha)
+{
+    return (((in + 0x0001000100010001) * ((uint16_t) alpha + 1) - 0x0001000100010001)
+            >> 8) & 0x00ff00ff00ff00ff;
 }
 
 static SMOL_INLINE uint64_t
@@ -173,23 +179,26 @@ unpremul_p8_to_u_64bpp (const uint64_t in,
 
     unpremul_p8_to_u_128bpp (in_128bpp, out_128bpp, alpha);
 
-    return (out_128bpp [0] & 0x000000ff000000ff)
-           | ((out_128bpp [1] & 0x000000ff000000ff) << 16);
-}
-
-static SMOL_INLINE uint64_t
-premul_u_to_p8_64bpp (const uint64_t in,
-                      uint8_t alpha)
-{
-    return ((in * ((uint16_t) alpha + 1)) >> 8) & 0x00ff00ff00ff00ff;
+    return out_128bpp [0] | (out_128bpp [1] << 16);
 }
 
 static SMOL_INLINE void
-premul_u_to_p8_128bpp (uint64_t * SMOL_RESTRICT inout,
-                      uint8_t alpha)
+premul_u_to_p16_128bpp (uint64_t *inout,
+                        uint8_t alpha)
 {
-    inout [0] = ((inout [0] * ((uint16_t) alpha + 1)) >> 8) & 0x00ffffff00ffffff;
-    inout [1] = ((inout [1] * ((uint16_t) alpha + 1)) >> 8) & 0x00ffffff00ffffff;
+    inout [0] = inout [0] * alpha;
+    inout [1] = inout [1] * alpha;
+}
+
+static SMOL_INLINE void
+unpremul_p16_to_u_128bpp (const uint64_t * SMOL_RESTRICT in,
+                          uint64_t * SMOL_RESTRICT out,
+                          uint8_t alpha)
+{
+    out [0] = ((in [0] * _smol_inv_div_p16_lut [alpha])
+               >> INVERTED_DIV_SHIFT_P16) & 0x000000ff000000ffULL;
+    out [1] = ((in [1] * _smol_inv_div_p16_lut [alpha])
+               >> INVERTED_DIV_SHIFT_P16) & 0x000000ff000000ffULL;
 }
 
 /* --------- *
@@ -913,7 +922,7 @@ pack_8x_123a_p16_to_xxxx_u_128bpp (const uint64_t * SMOL_RESTRICT *in,
                                    uint32_t * out_max,
                                    const __m256i channel_shuf)
 {
-#define ALPHA_MUL (1 << (INVERTED_DIV_SHIFT - 8))
+#define ALPHA_MUL (1 << (INVERTED_DIV_SHIFT_P16 - 8))
 #define ALPHA_MASK SMOL_8X1BIT (0, 1, 0, 0, 0, 1, 0, 0)
 
     const __m256i ones = _mm256_set_epi32 (
@@ -922,9 +931,6 @@ pack_8x_123a_p16_to_xxxx_u_128bpp (const uint64_t * SMOL_RESTRICT *in,
     const __m256i alpha_clean_mask = _mm256_set_epi32 (
         0x000000ff, 0x000000ff, 0x000000ff, 0x000000ff,
         0x000000ff, 0x000000ff, 0x000000ff, 0x000000ff);
-    const __m256i rounding = _mm256_set_epi32 (
-        INVERTED_DIV_ROUNDING, 0, INVERTED_DIV_ROUNDING, INVERTED_DIV_ROUNDING,
-        INVERTED_DIV_ROUNDING, 0, INVERTED_DIV_ROUNDING, INVERTED_DIV_ROUNDING);
     __m256i m00, m01, m02, m03, m04, m05, m06, m07, m08;
     const __m256i * SMOL_RESTRICT my_in = (const __m256i * SMOL_RESTRICT) *in;
     __m256i * SMOL_RESTRICT my_out = (__m256i * SMOL_RESTRICT) *out;
@@ -955,7 +961,7 @@ pack_8x_123a_p16_to_xxxx_u_128bpp (const uint64_t * SMOL_RESTRICT *in,
         m04 = _mm256_blend_epi32 (m05, m07, SMOL_8X1BIT (0, 0, 1, 1, 0, 0, 1, 1));
         m04 = _mm256_srli_epi32 (m04, 8);
         m04 = _mm256_and_si256 (m04, alpha_clean_mask);
-        m04 = _mm256_i32gather_epi32 ((const void *) _smol_inverted_div_lut, m04, 4);
+        m04 = _mm256_i32gather_epi32 ((const void *) _smol_inv_div_p16_lut, m04, 4);
 
         /* 2 pixels times 4 */
 
@@ -974,15 +980,10 @@ pack_8x_123a_p16_to_xxxx_u_128bpp (const uint64_t * SMOL_RESTRICT *in,
         m07 = _mm256_mullo_epi32 (m07, m02);
         m08 = _mm256_mullo_epi32 (m08, m03);
 
-        m05 = _mm256_add_epi32 (m05, rounding);
-        m06 = _mm256_add_epi32 (m06, rounding);
-        m07 = _mm256_add_epi32 (m07, rounding);
-        m08 = _mm256_add_epi32 (m08, rounding);
-
-        m05 = _mm256_srli_epi32 (m05, INVERTED_DIV_SHIFT);
-        m06 = _mm256_srli_epi32 (m06, INVERTED_DIV_SHIFT);
-        m07 = _mm256_srli_epi32 (m07, INVERTED_DIV_SHIFT);
-        m08 = _mm256_srli_epi32 (m08, INVERTED_DIV_SHIFT);
+        m05 = _mm256_srli_epi32 (m05, INVERTED_DIV_SHIFT_P16);
+        m06 = _mm256_srli_epi32 (m06, INVERTED_DIV_SHIFT_P16);
+        m07 = _mm256_srli_epi32 (m07, INVERTED_DIV_SHIFT_P16);
+        m08 = _mm256_srli_epi32 (m08, INVERTED_DIV_SHIFT_P16);
 
         /* Pack and store */
 
