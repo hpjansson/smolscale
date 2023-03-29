@@ -47,11 +47,10 @@ static SMOL_INLINE void
 premul_u_to_p8_128bpp (uint64_t * SMOL_RESTRICT inout,
                        uint8_t alpha)
 {
-    /* FIXME: Use same approach as 64-bit version? */
-    inout [0] = ((inout [0] * (((uint16_t) alpha << 8) | alpha) + 0x00007fff00007fff)
-                 >> 16) & 0x000000ff000000ff;
-    inout [1] = ((inout [1] * (((uint16_t) alpha << 8) | alpha) + 0x00007fff00007fff)
-                 >> 16) & 0x000000ff000000ff;
+    inout [0] = (((inout [0] + 0x0000000100000001) * ((uint16_t) alpha + 1) - 0x0000000100000001)
+                 >> 8) & 0x000000ff000000ff;
+    inout [1] = (((inout [1] + 0x0000000100000001) * ((uint16_t) alpha + 1) - 0x0000000100000001)
+                 >> 8) & 0x000000ff000000ff;
 }
 
 static SMOL_INLINE void
@@ -92,10 +91,10 @@ static SMOL_INLINE void
 premul_ul_to_p8l_128bpp (uint64_t * SMOL_RESTRICT inout,
                          uint8_t alpha)
 {
-    inout [0] = ((inout [0] * ((((uint32_t) alpha) << 8) | alpha) + 0x00007fff00007fff)
-                 >> 16) & 0x000007ff000007ff;
-    inout [1] = ((inout [1] * ((((uint32_t) alpha) << 8) | alpha) + 0x00007fff00007fff)
-                 >> 16) & 0x000007ff000007ff;
+    inout [0] = (((inout [0] + 0x0000000100000001) * (((uint16_t) alpha << 3) + 1) - 0x0000000100000001)
+                 >> 11) & 0x000007ff000007ff;
+    inout [1] = (((inout [1] + 0x0000000100000001) * (((uint16_t) alpha << 3) + 1) - 0x0000000100000001)
+                 >> 11) & 0x000007ff000007ff;
 }
 
 static SMOL_INLINE void

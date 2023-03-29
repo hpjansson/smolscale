@@ -306,7 +306,7 @@ extern const uint16_t _smol_from_srgb_lut [256];
 extern const uint8_t _smol_to_srgb_lut [SRGB_LINEAR_MAX];
 
 #define INVERTED_DIV_SHIFT_P8 (21 - 8)
-#define INVERTED_DIV_SHIFT_P8L (27 - SRGB_LINEAR_BITS)
+#define INVERTED_DIV_SHIFT_P8L (21 - SRGB_LINEAR_BITS)
 #define INVERTED_DIV_SHIFT_P16 (24 - 8)
 #define INVERTED_DIV_SHIFT_P16L (30 - SRGB_LINEAR_BITS)
 
