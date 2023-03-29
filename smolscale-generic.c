@@ -2664,6 +2664,90 @@ test_p16l (void)
     }
 }
 
+static void
+test_srgb (void)
+{
+    uint64_t i;
+
+    for (i = 0; i < 256; i++)
+    {
+        uint64_t p [3] [2];
+        uint16_t t [3] [4];
+
+        p [0] [0] = (i << 32) | i;
+        p [0] [1] = (i << 32) | 0xff;
+
+        memcpy (p [1], p [0], sizeof (uint64_t) * 2);
+        from_srgb_pixel_xxxa_128bpp (p [1]);
+        to_srgb_pixel_xxxa_128bpp (p [1], p [2]);
+
+        if (memcmp (p [0], p [2], sizeof (uint64_t) * 2))
+        {
+            printf ("sRGB revert failed: %016lx/%016lx -> %016lx/%016lx\n"
+                    "                    -> %016lx/%016lx\n",
+                    p [0] [0], p [0] [1],
+                    p [1] [0], p [1] [1],
+                    p [2] [0], p [2] [1]);
+        }
+    }
+}
+
+static void
+test_p8_to_p8_with_srgb (void)
+{
+    uint64_t i;
+    uint64_t alpha;
+
+    for (alpha = 1; alpha < 256; alpha++)
+    {
+        for (i = 0; i <= alpha; i++)
+        {
+            uint64_t p [7] [2];
+            uint16_t t [2] [4];
+            int is_good;
+
+            p [0] [0] = (i << 32) | i;
+            p [0] [1] = (i << 32) | alpha;
+
+            unpremul_p8_to_u_128bpp (p [0], p [1], alpha);
+            memcpy (p [2], p [1], sizeof (uint64_t) * 2);
+            from_srgb_pixel_xxxa_128bpp (p [2]);
+            memcpy (p [3], p [2], sizeof (uint64_t) * 2);
+            premul_ul_to_p8l_128bpp (p [3], alpha);
+
+            unpremul_p8l_to_ul_128bpp (p [3], p [4], alpha);
+            to_srgb_pixel_xxxa_128bpp (p [4], p [5]);
+            memcpy (p [6], p [5], sizeof (uint64_t) * 2);
+            premul_u_to_p8_128bpp (p [6], alpha);
+
+            p [6] [1] = (p [6] [1] & 0xffffffff00000000) | alpha;
+
+            unpack_128bpp (p [0], t [0]);
+            unpack_128bpp (p [6], t [1]);
+
+            is_good = !(cmp_channels_8bit_fuzzy (t [0] [0], t [1] [0], alpha)
+                        | cmp_channels_8bit_fuzzy (t [0] [1], t [1] [1], alpha)
+                        | cmp_channels_8bit_fuzzy (t [0] [2], t [1] [2], alpha)
+                        | cmp_channels_8bit_fuzzy (t [0] [3], t [1] [3], alpha));
+
+            if (!is_good)
+            {
+                printf ("p->l->p failed:   %016lx/%016lx -u-> %016lx/%016lx\n"
+                        "             -L-> %016lx/%016lx -p-> %016lx/%016lx\n"
+                        "             -u-> %016lx/%016lx -l-> %016lx/%016lx\n"
+                        "             -p-> %016lx/%016lx\n",
+                        p [0] [0], p [0] [1],
+                        p [1] [0], p [1] [1],
+                        p [2] [0], p [2] [1],
+                        p [3] [0], p [3] [1],
+                        p [4] [0], p [4] [1],
+                        p [5] [0], p [5] [1],
+                        p [6] [0], p [6] [1]);
+            }
+        }
+    }
+}
+
 int
 main (int argc, char *argv [])
 {
@@ -2672,6 +2756,8 @@ main (int argc, char *argv [])
     test_p8l ();
     test_p16 ();
     test_p16l ();
+    test_srgb ();
+    test_p8_to_p8_with_srgb ();
 }
 
 #endif
