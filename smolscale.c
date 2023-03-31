@@ -903,12 +903,6 @@ get_implementations (SmolScaleCtx *scale_ctx)
         internal_alpha = SMOL_ALPHA_PREMUL16;
         scale_ctx->storage_type = SMOL_STORAGE_128BPP;
     }
-#if 0
-    else if (pmeta_out->alpha == SMOL_ALPHA_UNASSOCIATED)
-    {
-        scale_ctx->storage_type = SMOL_STORAGE_128BPP;
-    }
-#endif
 
     if (scale_ctx->width_in > scale_ctx->width_out * 8191
         || scale_ctx->height_in > scale_ctx->height_out * 8191)
