@@ -175,20 +175,6 @@ unpremul_p16l_to_ul_128bpp (const uint64_t * SMOL_RESTRICT in,
     | (SHIFT_S ((in), (SWAP_2_AND_3 (c) - 1) * 16 + 8 - 48) & 0x0000ff00)  \
     | (SHIFT_S ((in), (SWAP_2_AND_3 (d) - 1) * 16 + 8 - 56) & 0x000000ff))
 
-#if 0
-/* Currently unused */
-
-#define PACK_FROM_1324_128BPP(in, a, b, c, d)                               \
-     ((SHIFT_S ((in [(SWAP_2_AND_3 (a) - 1) >> 1]),                         \
-                ((SWAP_2_AND_3 (a) - 1) & 1) * 32 + 24 - 32) & 0xff000000)  \
-    | (SHIFT_S ((in [(SWAP_2_AND_3 (b) - 1) >> 1]),                         \
-                ((SWAP_2_AND_3 (b) - 1) & 1) * 32 + 24 - 40) & 0x00ff0000)  \
-    | (SHIFT_S ((in [(SWAP_2_AND_3 (c) - 1) >> 1]),                         \
-                ((SWAP_2_AND_3 (c) - 1) & 1) * 32 + 24 - 48) & 0x0000ff00)  \
-    | (SHIFT_S ((in [(SWAP_2_AND_3 (d) - 1) >> 1]),                         \
-                ((SWAP_2_AND_3 (d) - 1) & 1) * 32 + 24 - 56) & 0x000000ff))
-#endif
-
 /* ---------------------- *
  * Repacking: 24/32 -> 64 *
  * ---------------------- */
@@ -209,9 +195,6 @@ SMOL_REPACK_ROW_DEF (123,  24,  8, PREMUL8, COMPRESSED,
     }
 } SMOL_REPACK_ROW_DEF_END
 
-/* AVX2 has a useful instruction for this: __m256i _mm256_cvtepu8_epi16 (__m128i a);
- * It results in a different channel ordering, so it'd be important to match with
- * the right kind of re-pack. */
 static SMOL_INLINE uint64_t
 unpack_pixel_1234_p8_to_1324_p8_64bpp (uint32_t p)
 {
@@ -441,12 +424,6 @@ unpack_pixel_a234_u_to_234a_pl_128bpp (uint32_t p,
     uint64_t p64 = p;
     uint8_t alpha = p >> 24;
 
-    /* FIXME: It should be possible to improve this by packing three channels in
-     * 64 bits (alpha is not needed). Each channel needs 12 bits (for srgb) plus
-     * 8 bits (for premul) = 20 bits. Times three makes 60 bits. This allows us
-     * to do premul with a single 64-bit operation. Then we shift things out into
-     * 128bpp and merge alpha back in afterwards. */
-
     out [0] = ((p64 & 0x00ff0000) << 16) | ((p64 & 0x0000ff00) >> 8);
     out [1] = ((p64 & 0x000000ff) << 32);
 
@@ -539,12 +516,6 @@ unpack_pixel_123a_u_to_123a_pl_128bpp (uint32_t p,
     uint64_t p64 = p;
     uint8_t alpha = p;
 
-    /* FIXME: It should be possible to improve this by packing three channels in
-     * 64 bits (alpha is not needed). Each channel needs 12 bits (for srgb) plus
-     * 8 bits (for premul) = 20 bits. Times three makes 60 bits. This allows us
-     * to do premul with a single 64-bit operation. Then we shift things out into
-     * 128bpp and merge alpha back in afterwards. */
-
     out [0] = ((p64 & 0xff000000) << 8) | ((p64 & 0x00ff0000) >> 16);
     out [1] = ((p64 & 0x0000ff00) << 24);
 
@@ -623,7 +594,6 @@ SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
                      132,  24,  8, PREMUL8,       COMPRESSED) {
     while (row_out != row_out_max)
     {
-        /* FIXME: Would be faster to shift directly */
         uint32_t p = pack_pixel_1234_p8_to_1324_p8_64bpp (*(row_in++));
         *(row_out++) = p >> 24;
         *(row_out++) = p >> 16;
@@ -637,7 +607,6 @@ SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
     {
         uint8_t alpha = *row_in;
         uint64_t t = (unpremul_p8_to_u_64bpp (*row_in, alpha) & 0xffffffffffffff00ULL) | alpha;
-        /* FIXME: Would be faster to shift directly */
         uint32_t p = pack_pixel_1234_p8_to_1324_p8_64bpp (t);
         *(row_out++) = p >> 24;
         *(row_out++) = p >> 16;
@@ -650,7 +619,6 @@ SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
                      231,  24,  8, PREMUL8,       COMPRESSED) {
     while (row_out != row_out_max)
     {
-        /* FIXME: Would be faster to shift directly */
         uint32_t p = pack_pixel_1234_p8_to_1324_p8_64bpp (*(row_in++));
         *(row_out++) = p >> 8;
         *(row_out++) = p >> 16;
@@ -664,7 +632,6 @@ SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
     {
         uint8_t alpha = *row_in;
         uint64_t t = (unpremul_p8_to_u_64bpp (*row_in, alpha) & 0xffffffffffffff00ULL) | alpha;
-        /* FIXME: Would be faster to shift directly */
         uint32_t p = pack_pixel_1234_p8_to_1324_p8_64bpp (t);
         *(row_out++) = p >> 8;
         *(row_out++) = p >> 16;
@@ -677,7 +644,6 @@ SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
                      324,  24,  8, PREMUL8,       COMPRESSED) {
     while (row_out != row_out_max)
     {
-        /* FIXME: Would be faster to shift directly */
         uint32_t p = pack_pixel_1234_p8_to_1324_p8_64bpp (*(row_in++));
         *(row_out++) = p >> 16;
         *(row_out++) = p >> 8;
@@ -691,7 +657,6 @@ SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
     {
         uint8_t alpha = *row_in >> 24;
         uint64_t t = (unpremul_p8_to_u_64bpp (*row_in, alpha) & 0xffffffffffffff00ULL) | alpha;
-        /* FIXME: Would be faster to shift directly */
         uint32_t p = pack_pixel_1234_p8_to_1324_p8_64bpp (t);
         *(row_out++) = p >> 16;
         *(row_out++) = p >> 8;
@@ -704,7 +669,6 @@ SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
                      423,  24,  8, PREMUL8,       COMPRESSED) {
     while (row_out != row_out_max)
     {
-        /* FIXME: Would be faster to shift directly */
         uint32_t p = pack_pixel_1234_p8_to_1324_p8_64bpp (*(row_in++));
         *(row_out++) = p;
         *(row_out++) = p >> 8;
@@ -718,7 +682,6 @@ SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
     {
         uint8_t alpha = *row_in >> 24;
         uint64_t t = (unpremul_p8_to_u_64bpp (*row_in, alpha) & 0xffffffffffffff00ULL) | alpha;
-        /* FIXME: Would be faster to shift directly */
         uint32_t p = pack_pixel_1234_p8_to_1324_p8_64bpp (t);
         *(row_out++) = p;
         *(row_out++) = p >> 8;
@@ -1062,8 +1025,8 @@ sum_parts_64bpp (const uint64_t ** SMOL_RESTRICT parts_in,
                  uint64_t * SMOL_RESTRICT accum,
                  uint32_t n)
 {
-    const uint64_t *pp_end;
     const uint64_t * SMOL_RESTRICT pp = *parts_in;
+    const uint64_t *pp_end;
 
     SMOL_ASSUME_ALIGNED_TO (pp, const uint64_t *, sizeof (uint64_t));
 
@@ -1080,8 +1043,8 @@ sum_parts_128bpp (const uint64_t ** SMOL_RESTRICT parts_in,
                   uint64_t * SMOL_RESTRICT accum,
                   uint32_t n)
 {
-    const uint64_t *pp_end;
     const uint64_t * SMOL_RESTRICT pp = *parts_in;
+    const uint64_t *pp_end;
 
     SMOL_ASSUME_ALIGNED_TO (pp, const uint64_t *, sizeof (uint64_t) * 2);
 
@@ -1159,10 +1122,10 @@ interp_horizontal_bilinear_##n_halvings##h_64bpp (const SmolScaleCtx *scale_ctx,
                                                   const uint64_t * SMOL_RESTRICT row_parts_in, \
                                                   uint64_t * SMOL_RESTRICT row_parts_out) \
 {                                                                       \
-    uint64_t p, q;                                                      \
     const uint16_t * SMOL_RESTRICT ofs_x = scale_ctx->offsets_x;        \
-    uint64_t F;                                                         \
     uint64_t *row_parts_out_max = row_parts_out + scale_ctx->width_out; \
+    uint64_t p, q;                                                      \
+    uint64_t F;                                                         \
     int i;                                                              \
                                                                         \
     SMOL_ASSUME_ALIGNED (row_parts_in, const uint64_t *);               \
@@ -1192,10 +1155,10 @@ interp_horizontal_bilinear_##n_halvings##h_128bpp (const SmolScaleCtx *scale_ctx
                                                    const uint64_t * SMOL_RESTRICT row_parts_in, \
                                                    uint64_t * SMOL_RESTRICT row_parts_out) \
 {                                                                       \
-    uint64_t p, q;                                                      \
     const uint16_t * SMOL_RESTRICT ofs_x = scale_ctx->offsets_x;        \
-    uint64_t F;                                                         \
     uint64_t *row_parts_out_max = row_parts_out + scale_ctx->width_out * 2; \
+    uint64_t p, q;                                                      \
+    uint64_t F;                                                         \
     int i;                                                              \
                                                                         \
     SMOL_ASSUME_ALIGNED (row_parts_in, const uint64_t *);               \
@@ -1231,10 +1194,10 @@ interp_horizontal_bilinear_0h_64bpp (const SmolScaleCtx *scale_ctx,
                                      const uint64_t * SMOL_RESTRICT row_parts_in,
                                      uint64_t * SMOL_RESTRICT row_parts_out)
 {
-    uint64_t p, q;
     const uint16_t * SMOL_RESTRICT ofs_x = scale_ctx->offsets_x;
-    uint64_t F;
     uint64_t * SMOL_RESTRICT row_parts_out_max = row_parts_out + scale_ctx->width_out;
+    uint64_t p, q;
+    uint64_t F;
 
     SMOL_ASSUME_ALIGNED (row_parts_in, const uint64_t *);
     SMOL_ASSUME_ALIGNED (row_parts_out, uint64_t *);
@@ -1257,10 +1220,10 @@ interp_horizontal_bilinear_0h_128bpp (const SmolScaleCtx *scale_ctx,
                                       const uint64_t * SMOL_RESTRICT row_parts_in,
                                       uint64_t * SMOL_RESTRICT row_parts_out)
 {
-    uint64_t p, q;
     const uint16_t * SMOL_RESTRICT ofs_x = scale_ctx->offsets_x;
-    uint64_t F;
     uint64_t * SMOL_RESTRICT row_parts_out_max = row_parts_out + scale_ctx->width_out * 2;
+    uint64_t p, q;
+    uint64_t F;
 
     SMOL_ASSUME_ALIGNED (row_parts_in, const uint64_t *);
     SMOL_ASSUME_ALIGNED (row_parts_out, uint64_t *);
@@ -1351,7 +1314,7 @@ interp_horizontal_boxes_128bpp (const SmolScaleCtx *scale_ctx,
 {
     const uint64_t * SMOL_RESTRICT pp;
     const uint16_t *ofs_x = scale_ctx->offsets_x;
-    uint64_t *row_parts_out_max = row_parts_out + (scale_ctx->width_out - /* 2 */ 1) * 2;
+    uint64_t *row_parts_out_max = row_parts_out + (scale_ctx->width_out - 1) * 2;
     uint64_t accum [2] = { 0, 0 };
     uint64_t p [2], q [2], r [2], s [2];
     uint32_t n;

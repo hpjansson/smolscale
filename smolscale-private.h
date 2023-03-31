@@ -2,6 +2,13 @@
 
 /* Copyright © 2019-2023 Hans Petter Jansson. See COPYING for details. */
 
+/* If you're just going to use Smolscale in your project, you don't have to
+ * worry about anything in here. The public API and documentation, such as
+ * it is, lives in smolscale.h.
+ *
+ * If, on the other hand, you're here to hack on Smolscale itself, this file
+ * contains all the internal shared declarations. */
+
 #include <stdint.h>
 #include "smolscale.h"
 
