@@ -89,22 +89,38 @@ unpremul_p16_to_u_128bpp (const uint64_t * SMOL_RESTRICT in,
  * _mm256_set_epi8 (13,12,15,14, 9,8,11,10, 5,4,7,6, 1,0,3,2,
  *                  13,12,15,14, 9,8,11,10, 5,4,7,6, 1,0,3,2);
  */
-#define SHUF_ORDER 0x01000302U
-#define SHUF_CH(n) ((char) (SHUF_ORDER >> ((4 - (n)) * 8)))
-#define SHUF_QUAD_CH(q, n) (4 * (q) + SHUF_CH (n))
-#define SHUF_QUAD(q, a, b, c, d) \
-    SHUF_QUAD_CH ((q), (a)), \
-    SHUF_QUAD_CH ((q), (b)), \
-    SHUF_QUAD_CH ((q), (c)), \
-    SHUF_QUAD_CH ((q), (d))
-#define PACK_SHUF_EPI8_LANE(a, b, c, d) \
-    SHUF_QUAD (3, (a), (b), (c), (d)), \
-    SHUF_QUAD (2, (a), (b), (c), (d)), \
-    SHUF_QUAD (1, (a), (b), (c), (d)), \
-    SHUF_QUAD (0, (a), (b), (c), (d))
-#define PACK_SHUF_MM256_EPI8(a, b, c, d) _mm256_set_epi8 ( \
-    PACK_SHUF_EPI8_LANE ((a), (b), (c), (d)), \
-    PACK_SHUF_EPI8_LANE ((a), (b), (c), (d)))
+#define SHUF_ORDER_32_TO_128 0x01000302U
+#define SHUF_CH_32_TO_128(n) ((char) (SHUF_ORDER_32_TO_128 >> ((4 - (n)) * 8)))
+#define SHUF_QUAD_CH_32_TO_128(q, n) (4 * (q) + SHUF_CH_32_TO_128 (n))
+#define SHUF_QUAD_32_TO_128(q, a, b, c, d) \
+    SHUF_QUAD_CH_32_TO_128 ((q), (a)), \
+    SHUF_QUAD_CH_32_TO_128 ((q), (b)), \
+    SHUF_QUAD_CH_32_TO_128 ((q), (c)), \
+    SHUF_QUAD_CH_32_TO_128 ((q), (d))
+#define PACK_SHUF_EPI8_LANE_32_TO_128(a, b, c, d) \
+    SHUF_QUAD_32_TO_128 (3, (a), (b), (c), (d)), \
+    SHUF_QUAD_32_TO_128 (2, (a), (b), (c), (d)), \
+    SHUF_QUAD_32_TO_128 (1, (a), (b), (c), (d)), \
+    SHUF_QUAD_32_TO_128 (0, (a), (b), (c), (d))
+#define PACK_SHUF_MM256_EPI8_32_TO_128(a, b, c, d) _mm256_set_epi8 ( \
+    PACK_SHUF_EPI8_LANE_32_TO_128 ((a), (b), (c), (d)), \
+    PACK_SHUF_EPI8_LANE_32_TO_128 ((a), (b), (c), (d)))
+
+#define SHUF_CH_32_TO_64(n) ((char) (4 - (n)))
+#define SHUF_QUAD_CH_32_TO_64(q, n) (4 * (q) + SHUF_CH_32_TO_64 (n))
+#define SHUF_QUAD_32_TO_64(q, a, b, c, d) \
+    SHUF_QUAD_CH_32_TO_64 ((q), (a)), \
+    SHUF_QUAD_CH_32_TO_64 ((q), (b)), \
+    SHUF_QUAD_CH_32_TO_64 ((q), (c)), \
+    SHUF_QUAD_CH_32_TO_64 ((q), (d))
+#define PACK_SHUF_EPI8_LANE_32_TO_64(a, b, c, d) \
+    SHUF_QUAD_32_TO_64 (3, (a), (b), (c), (d)), \
+    SHUF_QUAD_32_TO_64 (2, (a), (b), (c), (d)), \
+    SHUF_QUAD_32_TO_64 (1, (a), (b), (c), (d)), \
+    SHUF_QUAD_32_TO_64 (0, (a), (b), (c), (d))
+#define PACK_SHUF_MM256_EPI8_32_TO_64(a, b, c, d) _mm256_set_epi8 ( \
+    PACK_SHUF_EPI8_LANE_32_TO_64 ((a), (b), (c), (d)), \
+    PACK_SHUF_EPI8_LANE_32_TO_64 ((a), (b), (c), (d)))
 
 /* It's nice to be able to shift by a negative amount */
 #define SHIFT_S(in, s) ((s >= 0) ? (in) << (s) : (in) >> -(s))
@@ -149,6 +165,40 @@ unpremul_p16_to_u_128bpp (const uint64_t * SMOL_RESTRICT in,
  * Repacking: 24/32 -> 64 *
  * ---------------------- */
 
+static void
+unpack_8x_1234_p8_to_xxxx_p8_64bpp (const uint32_t * SMOL_RESTRICT *in,
+                                    uint64_t * SMOL_RESTRICT *out,
+                                    uint64_t *out_max,
+                                    const __m256i channel_shuf)
+{
+    const __m256i zero = _mm256_setzero_si256 ();
+    __m256i m0, m1, m2;
+    const __m256i * SMOL_RESTRICT my_in = (const __m256i * SMOL_RESTRICT) *in;
+    __m256i * SMOL_RESTRICT my_out = (__m256i * SMOL_RESTRICT) *out;
+
+    SMOL_ASSUME_ALIGNED (my_out, __m256i * SMOL_RESTRICT);
+
+    while ((ptrdiff_t) (my_out + 2) <= (ptrdiff_t) out_max)
+    {
+        m0 = _mm256_loadu_si256 (my_in);
+        my_in++;
+
+        m0 = _mm256_shuffle_epi8 (m0, channel_shuf);
+        m0 = _mm256_permute4x64_epi64 (m0, SMOL_4X2BIT (3, 1, 2, 0));
+
+        m1 = _mm256_unpacklo_epi8 (m0, zero);
+        m2 = _mm256_unpackhi_epi8 (m0, zero);
+
+        _mm256_store_si256 ((__m256i *) my_out, m1);
+        my_out++;
+        _mm256_store_si256 ((__m256i *) my_out, m2);
+        my_out++;
+    }
+
+    *out = (uint64_t * SMOL_RESTRICT) my_out;
+    *in = (const uint32_t * SMOL_RESTRICT) my_in;
+}
+
 static SMOL_INLINE uint64_t
 unpack_pixel_123_p8_to_132a_p8_64bpp (const uint8_t *p)
 {
@@ -176,6 +226,10 @@ unpack_pixel_1234_p8_to_1324_p8_64bpp (uint32_t p)
 
 SMOL_REPACK_ROW_DEF (1234, 32, 32, PREMUL8, COMPRESSED,
                      1324, 64, 64, PREMUL8, COMPRESSED) {
+    const __m256i channel_shuf = PACK_SHUF_MM256_EPI8_32_TO_64 (1, 3, 2, 4);
+    unpack_8x_1234_p8_to_xxxx_p8_64bpp (&row_in, &row_out, row_out_max,
+                                        channel_shuf);
+
     while (row_out != row_out_max)
     {
         *(row_out++) = unpack_pixel_1234_p8_to_1324_p8_64bpp (*(row_in++));
@@ -191,6 +245,10 @@ unpack_pixel_1234_p8_to_3241_p8_64bpp (uint32_t p)
 
 SMOL_REPACK_ROW_DEF (1234, 32, 32, PREMUL8, COMPRESSED,
                      3241, 64, 64, PREMUL8, COMPRESSED) {
+    const __m256i channel_shuf = PACK_SHUF_MM256_EPI8_32_TO_64 (3, 2, 4, 1);
+    unpack_8x_1234_p8_to_xxxx_p8_64bpp (&row_in, &row_out, row_out_max,
+                                        channel_shuf);
+
     while (row_out != row_out_max)
     {
         *(row_out++) = unpack_pixel_1234_p8_to_3241_p8_64bpp (*(row_in++));
@@ -208,6 +266,10 @@ unpack_pixel_1234_p8_to_2431_p8_64bpp (uint32_t p)
 
 SMOL_REPACK_ROW_DEF (1234, 32, 32, PREMUL8, COMPRESSED,
                      2431, 64, 64, PREMUL8, COMPRESSED) {
+    const __m256i channel_shuf = PACK_SHUF_MM256_EPI8_32_TO_64 (2, 4, 3, 1);
+    unpack_8x_1234_p8_to_xxxx_p8_64bpp (&row_in, &row_out, row_out_max,
+                                        channel_shuf);
+
     while (row_out != row_out_max)
     {
         *(row_out++) = unpack_pixel_1234_p8_to_2431_p8_64bpp (*(row_in++));
@@ -425,9 +487,9 @@ unpack_pixel_a234_u_to_234a_p16_128bpp (uint32_t p,
 
 SMOL_REPACK_ROW_DEF (1234,  32, 32, UNASSOCIATED, COMPRESSED,
                      2341, 128, 64, PREMUL16,     COMPRESSED) {
-    const __m256i channel_shuf = PACK_SHUF_MM256_EPI8 (2, 3, 4, 1);
+    const __m256i channel_shuf = PACK_SHUF_MM256_EPI8_32_TO_128 (2, 3, 4, 1);
     unpack_8x_xxxx_u_to_123a_p16_128bpp (&row_in, &row_out, row_out_max,
-                                       channel_shuf);
+                                         channel_shuf);
 
     while (row_out != row_out_max)
     {
@@ -470,9 +532,9 @@ unpack_pixel_123a_u_to_123a_p16_128bpp (uint32_t p,
 
 SMOL_REPACK_ROW_DEF (1234,  32, 32, UNASSOCIATED, COMPRESSED,
                      1234, 128, 64, PREMUL16,     COMPRESSED) {
-    const __m256i channel_shuf = PACK_SHUF_MM256_EPI8 (1, 2, 3, 4);
+    const __m256i channel_shuf = PACK_SHUF_MM256_EPI8_32_TO_128 (1, 2, 3, 4);
     unpack_8x_xxxx_u_to_123a_p16_128bpp (&row_in, &row_out, row_out_max,
-                                       channel_shuf);
+                                         channel_shuf);
 
     while (row_out != row_out_max)
     {
@@ -484,6 +546,41 @@ SMOL_REPACK_ROW_DEF (1234,  32, 32, UNASSOCIATED, COMPRESSED,
 /* ---------------------- *
  * Repacking: 64 -> 24/32 *
  * ---------------------- */
+
+static void
+pack_8x_1234_p8_to_xxxx_p8_64bpp (const uint64_t * SMOL_RESTRICT *in,
+                                  uint32_t * SMOL_RESTRICT *out,
+                                  uint32_t * out_max,
+                                  const __m256i channel_shuf)
+{
+    __m256i m00, m01;
+    const __m256i * SMOL_RESTRICT my_in = (const __m256i * SMOL_RESTRICT) *in;
+    __m256i * SMOL_RESTRICT my_out = (__m256i * SMOL_RESTRICT) *out;
+
+    SMOL_ASSUME_ALIGNED (my_in, __m256i * SMOL_RESTRICT);
+
+    while ((ptrdiff_t) (my_out + 1) <= (ptrdiff_t) out_max)
+    {
+        /* Load inputs */
+
+        m00 = _mm256_stream_load_si256 (my_in);
+        my_in++;
+        m01 = _mm256_stream_load_si256 (my_in);
+        my_in++;
+
+        /* Pack and store */
+
+        m00 = _mm256_packus_epi16 (m00, m01);
+        m00 = _mm256_shuffle_epi8 (m00, channel_shuf);
+        m00 = _mm256_permute4x64_epi64 (m00, SMOL_4X2BIT (3, 1, 2, 0));
+
+        _mm256_storeu_si256 (my_out, m00);
+        my_out++;
+    }
+
+    *out = (uint32_t * SMOL_RESTRICT) my_out;
+    *in = (const uint64_t * SMOL_RESTRICT) my_in;
+}
 
 static SMOL_INLINE uint32_t
 pack_pixel_1234_p8_to_1324_p8_64bpp (uint64_t in)
@@ -601,6 +698,9 @@ SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
 
 SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
                      1324, 32, 32, PREMUL8,       COMPRESSED) {
+    const __m256i channel_shuf = PACK_SHUF_MM256_EPI8_32_TO_64 (1, 3, 2, 4);
+    pack_8x_1234_p8_to_xxxx_p8_64bpp (&row_in, &row_out, row_out_max,
+                                      channel_shuf);
     while (row_out != row_out_max)
     {
         *(row_out++) = pack_pixel_1234_p8_to_1324_p8_64bpp (*(row_in++));
@@ -621,6 +721,9 @@ SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
 #define DEF_REPACK_FROM_1234_64BPP_TO_32BPP(a, b, c, d) \
     SMOL_REPACK_ROW_DEF (1234,       64, 64, PREMUL8,       COMPRESSED, \
                          a##b##c##d, 32, 32, PREMUL8,       COMPRESSED) { \
+        const __m256i channel_shuf = PACK_SHUF_MM256_EPI8_32_TO_64 ((a), (b), (c), (d)); \
+        pack_8x_1234_p8_to_xxxx_p8_64bpp (&row_in, &row_out, row_out_max, \
+                                          channel_shuf); \
         while (row_out != row_out_max) \
         { \
             *(row_out++) = PACK_FROM_1234_64BPP (*row_in, a, b, c, d); \
@@ -841,7 +944,7 @@ SMOL_REPACK_ROW_DEF (1234, 128, 64, PREMUL16,      COMPRESSED,
     } SMOL_REPACK_ROW_DEF_END \
     SMOL_REPACK_ROW_DEF (1234,       128, 64, PREMUL16,      COMPRESSED, \
                          a##b##c##d,  32, 32, UNASSOCIATED,  COMPRESSED) { \
-        const __m256i channel_shuf = PACK_SHUF_MM256_EPI8 ((a), (b), (c), (d)); \
+        const __m256i channel_shuf = PACK_SHUF_MM256_EPI8_32_TO_128 ((a), (b), (c), (d)); \
         pack_8x_123a_p16_to_xxxx_u_128bpp (&row_in, &row_out, row_out_max, \
                                            channel_shuf);               \
         while (row_out != row_out_max) \
