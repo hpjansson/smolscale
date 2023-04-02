@@ -191,6 +191,7 @@ typedef struct
 }
 SmolVerticalCtx;
 
+typedef void (SmolInitFunc) (SmolScaleCtx *scale_ctx);
 typedef void (SmolUnpackRowFunc) (const uint32_t *row_in,
                                   uint64_t *row_out,
                                   uint32_t n_pixels);
@@ -268,6 +269,8 @@ SmolRepackMeta;
 
 typedef struct
 {
+    SmolInitFunc *init_h_func;
+    SmolInitFunc *init_v_func;
     SmolHFilterFunc *hfilter_funcs [SMOL_STORAGE_MAX] [SMOL_FILTER_MAX];
     SmolVFilterFunc *vfilter_funcs [SMOL_STORAGE_MAX] [SMOL_FILTER_MAX];
     const SmolRepackMeta *repack_meta;

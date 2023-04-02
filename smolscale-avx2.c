@@ -10,6 +10,174 @@
 #include <immintrin.h>
 #include "smolscale-private.h"
 
+/* ---------------------- *
+ * Context initialization *
+ * ---------------------- */
+
+static void
+precalc_bilinear_array (uint16_t *array,
+                        uint32_t dim_in,
+                        uint32_t dim_out,
+                        unsigned int make_absolute_offsets)
+{
+    uint64_t ofs_stepF, fracF, frac_stepF;
+    uint16_t *pu16 = array;
+    uint16_t last_ofs = 0;
+
+    if (dim_in > dim_out)
+    {
+        /* Minification */
+        frac_stepF = ofs_stepF = (dim_in * SMOL_BILIN_MULTIPLIER) / dim_out;
+        fracF = (frac_stepF - SMOL_BILIN_MULTIPLIER) / 2;
+    }
+    else
+    {
+        /* Magnification */
+        frac_stepF = ofs_stepF = ((dim_in - 1) * SMOL_BILIN_MULTIPLIER)
+            / (dim_out > 1 ? (dim_out - 1) : 1);
+        fracF = 0;
+    }
+
+    do
+    {
+        uint16_t ofs = fracF / SMOL_BILIN_MULTIPLIER;
+
+        /* We sample ofs and its neighbor -- prevent out of bounds access
+         * for the latter. */
+        if (ofs >= dim_in - 1)
+            break;
+
+        *(pu16++) = make_absolute_offsets ? ofs : ofs - last_ofs;
+        *(pu16++) = SMOL_SMALL_MUL - ((fracF / (SMOL_BILIN_MULTIPLIER / SMOL_SMALL_MUL))
+                                      % SMOL_SMALL_MUL);
+        fracF += frac_stepF;
+
+        last_ofs = ofs;
+    }
+    while (--dim_out);
+
+    /* Instead of going out of bounds, sample the final pair of pixels with a 100%
+     * bias towards the last pixel */
+    while (dim_out)
+    {
+        *(pu16++) = make_absolute_offsets ? dim_in - 2 : (dim_in - 2) - last_ofs;
+        *(pu16++) = 0;
+        dim_out--;
+
+        last_ofs = dim_in - 2;
+    }
+}
+
+static void
+precalc_boxes_array (uint16_t *array,
+                     uint32_t *span_mul,
+                     uint32_t dim_in,
+                     uint32_t dim_out,
+                     unsigned int make_absolute_offsets)
+{
+    uint64_t fracF, frac_stepF;
+    uint16_t *pu16 = array;
+    uint16_t ofs, next_ofs;
+    uint64_t f;
+    uint64_t stride;
+    uint64_t a, b;
+
+    frac_stepF = ((uint64_t) dim_in * SMOL_BIG_MUL) / (uint64_t) dim_out;
+    fracF = 0;
+    ofs = 0;
+
+    stride = frac_stepF / (uint64_t) SMOL_BIG_MUL;
+    f = (frac_stepF / SMOL_SMALL_MUL) % SMOL_SMALL_MUL;
+
+    a = (SMOL_BOXES_MULTIPLIER * 255);
+    b = ((stride * 255) + ((f * 255) / 256));
+    *span_mul = (a + (b / 2)) / b;
+
+    do
+    {
+        fracF += frac_stepF;
+        next_ofs = (uint64_t) fracF / ((uint64_t) SMOL_BIG_MUL);
+
+        /* Prevent out of bounds access */
+        if (ofs >= dim_in - 1)
+            break;
+
+        if (next_ofs > dim_in)
+        {
+            next_ofs = dim_in;
+            if (next_ofs <= ofs)
+                break;
+        }
+
+        stride = next_ofs - ofs - 1;
+        f = (fracF / SMOL_SMALL_MUL) % SMOL_SMALL_MUL;
+
+        /* Fraction is the other way around, since left pixel of each span
+         * comes first, and it's on the right side of the fractional sample. */
+        *(pu16++) = make_absolute_offsets ? ofs : stride;
+        *(pu16++) = f;
+
+        ofs = next_ofs;
+    }
+    while (--dim_out);
+
+    /* Instead of going out of bounds, sample the final pair of pixels with a 100%
+     * bias towards the last pixel */
+    while (dim_out)
+    {
+        *(pu16++) = make_absolute_offsets ? ofs : 0;
+        *(pu16++) = 0;
+        dim_out--;
+    }
+
+    *(pu16++) = make_absolute_offsets ? ofs : 0;
+    *(pu16++) = 0;
+}
+
+static void
+init_horizontal (SmolScaleCtx *scale_ctx)
+{
+    if (scale_ctx->filter_h == SMOL_FILTER_ONE
+        || scale_ctx->filter_h == SMOL_FILTER_COPY)
+    {
+    }
+    else if (scale_ctx->filter_h == SMOL_FILTER_BOX)
+    {
+        precalc_boxes_array (scale_ctx->offsets_x, &scale_ctx->span_mul_x,
+                             scale_ctx->width_in, scale_ctx->width_out,
+                             FALSE);
+    }
+    else /* SMOL_FILTER_BILINEAR_?H */
+    {
+        precalc_bilinear_array (scale_ctx->offsets_x,
+                                scale_ctx->width_in,
+                                scale_ctx->width_bilin_out,
+                                FALSE);
+    }
+}
+
+static void
+init_vertical (SmolScaleCtx *scale_ctx)
+{
+    if (scale_ctx->filter_v == SMOL_FILTER_ONE
+        || scale_ctx->filter_v == SMOL_FILTER_COPY)
+    {
+    }
+    else if (scale_ctx->filter_v == SMOL_FILTER_BOX)
+    {
+        precalc_boxes_array (scale_ctx->offsets_y, &scale_ctx->span_mul_y,
+                             scale_ctx->height_in, scale_ctx->height_out,
+                             TRUE);
+    }
+    else /* SMOL_FILTER_BILINEAR_?H */
+    {
+        precalc_bilinear_array (scale_ctx->offsets_y,
+                                scale_ctx->height_in,
+                                scale_ctx->height_bilin_out,
+                                TRUE);
+    }
+}
+
 /* ----------------- *
  * Premultiplication *
  * ----------------- */
@@ -2389,6 +2557,12 @@ static const SmolRepackMeta repack_meta [] =
 
 static const SmolImplementation implementation =
 {
+    /* Horizontal init */
+    init_horizontal,
+
+    /* Vertical init */
+    init_vertical,
+
     {
         /* Horizontal filters */
         {
