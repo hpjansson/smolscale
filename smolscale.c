@@ -2,10 +2,6 @@
 
 /* Copyright © 2019-2023 Hans Petter Jansson. See COPYING for details. */
 
-#if 0
-#include <stdio.h>
-#endif
-
 #include <assert.h> /* assert */
 #include <stdlib.h> /* malloc, free, alloca */
 #include <string.h> /* memset */
@@ -625,19 +621,6 @@ do_reorder (const uint8_t *order_in, uint8_t *order_out, const uint8_t *reorder)
     }
 }
 
-#if 0
-static void
-print_order (const uint8_t *order)
-{
-    int i;
-
-    for (i = 0; i < 4; i++)
-    {
-        fputc ('0' + order [i], stdout);
-    }
-}
-#endif
-
 static void
 find_repacks (const SmolImplementation **implementations,
               SmolStorageType storage_in, SmolStorageType storage_mid, SmolStorageType storage_out,
@@ -672,10 +655,6 @@ find_repacks (const SmolImplementation **implementations,
         {
             uint8_t order_mid [4];
 
-#if 0
-            fputc ('.', stdout);
-#endif
-
             meta_in = find_repack_match (meta_in, sig_in_to_mid, sig_mask);
             if (!meta_in)
                 break;
@@ -686,12 +665,6 @@ find_repacks (const SmolImplementation **implementations,
             do_reorder (pmeta_in->order, order_mid,
                         reorder_meta [SMOL_REPACK_SIGNATURE_GET_REORDER (meta_in->signature)].dest);
 
-#if 0
-            printf ("In: "); print_order (pmeta_in->order); printf (" via "); print_order (reorder_meta [SMOL_REPACK_SIGNATURE_GET_REORDER (meta_in->signature)].dest); printf (" -> "); print_order (order_mid);
-            fputc ('\n', stdout);
-            fflush (stdout);
-#endif
-
             for (impl_out = 0; implementations [impl_out]; impl_out++)
             {
                 meta_out = &implementations [impl_out]->repack_meta [0];
@@ -700,22 +673,12 @@ find_repacks (const SmolImplementation **implementations,
                 {
                     uint8_t order_out [4];
 
-#if 0
-                    fputc ('*', stdout);
-#endif
-
                     meta_out = find_repack_match (meta_out, sig_mid_to_out, sig_mask);
                     if (!meta_out)
                         break;
 
                     do_reorder (order_mid, order_out,
                                 reorder_meta [SMOL_REPACK_SIGNATURE_GET_REORDER (meta_out->signature)].dest);
-
-#if 0
-                    printf ("Out: "); print_order (order_mid); printf (" via "); print_order (reorder_meta [SMOL_REPACK_SIGNATURE_GET_REORDER (meta_out->signature)].dest); printf (" -> "); print_order (order_out); printf (" / want "); print_order (pmeta_out->order);
-                    fputc ('\n', stdout);
-                    fflush (stdout);
-#endif
 
                     if (*((uint32_t *) order_out) == *((uint32_t *) pmeta_out->order))
                     {
