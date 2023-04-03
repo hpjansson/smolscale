@@ -14,15 +14,45 @@
  * Context initialization *
  * ---------------------- */
 
+#define BILIN_HORIZ_BATCH_PIXELS 16
+
+static uint32_t
+array_offset_offset (uint32_t elem_i)
+{
+    return (elem_i / (BILIN_HORIZ_BATCH_PIXELS)) * (BILIN_HORIZ_BATCH_PIXELS * 2)
+        + (elem_i % BILIN_HORIZ_BATCH_PIXELS);
+}
+
+static uint32_t
+array_offset_factor (uint32_t elem_i)
+{
+    return (elem_i / (BILIN_HORIZ_BATCH_PIXELS)) * (BILIN_HORIZ_BATCH_PIXELS * 2)
+        + BILIN_HORIZ_BATCH_PIXELS
+        + ((elem_i & ~2U) % (BILIN_HORIZ_BATCH_PIXELS))
+        - ((elem_i % (BILIN_HORIZ_BATCH_PIXELS) / 4)) * 2
+        + (elem_i & 2) * (BILIN_HORIZ_BATCH_PIXELS / 4);
+}
+
+/* Precalc array layout:
+ *
+ * |16xu16: Offsets |16xu16: Factors |16xu16: Offsets |16xu16: Factors |
+ * |................|................|................|................| ...
+ *
+ * Offsets layout: 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15
+ * Factors layout: 0 1 4 5 8 9 12 13 2 3 6 7 10 11 14 15
+ */
+
 static void
 precalc_bilinear_array (uint16_t *array,
                         uint32_t dim_in,
                         uint32_t dim_out,
-                        unsigned int make_absolute_offsets)
+                        unsigned int make_absolute_offsets,
+                        unsigned int do_batches)
 {
     uint64_t ofs_stepF, fracF, frac_stepF;
     uint16_t *pu16 = array;
     uint16_t last_ofs = 0;
+    uint32_t i = 0;
 
     if (dim_in > dim_out)
     {
@@ -38,33 +68,61 @@ precalc_bilinear_array (uint16_t *array,
         fracF = 0;
     }
 
-    do
+    if (do_batches)
+    {
+        while (dim_out >= BILIN_HORIZ_BATCH_PIXELS)
+        {
+            uint32_t j;
+
+            for (j = 0; j < BILIN_HORIZ_BATCH_PIXELS; j++)
+            {
+                uint16_t ofs = fracF / SMOL_BILIN_MULTIPLIER;
+
+                /* We sample ofs and its neighbor -- prevent out of bounds access
+                 * for the latter by sampling the final pixel at 100%. */
+                if (ofs >= dim_in - 1)
+                {
+                    array [array_offset_offset (i)] = make_absolute_offsets ? dim_in - 2 : (dim_in - 2) - last_ofs;
+                    array [array_offset_factor (i)] = 0;
+                    last_ofs = dim_in - 2;
+                }
+                else
+                {
+                    array [array_offset_offset (i)] = make_absolute_offsets ? ofs : ofs - last_ofs;
+                    array [array_offset_factor (i)] = SMOL_SMALL_MUL - ((fracF / (SMOL_BILIN_MULTIPLIER / SMOL_SMALL_MUL))
+                                                                        % SMOL_SMALL_MUL);
+                    fracF += frac_stepF;
+                    last_ofs = ofs;
+                }
+
+                i++;
+                dim_out--;
+            }
+        }
+
+        i = (i / BILIN_HORIZ_BATCH_PIXELS) * (BILIN_HORIZ_BATCH_PIXELS * 2);
+    }
+
+    while (dim_out)
     {
         uint16_t ofs = fracF / SMOL_BILIN_MULTIPLIER;
 
-        /* We sample ofs and its neighbor -- prevent out of bounds access
-         * for the latter. */
         if (ofs >= dim_in - 1)
-            break;
+        {
+            array [i++] = make_absolute_offsets ? dim_in - 2 : (dim_in - 2) - last_ofs;
+            array [i++] = 0;
+            last_ofs = dim_in - 2;
+        }
+        else
+        {
+            array [i++] = make_absolute_offsets ? ofs : ofs - last_ofs;
+            array [i++] = SMOL_SMALL_MUL - ((fracF / (SMOL_BILIN_MULTIPLIER / SMOL_SMALL_MUL))
+                                            % SMOL_SMALL_MUL);
+            fracF += frac_stepF;
+            last_ofs = ofs;
+        }
 
-        *(pu16++) = make_absolute_offsets ? ofs : ofs - last_ofs;
-        *(pu16++) = SMOL_SMALL_MUL - ((fracF / (SMOL_BILIN_MULTIPLIER / SMOL_SMALL_MUL))
-                                      % SMOL_SMALL_MUL);
-        fracF += frac_stepF;
-
-        last_ofs = ofs;
-    }
-    while (--dim_out);
-
-    /* Instead of going out of bounds, sample the final pair of pixels with a 100%
-     * bias towards the last pixel */
-    while (dim_out)
-    {
-        *(pu16++) = make_absolute_offsets ? dim_in - 2 : (dim_in - 2) - last_ofs;
-        *(pu16++) = 0;
         dim_out--;
-
-        last_ofs = dim_in - 2;
     }
 }
 
@@ -147,12 +205,20 @@ init_horizontal (SmolScaleCtx *scale_ctx)
                              scale_ctx->width_in, scale_ctx->width_out,
                              FALSE);
     }
+    else if (scale_ctx->filter_h == SMOL_FILTER_BILINEAR_0H
+             && scale_ctx->storage_type == SMOL_STORAGE_64BPP)
+    {
+        precalc_bilinear_array (scale_ctx->offsets_x,
+                                scale_ctx->width_in,
+                                scale_ctx->width_bilin_out,
+                                TRUE, TRUE);
+    }
     else /* SMOL_FILTER_BILINEAR_?H */
     {
         precalc_bilinear_array (scale_ctx->offsets_x,
                                 scale_ctx->width_in,
                                 scale_ctx->width_bilin_out,
-                                FALSE);
+                                FALSE, FALSE);
     }
 }
 
@@ -174,7 +240,7 @@ init_vertical (SmolScaleCtx *scale_ctx)
         precalc_bilinear_array (scale_ctx->offsets_y,
                                 scale_ctx->height_in,
                                 scale_ctx->height_bilin_out,
-                                TRUE);
+                                TRUE, FALSE);
     }
 }
 
@@ -1362,23 +1428,103 @@ interp_horizontal_bilinear_0h_64bpp (const SmolScaleCtx *scale_ctx,
 {
     const uint16_t * SMOL_RESTRICT ofs_x = scale_ctx->offsets_x;
     uint64_t * SMOL_RESTRICT row_parts_out_max = row_parts_out + scale_ctx->width_out;
-    uint64_t p, q;
-    uint64_t F;
+    const __m256i mask = _mm256_set_epi16 (0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff,
+                                           0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff);
+    const __m256i shuf_0 = _mm256_set_epi8 (3, 2, 3, 2, 3, 2, 3, 2, 1, 0, 1, 0, 1, 0, 1, 0,
+                                            3, 2, 3, 2, 3, 2, 3, 2, 1, 0, 1, 0, 1, 0, 1, 0);
+    const __m256i shuf_1 = _mm256_set_epi8 (7, 6, 7, 6, 7, 6, 7, 6, 5, 4, 5, 4, 5, 4, 5, 4,
+                                            7, 6, 7, 6, 7, 6, 7, 6, 5, 4, 5, 4, 5, 4, 5, 4);
+    const __m256i shuf_2 = _mm256_set_epi8 (11, 10, 11, 10, 11, 10, 11, 10, 9, 8, 9, 8, 9, 8, 9, 8,
+                                            11, 10, 11, 10, 11, 10, 11, 10, 9, 8, 9, 8, 9, 8, 9, 8);
+    const __m256i shuf_3 = _mm256_set_epi8 (13, 12, 13, 12, 13, 12, 13, 12, 15, 14, 15, 14, 15, 14, 15, 14,
+                                            13, 12, 13, 12, 13, 12, 13, 12, 15, 14, 15, 14, 15, 14, 15, 14);
 
-    SMOL_ASSUME_ALIGNED (row_parts_in, const uint64_t *);
-    SMOL_ASSUME_ALIGNED (row_parts_out, uint64_t *);
+    SMOL_ASSUME_ALIGNED (row_parts_in, const uint64_t * SMOL_RESTRICT);
+    SMOL_ASSUME_ALIGNED (row_parts_out, uint64_t * SMOL_RESTRICT);
+    SMOL_ASSUME_ALIGNED (ofs_x, const uint16_t * SMOL_RESTRICT);
 
-    do
+    while (row_parts_out + BILIN_HORIZ_BATCH_PIXELS <= row_parts_out_max)
     {
-        row_parts_in += *(ofs_x++);
-        F = *(ofs_x++);
+        __m256i m0, m1, m2, m3, m4, m5, m6;
+        __m256i f0, f1, f2, f3;
+        __m256i p00, p01, p10, p11, p20, p21, p30, p31;
+        __m128i n0, n1, n2, n3, n4, n5;
+        __m256i f;
 
-        p = *row_parts_in;
-        q = *(row_parts_in + 1);
+        m4 = _mm256_load_si256 ((const __m256i *) ofs_x);  /* Offsets */
+        f = _mm256_load_si256 ((const __m256i *) ofs_x + 1);  /* Factors */
+        ofs_x += 32;
+
+        n0 = _mm256_extracti128_si256 (m4, 0);
+        n1 = _mm256_extracti128_si256 (m4, 1);
+        m5 = _mm256_cvtepu16_epi32 (n0);
+        m6 = _mm256_cvtepu16_epi32 (n1);
+
+        n2 = _mm256_extracti128_si256 (m5, 0);
+        n3 = _mm256_extracti128_si256 (m5, 1);
+        n4 = _mm256_extracti128_si256 (m6, 0);
+        n5 = _mm256_extracti128_si256 (m6, 1);
+
+        p00 = _mm256_i32gather_epi64 ((const long long int *) row_parts_in, n2, 8);
+        p10 = _mm256_i32gather_epi64 ((const long long int *) row_parts_in, n3, 8);
+        p20 = _mm256_i32gather_epi64 ((const long long int *) row_parts_in, n4, 8);
+        p30 = _mm256_i32gather_epi64 ((const long long int *) row_parts_in, n5, 8);
+
+        p01 = _mm256_i32gather_epi64 ((const long long int *) row_parts_in + 1, n2, 8);
+        p11 = _mm256_i32gather_epi64 ((const long long int *) row_parts_in + 1, n3, 8);
+        p21 = _mm256_i32gather_epi64 ((const long long int *) row_parts_in + 1, n4, 8);
+        p31 = _mm256_i32gather_epi64 ((const long long int *) row_parts_in + 1, n5, 8);
+
+        m0 = _mm256_sub_epi16 (p00, p01);
+        m1 = _mm256_sub_epi16 (p10, p11);
+        m2 = _mm256_sub_epi16 (p20, p21);
+        m3 = _mm256_sub_epi16 (p30, p31);
+
+        f0 = _mm256_shuffle_epi8 (f, shuf_0);
+        f1 = _mm256_shuffle_epi8 (f, shuf_1);
+        f2 = _mm256_shuffle_epi8 (f, shuf_2);
+        f3 = _mm256_shuffle_epi8 (f, shuf_3);
+
+        m0 = _mm256_mullo_epi16 (m0, f0);
+        m1 = _mm256_mullo_epi16 (m1, f1);
+        m2 = _mm256_mullo_epi16 (m2, f2);
+        m3 = _mm256_mullo_epi16 (m3, f3);
+
+        m0 = _mm256_srli_epi16 (m0, 8);
+        m1 = _mm256_srli_epi16 (m1, 8);
+        m2 = _mm256_srli_epi16 (m2, 8);
+        m3 = _mm256_srli_epi16 (m3, 8);
+
+        m0 = _mm256_add_epi16 (m0, p01);
+        m1 = _mm256_add_epi16 (m1, p11);
+        m2 = _mm256_add_epi16 (m2, p21);
+        m3 = _mm256_add_epi16 (m3, p31);
+
+        m0 = _mm256_and_si256 (m0, mask);
+        m1 = _mm256_and_si256 (m1, mask);
+        m2 = _mm256_and_si256 (m2, mask);
+        m3 = _mm256_and_si256 (m3, mask);
+
+        _mm256_store_si256 ((__m256i *) row_parts_out, m0);
+        _mm256_store_si256 ((__m256i *) row_parts_out + 1, m1);
+        _mm256_store_si256 ((__m256i *) row_parts_out + 2, m2);
+        _mm256_store_si256 ((__m256i *) row_parts_out + 3, m3);
+
+        row_parts_out += 16;
+    }
+
+    while (row_parts_out != row_parts_out_max)
+    {
+        uint64_t p, q;
+        uint64_t F;
+
+        p = *(row_parts_in + *ofs_x);
+        q = *(row_parts_in + *ofs_x + 1);
+        ofs_x++;
+        F = *(ofs_x++);
 
         *(row_parts_out++) = ((((p - q) * F) >> 8) + q) & 0x00ff00ff00ff00ffULL;
     }
-    while (row_parts_out != row_parts_out_max);
 }
 
 static void
