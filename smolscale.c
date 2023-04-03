@@ -853,8 +853,9 @@ smol_scale_init (SmolScaleCtx *scale_ctx,
 
     scale_ctx->storage_type = MAX (storage_type [0], storage_type [1]);
 
-    scale_ctx->offsets_x = malloc (((scale_ctx->width_bilin_out + 1) * 2
-                                    + (scale_ctx->height_bilin_out + 1) * 2) * sizeof (uint16_t));
+    scale_ctx->offsets_x = smol_alloc_aligned (((scale_ctx->width_bilin_out + 1) * 2
+                                                + (scale_ctx->height_bilin_out + 1) * 2) * sizeof (uint16_t),
+                                               &scale_ctx->offsets_x_storage);
     scale_ctx->offsets_y = scale_ctx->offsets_x + (scale_ctx->width_bilin_out + 1) * 2;
 
     get_implementations (scale_ctx);
@@ -863,7 +864,7 @@ smol_scale_init (SmolScaleCtx *scale_ctx,
 static void
 smol_scale_finalize (SmolScaleCtx *scale_ctx)
 {
-    free (scale_ctx->offsets_x);
+    free (scale_ctx->offsets_x_storage);
 }
 
 /* ---------- *

@@ -305,6 +305,8 @@ struct SmolScaleCtx
     uint16_t *offsets_x, *offsets_y;
     uint32_t span_mul_x, span_mul_y;  /* For box filter */
 
+    void *offsets_x_storage;
+
     uint32_t width_bilin_out, height_bilin_out;
     unsigned int width_halvings, height_halvings;
 };
