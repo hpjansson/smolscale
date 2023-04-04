@@ -102,6 +102,8 @@ precalc_bilinear_array (uint16_t *array,
         i = (i / BILIN_HORIZ_BATCH_PIXELS) * (BILIN_HORIZ_BATCH_PIXELS * 2);
     }
 
+    /* Epilogue/unbatched */
+
     while (dim_out)
     {
         uint16_t ofs = fracF / SMOL_BILIN_MULTIPLIER;
@@ -1451,7 +1453,8 @@ interp_horizontal_bilinear_0h_64bpp (const SmolScaleCtx *scale_ctx,
         __m256i f;
         int control_bits;
 
-        /* This looks clumsy, but it's a lot faster than using _mm256_i32gather_epi64(),
+        /* Fetch pixel pairs to interpolate between, two pairs per ymm register.
+         * This looks clumsy, but it's a lot faster than using _mm256_i32gather_epi64(),
          * as benchmarked on both Haswell and Tiger Lake. */
 
         q0 = _mm256_inserti128_si256 (_mm256_castsi128_si256 (
@@ -1480,12 +1483,16 @@ interp_horizontal_bilinear_0h_64bpp (const SmolScaleCtx *scale_ctx,
                                           _mm_loadu_si128 ((const __m128i *) (row_parts_in + ofs_x [14]))),
                                       _mm_loadu_si128 ((const __m128i *) (row_parts_in + ofs_x [15])), 1);
 
+        /* 0123 -> 0x2x, 1x3x. 4567 -> x4x6, x5x7. Etc. */
+
         control_bits = SMOL_4X2BIT (1, 0, 3, 2);
 
         q1 = _mm256_shuffle_epi32 (q1, control_bits);
         q3 = _mm256_shuffle_epi32 (q3, control_bits);
         q5 = _mm256_shuffle_epi32 (q5, control_bits);
         q7 = _mm256_shuffle_epi32 (q7, control_bits);
+
+        /* 0x2x, x4x6 -> 0426. 1x3x, x5x7 -> 1537. Etc. */
 
         control_bits = SMOL_8X1BIT (1, 1, 0, 0, 1, 1, 0, 0);
 
@@ -1498,6 +1505,8 @@ interp_horizontal_bilinear_0h_64bpp (const SmolScaleCtx *scale_ctx,
         p11 = _mm256_blend_epi32 (q3, q2, control_bits);
         p21 = _mm256_blend_epi32 (q5, q4, control_bits);
         p31 = _mm256_blend_epi32 (q7, q6, control_bits);
+
+        /* Interpolation. 0426 vs 1537. Etc. */
 
         m0 = _mm256_sub_epi16 (p00, p01);
         m1 = _mm256_sub_epi16 (p10, p11);
@@ -1531,12 +1540,16 @@ interp_horizontal_bilinear_0h_64bpp (const SmolScaleCtx *scale_ctx,
         m2 = _mm256_and_si256 (m2, mask);
         m3 = _mm256_and_si256 (m3, mask);
 
+        /* [0426/1537] -> [0246/1357]. Etc. */
+
         control_bits = SMOL_4X2BIT (3, 1, 2, 0);
 
         m0 = _mm256_permute4x64_epi64 (m0, control_bits);
         m1 = _mm256_permute4x64_epi64 (m1, control_bits);
         m2 = _mm256_permute4x64_epi64 (m2, control_bits);
         m3 = _mm256_permute4x64_epi64 (m3, control_bits);
+
+        /* Store. */
 
         _mm256_store_si256 ((__m256i *) row_parts_out, m0);
         _mm256_store_si256 ((__m256i *) row_parts_out + 1, m1);
