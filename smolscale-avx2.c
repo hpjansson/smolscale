@@ -50,7 +50,6 @@ precalc_bilinear_array (uint16_t *array,
                         unsigned int do_batches)
 {
     uint64_t ofs_stepF, fracF, frac_stepF;
-    uint16_t *pu16 = array;
     uint16_t last_ofs = 0;
     uint32_t i = 0;
 
