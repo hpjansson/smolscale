@@ -26,11 +26,10 @@ array_offset_offset (uint32_t elem_i)
 static uint32_t
 array_offset_factor (uint32_t elem_i)
 {
+    uint8_t o [BILIN_HORIZ_BATCH_PIXELS] = { 0, 8, 1, 9, 2, 10, 3, 11, 4, 12, 5, 13, 6, 14, 7, 15 };
+
     return (elem_i / (BILIN_HORIZ_BATCH_PIXELS)) * (BILIN_HORIZ_BATCH_PIXELS * 2)
-        + BILIN_HORIZ_BATCH_PIXELS
-        + ((elem_i & ~2U) % (BILIN_HORIZ_BATCH_PIXELS))
-        - ((elem_i % (BILIN_HORIZ_BATCH_PIXELS) / 4)) * 2
-        + (elem_i & 2) * (BILIN_HORIZ_BATCH_PIXELS / 4);
+        + BILIN_HORIZ_BATCH_PIXELS + o [elem_i % BILIN_HORIZ_BATCH_PIXELS];
 }
 
 /* Precalc array layout:
@@ -206,8 +205,9 @@ init_horizontal (SmolScaleCtx *scale_ctx)
                              scale_ctx->width_in, scale_ctx->width_out,
                              FALSE);
     }
-    else if (scale_ctx->filter_h == SMOL_FILTER_BILINEAR_0H
-             && scale_ctx->storage_type == SMOL_STORAGE_64BPP)
+    else if (scale_ctx->storage_type == SMOL_STORAGE_64BPP
+             && scale_ctx->filter_h >= SMOL_FILTER_BILINEAR_0H
+             && scale_ctx->filter_h <= SMOL_FILTER_BILINEAR_2H)
     {
         precalc_bilinear_array (scale_ctx->offsets_x,
                                 scale_ctx->width_in,
@@ -1331,7 +1331,7 @@ add_parts (const uint64_t * SMOL_RESTRICT parts_in,
  * Horizontal scaling *
  * ------------------ */
 
-#define DEF_INTERP_HORIZONTAL_BILINEAR(n_halvings)                      \
+#define DEF_INTERP_HORIZONTAL_BILINEAR_64BPP(n_halvings)                \
 static void                                                             \
 interp_horizontal_bilinear_##n_halvings##h_64bpp (const SmolScaleCtx *scale_ctx, \
                                                   const uint64_t * SMOL_RESTRICT row_parts_in, \
@@ -1363,8 +1363,9 @@ interp_horizontal_bilinear_##n_halvings##h_64bpp (const SmolScaleCtx *scale_ctx,
         *(row_parts_out++) = ((accum) >> (n_halvings)) & 0x00ff00ff00ff00ffULL; \
     }                                                                   \
     while (row_parts_out != row_parts_out_max);                         \
-}                                                                       \
-                                                                        \
+}
+
+#define DEF_INTERP_HORIZONTAL_BILINEAR_128BPP(n_halvings)               \
 static void                                                             \
 interp_horizontal_bilinear_##n_halvings##h_128bpp (const SmolScaleCtx *scale_ctx, \
                                                    const uint64_t * SMOL_RESTRICT row_parts_in, \
@@ -1422,10 +1423,11 @@ interp_horizontal_bilinear_##n_halvings##h_128bpp (const SmolScaleCtx *scale_ctx
     }                                                                   \
 }
 
-static void
-interp_horizontal_bilinear_0h_64bpp (const SmolScaleCtx *scale_ctx,
+static SMOL_INLINE void
+interp_horizontal_bilinear_xh_64bpp (const SmolScaleCtx *scale_ctx,
                                      const uint64_t * SMOL_RESTRICT row_parts_in,
-                                     uint64_t * SMOL_RESTRICT row_parts_out)
+                                     uint64_t * SMOL_RESTRICT row_parts_out,
+                                     int n_halvings)
 {
     const uint16_t * SMOL_RESTRICT ofs_x = scale_ctx->offsets_x;
     uint64_t * SMOL_RESTRICT row_parts_out_max = row_parts_out + scale_ctx->width_out;
@@ -1437,18 +1439,19 @@ interp_horizontal_bilinear_0h_64bpp (const SmolScaleCtx *scale_ctx,
                                             7, 6, 7, 6, 7, 6, 7, 6, 5, 4, 5, 4, 5, 4, 5, 4);
     const __m256i shuf_2 = _mm256_set_epi8 (11, 10, 11, 10, 11, 10, 11, 10, 9, 8, 9, 8, 9, 8, 9, 8,
                                             11, 10, 11, 10, 11, 10, 11, 10, 9, 8, 9, 8, 9, 8, 9, 8);
-    const __m256i shuf_3 = _mm256_set_epi8 (13, 12, 13, 12, 13, 12, 13, 12, 15, 14, 15, 14, 15, 14, 15, 14,
-                                            13, 12, 13, 12, 13, 12, 13, 12, 15, 14, 15, 14, 15, 14, 15, 14);
+    const __m256i shuf_3 = _mm256_set_epi8 (15, 14, 15, 14, 15, 14, 15, 14, 13, 12, 13, 12, 13, 12, 13, 12,
+                                            15, 14, 15, 14, 15, 14, 15, 14, 13, 12, 13, 12, 13, 12, 13, 12);
 
     SMOL_ASSUME_ALIGNED (row_parts_in, const uint64_t * SMOL_RESTRICT);
     SMOL_ASSUME_ALIGNED (row_parts_out, uint64_t * SMOL_RESTRICT);
     SMOL_ASSUME_ALIGNED (ofs_x, const uint16_t * SMOL_RESTRICT);
 
-    while (row_parts_out + BILIN_HORIZ_BATCH_PIXELS <= row_parts_out_max)
+    while (row_parts_out + (BILIN_HORIZ_BATCH_PIXELS >> n_halvings) <= row_parts_out_max)
     {
         __m256i m0, m1, m2, m3;
         __m256i f0, f1, f2, f3;
-        __m256i q0, q1, q2, q3, q4, q5, q6, q7;
+        __m256i q00, q10, q20, q30, q40, q50, q60, q70;
+        __m256i q01, q11, q21, q31, q41, q51, q61, q71;
         __m256i p00, p01, p10, p11, p20, p21, p30, p31;
         __m256i f;
         int control_bits;
@@ -1457,54 +1460,58 @@ interp_horizontal_bilinear_0h_64bpp (const SmolScaleCtx *scale_ctx,
          * This looks clumsy, but it's a lot faster than using _mm256_i32gather_epi64(),
          * as benchmarked on both Haswell and Tiger Lake. */
 
-        q0 = _mm256_inserti128_si256 (_mm256_castsi128_si256 (
-                                          _mm_loadu_si128 ((const __m128i *) (row_parts_in + ofs_x [0]))),
-                                      _mm_loadu_si128 ((const __m128i *) (row_parts_in + ofs_x [1])), 1);
-        q1 = _mm256_inserti128_si256 (_mm256_castsi128_si256 (
-                                          _mm_loadu_si128 ((const __m128i *) (row_parts_in + ofs_x [2]))),
-                                      _mm_loadu_si128 ((const __m128i *) (row_parts_in + ofs_x [3])), 1);
-        q2 = _mm256_inserti128_si256 (_mm256_castsi128_si256 (
-                                          _mm_loadu_si128 ((const __m128i *) (row_parts_in + ofs_x [4]))),
-                                      _mm_loadu_si128 ((const __m128i *) (row_parts_in + ofs_x [5])), 1);
-        q3 = _mm256_inserti128_si256 (_mm256_castsi128_si256 (
-                                          _mm_loadu_si128 ((const __m128i *) (row_parts_in + ofs_x [6]))),
-                                      _mm_loadu_si128 ((const __m128i *) (row_parts_in + ofs_x [7])), 1);
+        q00 = _mm256_inserti128_si256 (_mm256_castsi128_si256 (
+                                           _mm_loadu_si128 ((const __m128i *) (row_parts_in + ofs_x [0]))),
+                                       _mm_loadu_si128 ((const __m128i *) (row_parts_in + ofs_x [1])), 1);
+        q10 = _mm256_inserti128_si256 (_mm256_castsi128_si256 (
+                                           _mm_loadu_si128 ((const __m128i *) (row_parts_in + ofs_x [2]))),
+                                       _mm_loadu_si128 ((const __m128i *) (row_parts_in + ofs_x [3])), 1);
+        q20 = _mm256_inserti128_si256 (_mm256_castsi128_si256 (
+                                           _mm_loadu_si128 ((const __m128i *) (row_parts_in + ofs_x [4]))),
+                                       _mm_loadu_si128 ((const __m128i *) (row_parts_in + ofs_x [5])), 1);
+        q30 = _mm256_inserti128_si256 (_mm256_castsi128_si256 (
+                                           _mm_loadu_si128 ((const __m128i *) (row_parts_in + ofs_x [6]))),
+                                       _mm_loadu_si128 ((const __m128i *) (row_parts_in + ofs_x [7])), 1);
 
-        q4 = _mm256_inserti128_si256 (_mm256_castsi128_si256 (
-                                          _mm_loadu_si128 ((const __m128i *) (row_parts_in + ofs_x [8]))),
-                                      _mm_loadu_si128 ((const __m128i *) (row_parts_in + ofs_x [9])), 1);
-        q5 = _mm256_inserti128_si256 (_mm256_castsi128_si256 (
-                                          _mm_loadu_si128 ((const __m128i *) (row_parts_in + ofs_x [10]))),
-                                      _mm_loadu_si128 ((const __m128i *) (row_parts_in + ofs_x [11])), 1);
-        q6 = _mm256_inserti128_si256 (_mm256_castsi128_si256 (
-                                          _mm_loadu_si128 ((const __m128i *) (row_parts_in + ofs_x [12]))),
-                                      _mm_loadu_si128 ((const __m128i *) (row_parts_in + ofs_x [13])), 1);
-        q7 = _mm256_inserti128_si256 (_mm256_castsi128_si256 (
-                                          _mm_loadu_si128 ((const __m128i *) (row_parts_in + ofs_x [14]))),
-                                      _mm_loadu_si128 ((const __m128i *) (row_parts_in + ofs_x [15])), 1);
+        q40 = _mm256_inserti128_si256 (_mm256_castsi128_si256 (
+                                           _mm_loadu_si128 ((const __m128i *) (row_parts_in + ofs_x [8]))),
+                                       _mm_loadu_si128 ((const __m128i *) (row_parts_in + ofs_x [9])), 1);
+        q50 = _mm256_inserti128_si256 (_mm256_castsi128_si256 (
+                                           _mm_loadu_si128 ((const __m128i *) (row_parts_in + ofs_x [10]))),
+                                       _mm_loadu_si128 ((const __m128i *) (row_parts_in + ofs_x [11])), 1);
+        q60 = _mm256_inserti128_si256 (_mm256_castsi128_si256 (
+                                           _mm_loadu_si128 ((const __m128i *) (row_parts_in + ofs_x [12]))),
+                                       _mm_loadu_si128 ((const __m128i *) (row_parts_in + ofs_x [13])), 1);
+        q70 = _mm256_inserti128_si256 (_mm256_castsi128_si256 (
+                                           _mm_loadu_si128 ((const __m128i *) (row_parts_in + ofs_x [14]))),
+                                       _mm_loadu_si128 ((const __m128i *) (row_parts_in + ofs_x [15])), 1);
 
         /* 0123 -> 0x2x, 1x3x. 4567 -> x4x6, x5x7. Etc. */
 
         control_bits = SMOL_4X2BIT (1, 0, 3, 2);
 
-        q1 = _mm256_shuffle_epi32 (q1, control_bits);
-        q3 = _mm256_shuffle_epi32 (q3, control_bits);
-        q5 = _mm256_shuffle_epi32 (q5, control_bits);
-        q7 = _mm256_shuffle_epi32 (q7, control_bits);
+        q01 = _mm256_shuffle_epi32 (q00, control_bits);
+        q11 = _mm256_shuffle_epi32 (q10, control_bits);
+        q21 = _mm256_shuffle_epi32 (q20, control_bits);
+        q31 = _mm256_shuffle_epi32 (q30, control_bits);
+        q41 = _mm256_shuffle_epi32 (q40, control_bits);
+        q51 = _mm256_shuffle_epi32 (q50, control_bits);
+        q61 = _mm256_shuffle_epi32 (q60, control_bits);
+        q71 = _mm256_shuffle_epi32 (q70, control_bits);
 
         /* 0x2x, x4x6 -> 0426. 1x3x, x5x7 -> 1537. Etc. */
 
         control_bits = SMOL_8X1BIT (1, 1, 0, 0, 1, 1, 0, 0);
 
-        p00 = _mm256_blend_epi32 (q0, q1, control_bits);
-        p10 = _mm256_blend_epi32 (q2, q3, control_bits);
-        p20 = _mm256_blend_epi32 (q4, q5, control_bits);
-        p30 = _mm256_blend_epi32 (q6, q7, control_bits);
+        p00 = _mm256_blend_epi32 (q00, q11, control_bits);
+        p10 = _mm256_blend_epi32 (q20, q31, control_bits);
+        p20 = _mm256_blend_epi32 (q40, q51, control_bits);
+        p30 = _mm256_blend_epi32 (q60, q71, control_bits);
 
-        p01 = _mm256_blend_epi32 (q1, q0, control_bits);
-        p11 = _mm256_blend_epi32 (q3, q2, control_bits);
-        p21 = _mm256_blend_epi32 (q5, q4, control_bits);
-        p31 = _mm256_blend_epi32 (q7, q6, control_bits);
+        p01 = _mm256_blend_epi32 (q01, q10, control_bits);
+        p11 = _mm256_blend_epi32 (q21, q30, control_bits);
+        p21 = _mm256_blend_epi32 (q41, q50, control_bits);
+        p31 = _mm256_blend_epi32 (q61, q70, control_bits);
 
         /* Interpolation. 0426 vs 1537. Etc. */
 
@@ -1549,30 +1556,138 @@ interp_horizontal_bilinear_0h_64bpp (const SmolScaleCtx *scale_ctx,
         m2 = _mm256_permute4x64_epi64 (m2, control_bits);
         m3 = _mm256_permute4x64_epi64 (m3, control_bits);
 
-        /* Store. */
+        /* Sum and store. */
 
-        _mm256_store_si256 ((__m256i *) row_parts_out, m0);
-        _mm256_store_si256 ((__m256i *) row_parts_out + 1, m1);
-        _mm256_store_si256 ((__m256i *) row_parts_out + 2, m2);
-        _mm256_store_si256 ((__m256i *) row_parts_out + 3, m3);
+        if (n_halvings == 0)
+        {
+            _mm256_store_si256 ((__m256i *) row_parts_out + 0, m0);
+            _mm256_store_si256 ((__m256i *) row_parts_out + 1, m1);
+            _mm256_store_si256 ((__m256i *) row_parts_out + 2, m2);
+            _mm256_store_si256 ((__m256i *) row_parts_out + 3, m3);
+            row_parts_out += 16;
+        }
+        else if (n_halvings == 1)
+        {
+            __m256i s0, s1, s2, s3;
 
-        row_parts_out += 16;
+            control_bits = SMOL_4X2BIT (1, 0, 3, 2);
+            s0 = _mm256_shuffle_epi32 (m0, control_bits);
+            s1 = _mm256_shuffle_epi32 (m1, control_bits);
+            s2 = _mm256_shuffle_epi32 (m2, control_bits);
+            s3 = _mm256_shuffle_epi32 (m3, control_bits);
+
+            s0 = _mm256_add_epi16 (s0, m0);
+            s1 = _mm256_add_epi16 (s1, m1);
+            s2 = _mm256_add_epi16 (s2, m2);
+            s3 = _mm256_add_epi16 (s3, m3);
+
+            control_bits = SMOL_8X1BIT (1, 1, 0, 0, 1, 1, 0, 0);
+            s0 = _mm256_blend_epi32 (s0, s1, control_bits);
+            s1 = _mm256_blend_epi32 (s2, s3, control_bits);
+
+            control_bits = SMOL_4X2BIT (3, 1, 2, 0);
+            s0 = _mm256_permute4x64_epi64 (s0, control_bits);
+            s1 = _mm256_permute4x64_epi64 (s1, control_bits);
+
+            s0 = _mm256_srli_epi16 (s0, 1);
+            s1 = _mm256_srli_epi16 (s1, 1);
+
+            _mm256_store_si256 ((__m256i *) row_parts_out, s0);
+            _mm256_store_si256 ((__m256i *) row_parts_out + 1, s1);
+
+            row_parts_out += 8;
+        }
+        else if (n_halvings == 2)
+        {
+            __m256i s0, s1, s2, s3;
+
+            control_bits = SMOL_4X2BIT (1, 0, 3, 2);
+            s0 = _mm256_shuffle_epi32 (m0, control_bits);
+            s1 = _mm256_shuffle_epi32 (m1, control_bits);
+            s2 = _mm256_shuffle_epi32 (m2, control_bits);
+            s3 = _mm256_shuffle_epi32 (m3, control_bits);
+
+            s0 = _mm256_add_epi16 (s0, m0);
+            s1 = _mm256_add_epi16 (s1, m1);
+            s2 = _mm256_add_epi16 (s2, m2);
+            s3 = _mm256_add_epi16 (s3, m3);
+
+            control_bits = SMOL_8X1BIT (1, 1, 0, 0, 1, 1, 0, 0);
+            s0 = _mm256_blend_epi32 (s0, s1, control_bits);
+            s1 = _mm256_blend_epi32 (s2, s3, control_bits);
+
+            control_bits = SMOL_4X2BIT (3, 1, 2, 0);
+            s0 = _mm256_permute4x64_epi64 (s0, control_bits);
+            s1 = _mm256_permute4x64_epi64 (s1, control_bits);
+
+            control_bits = SMOL_4X2BIT (1, 0, 3, 2);
+            m0 = _mm256_shuffle_epi32 (s0, control_bits);
+            m1 = _mm256_shuffle_epi32 (s1, control_bits);
+
+            s0 = _mm256_add_epi16 (s0, m0);
+            s1 = _mm256_add_epi16 (s1, m1);
+
+            control_bits = SMOL_8X1BIT (1, 1, 0, 0, 1, 1, 0, 0);
+            s0 = _mm256_blend_epi32 (s0, s1, control_bits);
+
+            control_bits = SMOL_4X2BIT (3, 1, 2, 0);
+            s0 = _mm256_permute4x64_epi64 (s0, control_bits);
+
+            s0 = _mm256_srli_epi16 (s0, 2);
+            _mm256_store_si256 ((__m256i *) row_parts_out, s0);
+
+            row_parts_out += 4;
+        }
+
         ofs_x += 32;
     }
 
     while (row_parts_out != row_parts_out_max)
     {
-        uint64_t p, q;
-        uint64_t F;
+        uint64_t accum = 0;
+        int i;
 
-        p = *(row_parts_in + *ofs_x);
-        q = *(row_parts_in + *ofs_x + 1);
-        ofs_x++;
-        F = *(ofs_x++);
+        for (i = 0; i < (1 << (n_halvings)); i++)
+        {
+            uint64_t p, q;
+            uint64_t F;
 
-        *(row_parts_out++) = ((((p - q) * F) >> 8) + q) & 0x00ff00ff00ff00ffULL;
+            p = *(row_parts_in + (*ofs_x));
+            q = *(row_parts_in + (*ofs_x) + 1);
+            ofs_x++;
+            F = *(ofs_x++);
+
+            accum += ((((p - q) * F) >> 8) + q) & 0x00ff00ff00ff00ffULL;
+        }
+
+        *(row_parts_out++) = ((accum) >> (n_halvings)) & 0x00ff00ff00ff00ffULL;
     }
 }
+
+static void
+interp_horizontal_bilinear_0h_64bpp (const SmolScaleCtx *scale_ctx,
+                                     const uint64_t * SMOL_RESTRICT row_parts_in,
+                                     uint64_t * SMOL_RESTRICT row_parts_out)
+{
+    interp_horizontal_bilinear_xh_64bpp (scale_ctx, row_parts_in, row_parts_out, 0);
+}
+
+static void
+interp_horizontal_bilinear_1h_64bpp (const SmolScaleCtx *scale_ctx,
+                                     const uint64_t * SMOL_RESTRICT row_parts_in,
+                                     uint64_t * SMOL_RESTRICT row_parts_out)
+{
+    interp_horizontal_bilinear_xh_64bpp (scale_ctx, row_parts_in, row_parts_out, 1);
+}
+
+static void
+interp_horizontal_bilinear_2h_64bpp (const SmolScaleCtx *scale_ctx,
+                                     const uint64_t * SMOL_RESTRICT row_parts_in,
+                                     uint64_t * SMOL_RESTRICT row_parts_out)
+{
+    interp_horizontal_bilinear_xh_64bpp (scale_ctx, row_parts_in, row_parts_out, 2);
+}
+
 
 static void
 interp_horizontal_bilinear_0h_128bpp (const SmolScaleCtx *scale_ctx,
@@ -1637,12 +1752,17 @@ interp_horizontal_bilinear_0h_128bpp (const SmolScaleCtx *scale_ctx,
     }
 }
 
-DEF_INTERP_HORIZONTAL_BILINEAR(1)
-DEF_INTERP_HORIZONTAL_BILINEAR(2)
-DEF_INTERP_HORIZONTAL_BILINEAR(3)
-DEF_INTERP_HORIZONTAL_BILINEAR(4)
-DEF_INTERP_HORIZONTAL_BILINEAR(5)
-DEF_INTERP_HORIZONTAL_BILINEAR(6)
+DEF_INTERP_HORIZONTAL_BILINEAR_64BPP(3)
+DEF_INTERP_HORIZONTAL_BILINEAR_64BPP(4)
+DEF_INTERP_HORIZONTAL_BILINEAR_64BPP(5)
+DEF_INTERP_HORIZONTAL_BILINEAR_64BPP(6)
+
+DEF_INTERP_HORIZONTAL_BILINEAR_128BPP(1)
+DEF_INTERP_HORIZONTAL_BILINEAR_128BPP(2)
+DEF_INTERP_HORIZONTAL_BILINEAR_128BPP(3)
+DEF_INTERP_HORIZONTAL_BILINEAR_128BPP(4)
+DEF_INTERP_HORIZONTAL_BILINEAR_128BPP(5)
+DEF_INTERP_HORIZONTAL_BILINEAR_128BPP(6)
 
 static void
 interp_horizontal_boxes_64bpp (const SmolScaleCtx *scale_ctx,
