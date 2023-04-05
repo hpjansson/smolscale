@@ -1908,6 +1908,8 @@ interp_vertical_bilinear_store_64bpp (uint64_t F,
                                       uint64_t * SMOL_RESTRICT parts_out,
                                       uint32_t width)
 {
+    const __m256i mask = _mm256_set_epi16 (0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff,
+                                           0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff);
     uint64_t *parts_out_last = parts_out + width;
     __m256i F256;
 
@@ -1930,6 +1932,7 @@ interp_vertical_bilinear_store_64bpp (uint64_t F,
         m0 = _mm256_mullo_epi16 (m0, F256);
         m0 = _mm256_srli_epi16 (m0, 8);
         m0 = _mm256_add_epi16 (m0, m1);
+        m0 = _mm256_and_si256 (m0, mask);
 
         _mm256_store_si256 ((__m256i *) parts_out, m0);
         parts_out += 4;
@@ -1953,6 +1956,8 @@ interp_vertical_bilinear_add_64bpp (uint16_t F,
                                     uint64_t *accum_out,
                                     uint32_t width)
 {
+    const __m256i mask = _mm256_set_epi16 (0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff,
+                                           0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff);
     uint64_t *accum_out_last = accum_out + width;
     __m256i F256;
 
@@ -1976,6 +1981,7 @@ interp_vertical_bilinear_add_64bpp (uint16_t F,
         m0 = _mm256_mullo_epi16 (m0, F256);
         m0 = _mm256_srli_epi16 (m0, 8);
         m0 = _mm256_add_epi16 (m0, m1);
+        m0 = _mm256_and_si256 (m0, mask);
 
         o0 = _mm256_add_epi16 (o0, m0);
         _mm256_store_si256 ((__m256i *) accum_out, o0);
@@ -2125,6 +2131,8 @@ interp_vertical_bilinear_final_##n_halvings##h_64bpp (uint64_t F,               
                                                       uint64_t * SMOL_RESTRICT accum_inout, \
                                                       uint32_t width)   \
 {                                                                       \
+    const __m256i mask = _mm256_set_epi16 (0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff, \
+                                           0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff); \
     uint64_t *accum_inout_last = accum_inout + width;                   \
     __m256i F256;                                                       \
                                                                         \
@@ -2148,6 +2156,7 @@ interp_vertical_bilinear_final_##n_halvings##h_64bpp (uint64_t F,               
         m0 = _mm256_mullo_epi16 (m0, F256);                             \
         m0 = _mm256_srli_epi16 (m0, 8);                                 \
         m0 = _mm256_add_epi16 (m0, m1);                                 \
+        m0 = _mm256_and_si256 (m0, mask);                               \
                                                                         \
         o0 = _mm256_add_epi16 (o0, m0);                                 \
         o0 = _mm256_srli_epi16 (o0, n_halvings);                        \
