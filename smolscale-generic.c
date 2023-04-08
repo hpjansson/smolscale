@@ -323,25 +323,25 @@ unpremul_p16l_to_ul_128bpp (const uint64_t * SMOL_RESTRICT in,
 
 /* This is kind of bulky (~13 x86 insns), but it's about the same as using
  * unions, and we don't have to worry about endianness. */
-#define PACK_FROM_1234_64BPP(in, a, b, c, d)                  \
-     ((SHIFT_S ((in), ((a) - 1) * 16 + 8 - 32) & 0xff000000)  \
-    | (SHIFT_S ((in), ((b) - 1) * 16 + 8 - 40) & 0x00ff0000)  \
-    | (SHIFT_S ((in), ((c) - 1) * 16 + 8 - 48) & 0x0000ff00)  \
-    | (SHIFT_S ((in), ((d) - 1) * 16 + 8 - 56) & 0x000000ff))
+#define PACK_FROM_1234_64BPP(in, a, b, c, d) \
+    ((SHIFT_S ((in), ((a) - 1) * 16 + 8 - 32) & 0xff000000) \
+     | (SHIFT_S ((in), ((b) - 1) * 16 + 8 - 40) & 0x00ff0000) \
+     | (SHIFT_S ((in), ((c) - 1) * 16 + 8 - 48) & 0x0000ff00) \
+     | (SHIFT_S ((in), ((d) - 1) * 16 + 8 - 56) & 0x000000ff))
 
-#define PACK_FROM_1234_128BPP(in, a, b, c, d)                                         \
-     ((SHIFT_S ((in [((a) - 1) >> 1]), (((a) - 1) & 1) * 32 + 24 - 32) & 0xff000000)  \
-    | (SHIFT_S ((in [((b) - 1) >> 1]), (((b) - 1) & 1) * 32 + 24 - 40) & 0x00ff0000)  \
-    | (SHIFT_S ((in [((c) - 1) >> 1]), (((c) - 1) & 1) * 32 + 24 - 48) & 0x0000ff00)  \
-    | (SHIFT_S ((in [((d) - 1) >> 1]), (((d) - 1) & 1) * 32 + 24 - 56) & 0x000000ff))
+#define PACK_FROM_1234_128BPP(in, a, b, c, d) \
+    ((SHIFT_S ((in [((a) - 1) >> 1]), (((a) - 1) & 1) * 32 + 24 - 32) & 0xff000000) \
+     | (SHIFT_S ((in [((b) - 1) >> 1]), (((b) - 1) & 1) * 32 + 24 - 40) & 0x00ff0000) \
+     | (SHIFT_S ((in [((c) - 1) >> 1]), (((c) - 1) & 1) * 32 + 24 - 48) & 0x0000ff00) \
+     | (SHIFT_S ((in [((d) - 1) >> 1]), (((d) - 1) & 1) * 32 + 24 - 56) & 0x000000ff))
 
 #define SWAP_2_AND_3(n) ((n) == 2 ? 3 : (n) == 3 ? 2 : n)
 
-#define PACK_FROM_1324_64BPP(in, a, b, c, d)                               \
-     ((SHIFT_S ((in), (SWAP_2_AND_3 (a) - 1) * 16 + 8 - 32) & 0xff000000)  \
-    | (SHIFT_S ((in), (SWAP_2_AND_3 (b) - 1) * 16 + 8 - 40) & 0x00ff0000)  \
-    | (SHIFT_S ((in), (SWAP_2_AND_3 (c) - 1) * 16 + 8 - 48) & 0x0000ff00)  \
-    | (SHIFT_S ((in), (SWAP_2_AND_3 (d) - 1) * 16 + 8 - 56) & 0x000000ff))
+#define PACK_FROM_1324_64BPP(in, a, b, c, d) \
+    ((SHIFT_S ((in), (SWAP_2_AND_3 (a) - 1) * 16 + 8 - 32) & 0xff000000) \
+     | (SHIFT_S ((in), (SWAP_2_AND_3 (b) - 1) * 16 + 8 - 40) & 0x00ff0000) \
+     | (SHIFT_S ((in), (SWAP_2_AND_3 (c) - 1) * 16 + 8 - 48) & 0x0000ff00) \
+     | (SHIFT_S ((in), (SWAP_2_AND_3 (d) - 1) * 16 + 8 - 56) & 0x000000ff))
 
 /* ---------------------- *
  * Repacking: 24/32 -> 64 *
@@ -1284,77 +1284,77 @@ add_parts (const uint64_t * SMOL_RESTRICT parts_in,
  * Horizontal scaling *
  * ------------------ */
 
-#define DEF_INTERP_HORIZONTAL_BILINEAR(n_halvings)                      \
-static void                                                             \
+#define DEF_INTERP_HORIZONTAL_BILINEAR(n_halvings) \
+static void \
 interp_horizontal_bilinear_##n_halvings##h_64bpp (const SmolScaleCtx *scale_ctx, \
                                                   const uint64_t * SMOL_RESTRICT row_parts_in, \
                                                   uint64_t * SMOL_RESTRICT row_parts_out) \
-{                                                                       \
-    const uint16_t * SMOL_RESTRICT precalc_x = scale_ctx->precalc_x;    \
+{ \
+    const uint16_t * SMOL_RESTRICT precalc_x = scale_ctx->precalc_x; \
     uint64_t *row_parts_out_max = row_parts_out + scale_ctx->width_out; \
-    uint64_t p, q;                                                      \
-    uint64_t F;                                                         \
-    int i;                                                              \
-                                                                        \
-    SMOL_ASSUME_ALIGNED (row_parts_in, const uint64_t *);               \
-    SMOL_ASSUME_ALIGNED (row_parts_out, uint64_t *);                    \
-                                                                        \
-    do                                                                  \
-    {                                                                   \
-        uint64_t accum = 0;                                             \
-                                                                        \
-        for (i = 0; i < (1 << (n_halvings)); i++)                       \
-        {                                                               \
-            row_parts_in += *(precalc_x++);                             \
-            F = *(precalc_x++);                                         \
-                                                                        \
-            p = *row_parts_in;                                          \
-            q = *(row_parts_in + 1);                                    \
-                                                                        \
+    uint64_t p, q; \
+    uint64_t F; \
+    int i; \
+\
+    SMOL_ASSUME_ALIGNED (row_parts_in, const uint64_t *); \
+    SMOL_ASSUME_ALIGNED (row_parts_out, uint64_t *); \
+\
+    do \
+    { \
+        uint64_t accum = 0; \
+\
+        for (i = 0; i < (1 << (n_halvings)); i++) \
+        { \
+            row_parts_in += *(precalc_x++); \
+            F = *(precalc_x++); \
+\
+            p = *row_parts_in; \
+            q = *(row_parts_in + 1); \
+\
             accum += ((((p - q) * F) >> 8) + q) & 0x00ff00ff00ff00ffULL; \
-        }                                                               \
+            } \
         *(row_parts_out++) = ((accum) >> (n_halvings)) & 0x00ff00ff00ff00ffULL; \
-    }                                                                   \
-    while (row_parts_out != row_parts_out_max);                         \
-}                                                                       \
-                                                                        \
-static void                                                             \
+    } \
+    while (row_parts_out != row_parts_out_max); \
+} \
+\
+static void \
 interp_horizontal_bilinear_##n_halvings##h_128bpp (const SmolScaleCtx *scale_ctx, \
                                                    const uint64_t * SMOL_RESTRICT row_parts_in, \
                                                    uint64_t * SMOL_RESTRICT row_parts_out) \
-{                                                                       \
-    const uint16_t * SMOL_RESTRICT precalc_x = scale_ctx->precalc_x;    \
+{ \
+    const uint16_t * SMOL_RESTRICT precalc_x = scale_ctx->precalc_x; \
     uint64_t *row_parts_out_max = row_parts_out + scale_ctx->width_out * 2; \
-    uint64_t p, q;                                                      \
-    uint64_t F;                                                         \
-    int i;                                                              \
-                                                                        \
-    SMOL_ASSUME_ALIGNED (row_parts_in, const uint64_t *);               \
-    SMOL_ASSUME_ALIGNED (row_parts_out, uint64_t *);                    \
-                                                                        \
-    do                                                                  \
-    {                                                                   \
-        uint64_t accum [2] = { 0 };                                     \
-                                                                        \
-        for (i = 0; i < (1 << (n_halvings)); i++)                       \
-        {                                                               \
-            row_parts_in += *(precalc_x++) * 2;                         \
-            F = *(precalc_x++);                                         \
-                                                                        \
-            p = row_parts_in [0];                                       \
-            q = row_parts_in [2];                                       \
-                                                                        \
+    uint64_t p, q; \
+    uint64_t F; \
+    int i; \
+\
+    SMOL_ASSUME_ALIGNED (row_parts_in, const uint64_t *); \
+    SMOL_ASSUME_ALIGNED (row_parts_out, uint64_t *); \
+\
+    do \
+    { \
+        uint64_t accum [2] = { 0 }; \
+         \
+        for (i = 0; i < (1 << (n_halvings)); i++) \
+        { \
+            row_parts_in += *(precalc_x++) * 2; \
+            F = *(precalc_x++); \
+\
+            p = row_parts_in [0]; \
+            q = row_parts_in [2]; \
+\
             accum [0] += ((((p - q) * F) >> 8) + q) & 0x00ffffff00ffffffULL; \
-                                                                        \
-            p = row_parts_in [1];                                       \
-            q = row_parts_in [3];                                       \
-                                                                        \
+\
+            p = row_parts_in [1]; \
+            q = row_parts_in [3]; \
+\
             accum [1] += ((((p - q) * F) >> 8) + q) & 0x00ffffff00ffffffULL; \
-        }                                                               \
+            } \
         *(row_parts_out++) = ((accum [0]) >> (n_halvings)) & 0x00ffffff00ffffffULL; \
         *(row_parts_out++) = ((accum [1]) >> (n_halvings)) & 0x00ffffff00ffffffULL; \
-    }                                                                   \
-    while (row_parts_out != row_parts_out_max);                         \
+    } \
+    while (row_parts_out != row_parts_out_max); \
 }
 
 static void
@@ -1778,137 +1778,137 @@ interp_vertical_bilinear_add_128bpp (uint64_t F,
     while (accum_out != accum_out_last);
 }
 
-#define DEF_INTERP_VERTICAL_BILINEAR_FINAL(n_halvings)                  \
-static void                                                             \
-interp_vertical_bilinear_final_##n_halvings##h_64bpp (uint64_t F,       \
+#define DEF_INTERP_VERTICAL_BILINEAR_FINAL(n_halvings) \
+static void \
+interp_vertical_bilinear_final_##n_halvings##h_64bpp (uint64_t F, \
                                                       const uint64_t * SMOL_RESTRICT top_row_parts_in, \
                                                       const uint64_t * SMOL_RESTRICT bottom_row_parts_in, \
                                                       uint64_t * SMOL_RESTRICT accum_inout, \
-                                                      uint32_t width)   \
-{                                                                       \
-    uint64_t *accum_inout_last = accum_inout + width;                   \
-                                                                        \
-    SMOL_ASSUME_ALIGNED (top_row_parts_in, const uint64_t *);           \
-    SMOL_ASSUME_ALIGNED (bottom_row_parts_in, const uint64_t *);        \
-    SMOL_ASSUME_ALIGNED (accum_inout, uint64_t *);                      \
-                                                                        \
-    do                                                                  \
-    {                                                                   \
-        uint64_t p, q;                                                  \
-                                                                        \
-        p = *(top_row_parts_in++);                                      \
-        q = *(bottom_row_parts_in++);                                   \
-                                                                        \
-        p = ((((p - q) * F) >> 8) + q) & 0x00ff00ff00ff00ffULL;         \
+                                                      uint32_t width) \
+{ \
+    uint64_t *accum_inout_last = accum_inout + width; \
+\
+    SMOL_ASSUME_ALIGNED (top_row_parts_in, const uint64_t *); \
+    SMOL_ASSUME_ALIGNED (bottom_row_parts_in, const uint64_t *); \
+    SMOL_ASSUME_ALIGNED (accum_inout, uint64_t *); \
+\
+    do \
+    { \
+        uint64_t p, q; \
+\
+        p = *(top_row_parts_in++); \
+        q = *(bottom_row_parts_in++); \
+\
+        p = ((((p - q) * F) >> 8) + q) & 0x00ff00ff00ff00ffULL; \
         p = ((p + *accum_inout) >> n_halvings) & 0x00ff00ff00ff00ffULL; \
-                                                                        \
-        *(accum_inout++) = p;                                           \
-    }                                                                   \
-    while (accum_inout != accum_inout_last);                            \
-}                                                                       \
-                                                                        \
-static void                                                             \
-interp_vertical_bilinear_final_##n_halvings##h_128bpp (uint64_t F,      \
+\
+        *(accum_inout++) = p; \
+    } \
+    while (accum_inout != accum_inout_last); \
+} \
+\
+static void \
+interp_vertical_bilinear_final_##n_halvings##h_128bpp (uint64_t F, \
                                                        const uint64_t * SMOL_RESTRICT top_row_parts_in, \
                                                        const uint64_t * SMOL_RESTRICT bottom_row_parts_in, \
                                                        uint64_t * SMOL_RESTRICT accum_inout, \
-                                                       uint32_t width)  \
-{                                                                       \
-    uint64_t *accum_inout_last = accum_inout + width;                   \
-                                                                        \
-    SMOL_ASSUME_ALIGNED (top_row_parts_in, const uint64_t *);           \
-    SMOL_ASSUME_ALIGNED (bottom_row_parts_in, const uint64_t *);        \
-    SMOL_ASSUME_ALIGNED (accum_inout, uint64_t *);                      \
-                                                                        \
-    do                                                                  \
-    {                                                                   \
-        uint64_t p, q;                                                  \
-                                                                        \
-        p = *(top_row_parts_in++);                                      \
-        q = *(bottom_row_parts_in++);                                   \
-                                                                        \
-        p = ((((p - q) * F) >> 8) + q) & 0x00ffffff00ffffffULL;         \
+                                                       uint32_t width) \
+{ \
+    uint64_t *accum_inout_last = accum_inout + width; \
+\
+    SMOL_ASSUME_ALIGNED (top_row_parts_in, const uint64_t *); \
+    SMOL_ASSUME_ALIGNED (bottom_row_parts_in, const uint64_t *); \
+    SMOL_ASSUME_ALIGNED (accum_inout, uint64_t *); \
+\
+    do \
+    { \
+        uint64_t p, q; \
+\
+        p = *(top_row_parts_in++); \
+        q = *(bottom_row_parts_in++); \
+\
+        p = ((((p - q) * F) >> 8) + q) & 0x00ffffff00ffffffULL; \
         p = ((p + *accum_inout) >> n_halvings) & 0x00ffffff00ffffffULL; \
-                                                                        \
-        *(accum_inout++) = p;                                           \
-    }                                                                   \
-    while (accum_inout != accum_inout_last);                            \
+\
+        *(accum_inout++) = p; \
+    } \
+    while (accum_inout != accum_inout_last); \
 }
 
-#define DEF_SCALE_OUTROW_BILINEAR(n_halvings)                           \
-static void                                                             \
+#define DEF_SCALE_OUTROW_BILINEAR(n_halvings) \
+static void \
 scale_outrow_bilinear_##n_halvings##h_64bpp (const SmolScaleCtx *scale_ctx, \
                                              SmolVerticalCtx *vertical_ctx, \
-                                             uint32_t outrow_index,     \
-                                             uint32_t *row_out)         \
-{                                                                       \
-    uint32_t bilin_index = outrow_index << (n_halvings);                \
-    unsigned int i;                                                     \
-                                                                        \
+                                             uint32_t outrow_index, \
+                                             uint32_t *row_out) \
+{ \
+    uint32_t bilin_index = outrow_index << (n_halvings); \
+    unsigned int i; \
+\
     update_vertical_ctx_bilinear (scale_ctx, vertical_ctx, bilin_index); \
     interp_vertical_bilinear_store_64bpp (scale_ctx->precalc_y [bilin_index * 2 + 1], \
-                                          vertical_ctx->parts_row [0],  \
-                                          vertical_ctx->parts_row [1],  \
-                                          vertical_ctx->parts_row [2],  \
-                                          scale_ctx->width_out);        \
-    bilin_index++;                                                      \
-                                                                        \
-    for (i = 0; i < (1 << (n_halvings)) - 2; i++)                       \
-    {                                                                   \
+                                          vertical_ctx->parts_row [0], \
+                                          vertical_ctx->parts_row [1], \
+                                          vertical_ctx->parts_row [2], \
+                                          scale_ctx->width_out); \
+    bilin_index++; \
+\
+    for (i = 0; i < (1 << (n_halvings)) - 2; i++) \
+    { \
         update_vertical_ctx_bilinear (scale_ctx, vertical_ctx, bilin_index); \
         interp_vertical_bilinear_add_64bpp (scale_ctx->precalc_y [bilin_index * 2 + 1], \
                                             vertical_ctx->parts_row [0], \
                                             vertical_ctx->parts_row [1], \
                                             vertical_ctx->parts_row [2], \
-                                            scale_ctx->width_out);      \
-        bilin_index++;                                                  \
-    }                                                                   \
-                                                                        \
+                                            scale_ctx->width_out); \
+        bilin_index++; \
+    } \
+\
     update_vertical_ctx_bilinear (scale_ctx, vertical_ctx, bilin_index); \
     interp_vertical_bilinear_final_##n_halvings##h_64bpp (scale_ctx->precalc_y [bilin_index * 2 + 1], \
                                                           vertical_ctx->parts_row [0], \
                                                           vertical_ctx->parts_row [1], \
                                                           vertical_ctx->parts_row [2], \
                                                           scale_ctx->width_out); \
-                                                                        \
+\
     scale_ctx->pack_row_func (vertical_ctx->parts_row [2], row_out, scale_ctx->width_out); \
-}                                                                       \
-                                                                        \
-static void                                                             \
+} \
+\
+static void \
 scale_outrow_bilinear_##n_halvings##h_128bpp (const SmolScaleCtx *scale_ctx, \
                                               SmolVerticalCtx *vertical_ctx, \
-                                              uint32_t outrow_index,    \
-                                              uint32_t *row_out)        \
-{                                                                       \
-    uint32_t bilin_index = outrow_index << (n_halvings);                \
-    unsigned int i;                                                     \
-                                                                        \
+                                              uint32_t outrow_index, \
+                                              uint32_t *row_out) \
+{ \
+    uint32_t bilin_index = outrow_index << (n_halvings); \
+    unsigned int i; \
+\
     update_vertical_ctx_bilinear (scale_ctx, vertical_ctx, bilin_index); \
     interp_vertical_bilinear_store_128bpp (scale_ctx->precalc_y [bilin_index * 2 + 1], \
                                            vertical_ctx->parts_row [0], \
                                            vertical_ctx->parts_row [1], \
                                            vertical_ctx->parts_row [2], \
-                                           scale_ctx->width_out * 2);   \
-    bilin_index++;                                                      \
-                                                                        \
-    for (i = 0; i < (1 << (n_halvings)) - 2; i++)                       \
-    {                                                                   \
+                                           scale_ctx->width_out * 2); \
+    bilin_index++; \
+\
+    for (i = 0; i < (1 << (n_halvings)) - 2; i++) \
+    { \
         update_vertical_ctx_bilinear (scale_ctx, vertical_ctx, bilin_index); \
         interp_vertical_bilinear_add_128bpp (scale_ctx->precalc_y [bilin_index * 2 + 1], \
                                              vertical_ctx->parts_row [0], \
                                              vertical_ctx->parts_row [1], \
                                              vertical_ctx->parts_row [2], \
                                              scale_ctx->width_out * 2); \
-        bilin_index++;                                                  \
-    }                                                                   \
-                                                                        \
+        bilin_index++; \
+    } \
+\
     update_vertical_ctx_bilinear (scale_ctx, vertical_ctx, bilin_index); \
     interp_vertical_bilinear_final_##n_halvings##h_128bpp (scale_ctx->precalc_y [bilin_index * 2 + 1], \
                                                            vertical_ctx->parts_row [0], \
                                                            vertical_ctx->parts_row [1], \
                                                            vertical_ctx->parts_row [2], \
                                                            scale_ctx->width_out * 2); \
-                                                                        \
+\
     scale_ctx->pack_row_func (vertical_ctx->parts_row [2], row_out, scale_ctx->width_out); \
 }
 

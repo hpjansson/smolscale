@@ -365,25 +365,25 @@ unpremul_p16_to_u_128bpp (const uint64_t * SMOL_RESTRICT in,
 
 /* This is kind of bulky (~13 x86 insns), but it's about the same as using
  * unions, and we don't have to worry about endianness. */
-#define PACK_FROM_1234_64BPP(in, a, b, c, d)                  \
-     ((SHIFT_S ((in), ((a) - 1) * 16 + 8 - 32) & 0xff000000)  \
-    | (SHIFT_S ((in), ((b) - 1) * 16 + 8 - 40) & 0x00ff0000)  \
-    | (SHIFT_S ((in), ((c) - 1) * 16 + 8 - 48) & 0x0000ff00)  \
-    | (SHIFT_S ((in), ((d) - 1) * 16 + 8 - 56) & 0x000000ff))
+#define PACK_FROM_1234_64BPP(in, a, b, c, d) \
+    ((SHIFT_S ((in), ((a) - 1) * 16 + 8 - 32) & 0xff000000) \
+     | (SHIFT_S ((in), ((b) - 1) * 16 + 8 - 40) & 0x00ff0000) \
+     | (SHIFT_S ((in), ((c) - 1) * 16 + 8 - 48) & 0x0000ff00) \
+     | (SHIFT_S ((in), ((d) - 1) * 16 + 8 - 56) & 0x000000ff))
 
-#define PACK_FROM_1234_128BPP(in, a, b, c, d)                                         \
-     ((SHIFT_S ((in [((a) - 1) >> 1]), (((a) - 1) & 1) * 32 + 24 - 32) & 0xff000000)  \
-    | (SHIFT_S ((in [((b) - 1) >> 1]), (((b) - 1) & 1) * 32 + 24 - 40) & 0x00ff0000)  \
-    | (SHIFT_S ((in [((c) - 1) >> 1]), (((c) - 1) & 1) * 32 + 24 - 48) & 0x0000ff00)  \
-    | (SHIFT_S ((in [((d) - 1) >> 1]), (((d) - 1) & 1) * 32 + 24 - 56) & 0x000000ff))
+#define PACK_FROM_1234_128BPP(in, a, b, c, d) \
+    ((SHIFT_S ((in [((a) - 1) >> 1]), (((a) - 1) & 1) * 32 + 24 - 32) & 0xff000000) \
+     | (SHIFT_S ((in [((b) - 1) >> 1]), (((b) - 1) & 1) * 32 + 24 - 40) & 0x00ff0000) \
+     | (SHIFT_S ((in [((c) - 1) >> 1]), (((c) - 1) & 1) * 32 + 24 - 48) & 0x0000ff00) \
+     | (SHIFT_S ((in [((d) - 1) >> 1]), (((d) - 1) & 1) * 32 + 24 - 56) & 0x000000ff))
 
 #define SWAP_2_AND_3(n) ((n) == 2 ? 3 : (n) == 3 ? 2 : n)
 
-#define PACK_FROM_1324_64BPP(in, a, b, c, d)                               \
-     ((SHIFT_S ((in), (SWAP_2_AND_3 (a) - 1) * 16 + 8 - 32) & 0xff000000)  \
-    | (SHIFT_S ((in), (SWAP_2_AND_3 (b) - 1) * 16 + 8 - 40) & 0x00ff0000)  \
-    | (SHIFT_S ((in), (SWAP_2_AND_3 (c) - 1) * 16 + 8 - 48) & 0x0000ff00)  \
-    | (SHIFT_S ((in), (SWAP_2_AND_3 (d) - 1) * 16 + 8 - 56) & 0x000000ff))
+#define PACK_FROM_1324_64BPP(in, a, b, c, d) \
+    ((SHIFT_S ((in), (SWAP_2_AND_3 (a) - 1) * 16 + 8 - 32) & 0xff000000) \
+     | (SHIFT_S ((in), (SWAP_2_AND_3 (b) - 1) * 16 + 8 - 40) & 0x00ff0000) \
+     | (SHIFT_S ((in), (SWAP_2_AND_3 (c) - 1) * 16 + 8 - 48) & 0x0000ff00) \
+     | (SHIFT_S ((in), (SWAP_2_AND_3 (d) - 1) * 16 + 8 - 56) & 0x000000ff))
 
 /* ---------------------- *
  * Repacking: 24/32 -> 64 *
@@ -1180,22 +1180,22 @@ DEF_REPACK_FROM_1234_128BPP_TO_32BPP (4, 3, 2, 1)
  * Filter helpers *
  * -------------- */
 
-#define LERP_SIMD256_EPI32(a, b, f)                                     \
-    _mm256_add_epi32 (                                                  \
-    _mm256_srli_epi32 (                                                 \
-    _mm256_mullo_epi32 (                                                \
-    _mm256_sub_epi32 ((a), (b)), (f)), 8), (b))
+#define LERP_SIMD256_EPI32(a, b, f) \
+    _mm256_add_epi32 ( \
+        _mm256_srli_epi32 ( \
+            _mm256_mullo_epi32 ( \
+                _mm256_sub_epi32 ((a), (b)), (f)), 8), (b))
 
-#define LERP_SIMD128_EPI32(a, b, f)                                     \
-    _mm_add_epi32 (                                                     \
-    _mm_srli_epi32 (                                                    \
-    _mm_mullo_epi32 (                                                   \
-    _mm_sub_epi32 ((a), (b)), (f)), 8), (b))
+#define LERP_SIMD128_EPI32(a, b, f) \
+    _mm_add_epi32 ( \
+        _mm_srli_epi32 ( \
+            _mm_mullo_epi32 ( \
+                _mm_sub_epi32 ((a), (b)), (f)), 8), (b))
 
-#define LERP_SIMD256_EPI32_AND_MASK(a, b, f, mask)                      \
+#define LERP_SIMD256_EPI32_AND_MASK(a, b, f, mask) \
     _mm256_and_si256 (LERP_SIMD256_EPI32 ((a), (b), (f)), (mask))
 
-#define LERP_SIMD128_EPI32_AND_MASK(a, b, f, mask)                      \
+#define LERP_SIMD128_EPI32_AND_MASK(a, b, f, mask) \
     _mm_and_si128 (LERP_SIMD128_EPI32 ((a), (b), (f)), (mask))
 
 static SMOL_INLINE const char *
@@ -1838,62 +1838,62 @@ interp_horizontal_bilinear_0h_128bpp (const SmolScaleCtx *scale_ctx,
     }
 }
 
-#define DEF_INTERP_HORIZONTAL_BILINEAR_128BPP(n_halvings)               \
-static void                                                             \
+#define DEF_INTERP_HORIZONTAL_BILINEAR_128BPP(n_halvings) \
+static void \
 interp_horizontal_bilinear_##n_halvings##h_128bpp (const SmolScaleCtx *scale_ctx, \
                                                    const uint64_t * SMOL_RESTRICT row_parts_in, \
                                                    uint64_t * SMOL_RESTRICT row_parts_out) \
-{                                                                       \
-    const uint16_t * SMOL_RESTRICT precalc_x = scale_ctx->precalc_x;        \
+{ \
+    const uint16_t * SMOL_RESTRICT precalc_x = scale_ctx->precalc_x; \
     uint64_t *row_parts_out_max = row_parts_out + scale_ctx->width_out * 2; \
-    const __m256i mask256 = _mm256_set_epi32 (                          \
-        0x00ffffff, 0x00ffffff, 0x00ffffff, 0x00ffffff,                 \
-        0x00ffffff, 0x00ffffff, 0x00ffffff, 0x00ffffff);                \
-    const __m128i mask128 = _mm_set_epi32 (                             \
-        0x00ffffff, 0x00ffffff, 0x00ffffff, 0x00ffffff);                \
-    const __m256i zero256 = _mm256_setzero_si256 ();                    \
-    int i;                                                              \
-                                                                        \
-    SMOL_ASSUME_ALIGNED (row_parts_in, const uint64_t *);               \
-    SMOL_ASSUME_ALIGNED (row_parts_out, uint64_t *);                    \
-                                                                        \
-    while (row_parts_out != row_parts_out_max)                          \
-    {                                                                   \
-        __m256i a0 = _mm256_setzero_si256 ();                           \
-        __m128i a1;                                                     \
-                                                                        \
-        for (i = 0; i < (1 << ((n_halvings) - 1)); i++)                 \
-        {                                                               \
-            __m256i m0, m1;                                             \
-            __m256i factors;                                            \
-            __m128i n0, n1, n2, n3, n4, n5;                             \
-                                                                        \
-            row_parts_in += *(precalc_x++) * 2;                         \
-            n4 = _mm_set1_epi16 (*(precalc_x++));                       \
-            n0 = _mm_load_si128 ((__m128i *) row_parts_in);             \
-            n1 = _mm_load_si128 ((__m128i *) row_parts_in + 1);         \
-                                                                        \
-            row_parts_in += *(precalc_x++) * 2;                         \
-            n5 = _mm_set1_epi16 (*(precalc_x++));                       \
-            n2 = _mm_load_si128 ((__m128i *) row_parts_in);             \
-            n3 = _mm_load_si128 ((__m128i *) row_parts_in + 1);         \
-                                                                        \
-            m0 = _mm256_set_m128i (n2, n0);                             \
-            m1 = _mm256_set_m128i (n3, n1);                             \
-            factors = _mm256_set_m128i (n5, n4);                        \
-            factors = _mm256_blend_epi16 (factors, zero256, 0xaa);      \
-                                                                        \
+    const __m256i mask256 = _mm256_set_epi32 ( \
+        0x00ffffff, 0x00ffffff, 0x00ffffff, 0x00ffffff, \
+        0x00ffffff, 0x00ffffff, 0x00ffffff, 0x00ffffff); \
+    const __m128i mask128 = _mm_set_epi32 ( \
+        0x00ffffff, 0x00ffffff, 0x00ffffff, 0x00ffffff); \
+    const __m256i zero256 = _mm256_setzero_si256 (); \
+    int i; \
+     \
+    SMOL_ASSUME_ALIGNED (row_parts_in, const uint64_t *); \
+    SMOL_ASSUME_ALIGNED (row_parts_out, uint64_t *); \
+\
+    while (row_parts_out != row_parts_out_max) \
+    { \
+        __m256i a0 = _mm256_setzero_si256 (); \
+        __m128i a1; \
+\
+        for (i = 0; i < (1 << ((n_halvings) - 1)); i++) \
+        { \
+            __m256i m0, m1; \
+            __m256i factors; \
+            __m128i n0, n1, n2, n3, n4, n5; \
+\
+            row_parts_in += *(precalc_x++) * 2; \
+            n4 = _mm_set1_epi16 (*(precalc_x++)); \
+            n0 = _mm_load_si128 ((__m128i *) row_parts_in); \
+            n1 = _mm_load_si128 ((__m128i *) row_parts_in + 1); \
+\
+            row_parts_in += *(precalc_x++) * 2; \
+            n5 = _mm_set1_epi16 (*(precalc_x++)); \
+            n2 = _mm_load_si128 ((__m128i *) row_parts_in); \
+            n3 = _mm_load_si128 ((__m128i *) row_parts_in + 1); \
+\
+            m0 = _mm256_set_m128i (n2, n0); \
+            m1 = _mm256_set_m128i (n3, n1); \
+            factors = _mm256_set_m128i (n5, n4); \
+            factors = _mm256_blend_epi16 (factors, zero256, 0xaa); \
+\
             m0 = LERP_SIMD256_EPI32_AND_MASK (m0, m1, factors, mask256); \
-            a0 = _mm256_add_epi32 (a0, m0);                             \
-        }                                                               \
-                                                                        \
-        a1 = _mm_add_epi32 (_mm256_extracti128_si256 (a0, 0),           \
-                            _mm256_extracti128_si256 (a0, 1));          \
-        a1 = _mm_srli_epi32 (a1, (n_halvings));                         \
-        a1 = _mm_and_si128 (a1, mask128);                               \
-        _mm_store_si128 ((__m128i *) row_parts_out, a1);                \
-        row_parts_out += 2;                                             \
-    }                                                                   \
+            a0 = _mm256_add_epi32 (a0, m0); \
+        } \
+\
+        a1 = _mm_add_epi32 (_mm256_extracti128_si256 (a0, 0), \
+                            _mm256_extracti128_si256 (a0, 1)); \
+        a1 = _mm_srli_epi32 (a1, (n_halvings)); \
+        a1 = _mm_and_si128 (a1, mask128); \
+        _mm_store_si128 ((__m128i *) row_parts_out, a1); \
+        row_parts_out += 2; \
+    } \
 }
 
 DEF_INTERP_HORIZONTAL_BILINEAR_128BPP(1)
@@ -2382,164 +2382,164 @@ interp_vertical_bilinear_add_128bpp (uint64_t F,
     }
 }
 
-#define DEF_INTERP_VERTICAL_BILINEAR_FINAL(n_halvings)                  \
-static void                                                             \
-interp_vertical_bilinear_final_##n_halvings##h_64bpp (uint64_t F,       \
+#define DEF_INTERP_VERTICAL_BILINEAR_FINAL(n_halvings) \
+static void \
+interp_vertical_bilinear_final_##n_halvings##h_64bpp (uint64_t F, \
                                                       const uint64_t * SMOL_RESTRICT top_row_parts_in, \
                                                       const uint64_t * SMOL_RESTRICT bottom_row_parts_in, \
                                                       uint64_t * SMOL_RESTRICT accum_inout, \
-                                                      uint32_t width)   \
-{                                                                       \
+                                                      uint32_t width) \
+{ \
     const __m256i mask = _mm256_set_epi16 (0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff, \
                                            0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff, 0x00ff); \
-    uint64_t *accum_inout_last = accum_inout + width;                   \
-    __m256i F256;                                                       \
-                                                                        \
-    SMOL_ASSUME_ALIGNED (top_row_parts_in, const uint64_t *);           \
-    SMOL_ASSUME_ALIGNED (bottom_row_parts_in, const uint64_t *);        \
-    SMOL_ASSUME_ALIGNED (accum_inout, uint64_t *);                      \
-                                                                        \
-    F256 = _mm256_set1_epi16 ((uint16_t) F);                            \
-                                                                        \
-    while (accum_inout + 4 <= accum_inout_last)                         \
-    {                                                                   \
-        __m256i m0, m1, o0;                                             \
-                                                                        \
-        m0 = _mm256_load_si256 ((const __m256i *) top_row_parts_in);    \
-        top_row_parts_in += 4;                                          \
+    uint64_t *accum_inout_last = accum_inout + width; \
+    __m256i F256; \
+\
+    SMOL_ASSUME_ALIGNED (top_row_parts_in, const uint64_t *); \
+    SMOL_ASSUME_ALIGNED (bottom_row_parts_in, const uint64_t *); \
+    SMOL_ASSUME_ALIGNED (accum_inout, uint64_t *); \
+\
+    F256 = _mm256_set1_epi16 ((uint16_t) F); \
+\
+    while (accum_inout + 4 <= accum_inout_last) \
+    { \
+        __m256i m0, m1, o0; \
+\
+        m0 = _mm256_load_si256 ((const __m256i *) top_row_parts_in); \
+        top_row_parts_in += 4; \
         m1 = _mm256_load_si256 ((const __m256i *) bottom_row_parts_in); \
-        bottom_row_parts_in += 4;                                       \
-        o0 = _mm256_load_si256 ((const __m256i *) accum_inout);         \
-                                                                        \
-        m0 = _mm256_sub_epi16 (m0, m1);                                 \
-        m0 = _mm256_mullo_epi16 (m0, F256);                             \
-        m0 = _mm256_srli_epi16 (m0, 8);                                 \
-        m0 = _mm256_add_epi16 (m0, m1);                                 \
-        m0 = _mm256_and_si256 (m0, mask);                               \
-                                                                        \
-        o0 = _mm256_add_epi16 (o0, m0);                                 \
-        o0 = _mm256_srli_epi16 (o0, n_halvings);                        \
-                                                                        \
-        _mm256_store_si256 ((__m256i *) accum_inout, o0);               \
-        accum_inout += 4;                                               \
-    }                                                                   \
-                                                                        \
-    while (accum_inout != accum_inout_last)                             \
-    {                                                                   \
-        uint64_t p, q;                                                  \
-                                                                        \
-        p = *(top_row_parts_in++);                                      \
-        q = *(bottom_row_parts_in++);                                   \
-                                                                        \
-        p = ((((p - q) * F) >> 8) + q) & 0x00ff00ff00ff00ffULL;         \
+        bottom_row_parts_in += 4; \
+        o0 = _mm256_load_si256 ((const __m256i *) accum_inout); \
+\
+        m0 = _mm256_sub_epi16 (m0, m1); \
+        m0 = _mm256_mullo_epi16 (m0, F256); \
+        m0 = _mm256_srli_epi16 (m0, 8); \
+        m0 = _mm256_add_epi16 (m0, m1); \
+        m0 = _mm256_and_si256 (m0, mask); \
+\
+        o0 = _mm256_add_epi16 (o0, m0); \
+        o0 = _mm256_srli_epi16 (o0, n_halvings); \
+\
+        _mm256_store_si256 ((__m256i *) accum_inout, o0); \
+        accum_inout += 4; \
+    } \
+\
+    while (accum_inout != accum_inout_last) \
+    { \
+        uint64_t p, q; \
+\
+        p = *(top_row_parts_in++); \
+        q = *(bottom_row_parts_in++); \
+\
+        p = ((((p - q) * F) >> 8) + q) & 0x00ff00ff00ff00ffULL; \
         p = ((p + *accum_inout) >> n_halvings) & 0x00ff00ff00ff00ffULL; \
-                                                                        \
-        *(accum_inout++) = p;                                           \
-    }                                                                   \
-}                                                                       \
-                                                                        \
-static void                                                             \
-interp_vertical_bilinear_final_##n_halvings##h_128bpp (uint64_t F,      \
+\
+        *(accum_inout++) = p; \
+    } \
+} \
+\
+static void \
+interp_vertical_bilinear_final_##n_halvings##h_128bpp (uint64_t F, \
                                                        const uint64_t * SMOL_RESTRICT top_row_parts_in, \
                                                        const uint64_t * SMOL_RESTRICT bottom_row_parts_in, \
                                                        uint64_t * SMOL_RESTRICT accum_inout, \
-                                                       uint32_t width)  \
-{                                                                       \
-    uint64_t *accum_inout_last = accum_inout + width;                   \
-                                                                        \
-    SMOL_ASSUME_ALIGNED (top_row_parts_in, const uint64_t *);           \
-    SMOL_ASSUME_ALIGNED (bottom_row_parts_in, const uint64_t *);        \
-    SMOL_ASSUME_ALIGNED (accum_inout, uint64_t *);                      \
-                                                                        \
-    do                                                                  \
-    {                                                                   \
-        uint64_t p, q;                                                  \
-                                                                        \
-        p = *(top_row_parts_in++);                                      \
-        q = *(bottom_row_parts_in++);                                   \
-                                                                        \
-        p = ((((p - q) * F) >> 8) + q) & 0x00ffffff00ffffffULL;         \
+                                                       uint32_t width) \
+{ \
+    uint64_t *accum_inout_last = accum_inout + width; \
+\
+    SMOL_ASSUME_ALIGNED (top_row_parts_in, const uint64_t *); \
+    SMOL_ASSUME_ALIGNED (bottom_row_parts_in, const uint64_t *); \
+    SMOL_ASSUME_ALIGNED (accum_inout, uint64_t *); \
+\
+    do \
+    { \
+        uint64_t p, q; \
+\
+        p = *(top_row_parts_in++); \
+        q = *(bottom_row_parts_in++); \
+\
+        p = ((((p - q) * F) >> 8) + q) & 0x00ffffff00ffffffULL; \
         p = ((p + *accum_inout) >> n_halvings) & 0x00ffffff00ffffffULL; \
-                                                                        \
-        *(accum_inout++) = p;                                           \
-    }                                                                   \
-    while (accum_inout != accum_inout_last);                            \
+\
+        *(accum_inout++) = p; \
+    } \
+    while (accum_inout != accum_inout_last); \
 }
 
-#define DEF_SCALE_OUTROW_BILINEAR(n_halvings)                           \
-static void                                                             \
+#define DEF_SCALE_OUTROW_BILINEAR(n_halvings) \
+static void \
 scale_outrow_bilinear_##n_halvings##h_64bpp (const SmolScaleCtx *scale_ctx, \
                                              SmolVerticalCtx *vertical_ctx, \
-                                             uint32_t outrow_index,     \
-                                             uint32_t *row_out)         \
-{                                                                       \
-    uint32_t bilin_index = outrow_index << (n_halvings);                \
-    unsigned int i;                                                     \
-                                                                        \
+                                             uint32_t outrow_index, \
+                                             uint32_t *row_out) \
+{ \
+    uint32_t bilin_index = outrow_index << (n_halvings); \
+    unsigned int i; \
+\
     update_vertical_ctx_bilinear (scale_ctx, vertical_ctx, bilin_index); \
     interp_vertical_bilinear_store_64bpp (scale_ctx->precalc_y [bilin_index * 2 + 1], \
-                                          vertical_ctx->parts_row [0],  \
-                                          vertical_ctx->parts_row [1],  \
-                                          vertical_ctx->parts_row [2],  \
-                                          scale_ctx->width_out);        \
-    bilin_index++;                                                      \
-                                                                        \
-    for (i = 0; i < (1 << (n_halvings)) - 2; i++)                       \
-    {                                                                   \
+                                          vertical_ctx->parts_row [0], \
+                                          vertical_ctx->parts_row [1], \
+                                          vertical_ctx->parts_row [2], \
+                                          scale_ctx->width_out); \
+    bilin_index++; \
+\
+    for (i = 0; i < (1 << (n_halvings)) - 2; i++) \
+    { \
         update_vertical_ctx_bilinear (scale_ctx, vertical_ctx, bilin_index); \
         interp_vertical_bilinear_add_64bpp (scale_ctx->precalc_y [bilin_index * 2 + 1], \
                                             vertical_ctx->parts_row [0], \
                                             vertical_ctx->parts_row [1], \
                                             vertical_ctx->parts_row [2], \
-                                            scale_ctx->width_out);      \
-        bilin_index++;                                                  \
-    }                                                                   \
-                                                                        \
+                                            scale_ctx->width_out); \
+        bilin_index++; \
+    } \
+\
     update_vertical_ctx_bilinear (scale_ctx, vertical_ctx, bilin_index); \
     interp_vertical_bilinear_final_##n_halvings##h_64bpp (scale_ctx->precalc_y [bilin_index * 2 + 1], \
                                                           vertical_ctx->parts_row [0], \
                                                           vertical_ctx->parts_row [1], \
                                                           vertical_ctx->parts_row [2], \
                                                           scale_ctx->width_out); \
-                                                                        \
+\
     scale_ctx->pack_row_func (vertical_ctx->parts_row [2], row_out, scale_ctx->width_out); \
-}                                                                       \
-                                                                        \
-static void                                                             \
+} \
+\
+static void \
 scale_outrow_bilinear_##n_halvings##h_128bpp (const SmolScaleCtx *scale_ctx, \
                                               SmolVerticalCtx *vertical_ctx, \
-                                              uint32_t outrow_index,    \
-                                              uint32_t *row_out)        \
-{                                                                       \
-    uint32_t bilin_index = outrow_index << (n_halvings);                \
-    unsigned int i;                                                     \
-                                                                        \
+                                              uint32_t outrow_index, \
+                                              uint32_t *row_out) \
+{ \
+    uint32_t bilin_index = outrow_index << (n_halvings); \
+    unsigned int i; \
+\
     update_vertical_ctx_bilinear (scale_ctx, vertical_ctx, bilin_index); \
     interp_vertical_bilinear_store_128bpp (scale_ctx->precalc_y [bilin_index * 2 + 1], \
                                            vertical_ctx->parts_row [0], \
                                            vertical_ctx->parts_row [1], \
                                            vertical_ctx->parts_row [2], \
-                                           scale_ctx->width_out * 2);   \
-    bilin_index++;                                                      \
-                                                                        \
-    for (i = 0; i < (1 << (n_halvings)) - 2; i++)                       \
-    {                                                                   \
+                                           scale_ctx->width_out * 2); \
+    bilin_index++; \
+\
+    for (i = 0; i < (1 << (n_halvings)) - 2; i++) \
+    { \
         update_vertical_ctx_bilinear (scale_ctx, vertical_ctx, bilin_index); \
         interp_vertical_bilinear_add_128bpp (scale_ctx->precalc_y [bilin_index * 2 + 1], \
                                              vertical_ctx->parts_row [0], \
                                              vertical_ctx->parts_row [1], \
                                              vertical_ctx->parts_row [2], \
                                              scale_ctx->width_out * 2); \
-        bilin_index++;                                                  \
-    }                                                                   \
-                                                                        \
+        bilin_index++; \
+    } \
+\
     update_vertical_ctx_bilinear (scale_ctx, vertical_ctx, bilin_index); \
     interp_vertical_bilinear_final_##n_halvings##h_128bpp (scale_ctx->precalc_y [bilin_index * 2 + 1], \
                                                            vertical_ctx->parts_row [0], \
                                                            vertical_ctx->parts_row [1], \
                                                            vertical_ctx->parts_row [2], \
                                                            scale_ctx->width_out * 2); \
-                                                                        \
+\
     scale_ctx->pack_row_func (vertical_ctx->parts_row [2], row_out, scale_ctx->width_out); \
 }
 
