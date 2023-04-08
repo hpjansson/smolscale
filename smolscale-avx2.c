@@ -14,7 +14,21 @@
  * Context initialization *
  * ---------------------- */
 
+/* Number of horizontal pixels to process in a single batch. The define exists for
+ * clarity and cannot be changed without significant changes to the code elsewhere. */
 #define BILIN_HORIZ_BATCH_PIXELS 16
+
+/* Batched precalc array layout:
+ *
+ * 16 offsets followed by 16 factors, repeating until epilogue. The epilogue
+ * has offsets and factors alternating one by one, and will always have fewer
+ * than 16 o/f pairs:
+ *
+ * ooooooooooooooooffffffffffffffffooooooooooooooooffffffffffffffffofofofofof...
+ *
+ * 16 offsets layout: 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15
+ * 16 factors layout: 0 2 4 6 8 10 12 14 1 3 5 7 9 11 13 15
+ */
 
 static uint32_t
 array_offset_offset (uint32_t elem_i)
@@ -31,15 +45,6 @@ array_offset_factor (uint32_t elem_i)
     return (elem_i / (BILIN_HORIZ_BATCH_PIXELS)) * (BILIN_HORIZ_BATCH_PIXELS * 2)
         + BILIN_HORIZ_BATCH_PIXELS + o [elem_i % BILIN_HORIZ_BATCH_PIXELS];
 }
-
-/* Precalc array layout:
- *
- * |16xu16: Offsets |16xu16: Factors |16xu16: Offsets |16xu16: Factors |
- * |................|................|................|................| ...
- *
- * Offsets layout: 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15
- * Factors layout: 0 1 4 5 8 9 12 13 2 3 6 7 10 11 14 15
- */
 
 static void
 precalc_bilinear_array (uint16_t *array,
