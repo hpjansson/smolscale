@@ -1386,7 +1386,7 @@ print_usage (void)
                 "              <min_scale> <max_scale> <n_steps>\n"
                 "              [ <averages log file>\n"
                 "                [ <samples log file> ] ] ] |\n"
-                "            [ benchmark-conv\n ]");
+                "            [ benchmark-conv ]\n");
 }
 
 #define DEFAULT_N_REPETITIONS 3
