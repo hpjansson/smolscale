@@ -545,9 +545,24 @@ do_rows (const SmolScaleCtx *scale_ctx,
         smol_free (vertical_ctx.in_aligned_storage);
 }
 
-/* ---------------------- *
- * Context initialization *
- * ---------------------- */
+/* -------------------- *
+ * Architecture support *
+ * -------------------- */
+
+#ifdef SMOL_WITH_AVX2
+
+static SmolBool
+have_avx2 (void)
+{
+    __builtin_cpu_init ();
+
+    if (__builtin_cpu_supports ("avx2"))
+        return TRUE;
+
+    return FALSE;
+}
+
+#endif
 
 /* In the absence of a proper build system, runtime detection is more
  * portable than compiler macros. WFM. */
@@ -579,6 +594,10 @@ get_host_pixel_type (SmolPixelType pixel_type)
 
     return pixel_type;
 }
+
+/* ---------------------- *
+ * Context initialization *
+ * ---------------------- */
 
 static const SmolRepackMeta *
 find_repack_match (const SmolRepackMeta *meta, uint16_t sig, uint16_t mask)
@@ -698,21 +717,6 @@ out:
     *repack_in = meta_in;
     *repack_out = meta_out;
 }
-
-#ifdef SMOL_WITH_AVX2
-
-static SmolBool
-have_avx2 (void)
-{
-    __builtin_cpu_init ();
-
-    if (__builtin_cpu_supports ("avx2"))
-        return TRUE;
-
-    return FALSE;
-}
-
-#endif
 
 #define IMPLEMENTATION_MAX 8
 
