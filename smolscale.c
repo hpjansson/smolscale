@@ -8,6 +8,72 @@
 #include <limits.h>
 #include "smolscale-private.h"
 
+/* ----------------------- *
+ * Misc. conversion tables *
+ * ----------------------- */
+
+/* Keep in sync with the private SmolReorderType enum */
+static const SmolReorderMeta reorder_meta [SMOL_REORDER_MAX] =
+{
+    { { 1, 2, 3, 4 }, { 1, 2, 3, 4 } },
+
+    { { 1, 2, 3, 4 }, { 2, 3, 4, 1 } },
+    { { 1, 2, 3, 4 }, { 3, 2, 1, 4 } },
+    { { 1, 2, 3, 4 }, { 4, 1, 2, 3 } },
+    { { 1, 2, 3, 4 }, { 4, 3, 2, 1 } },
+    { { 1, 2, 3, 4 }, { 1, 2, 3, 0 } },
+    { { 1, 2, 3, 4 }, { 3, 2, 1, 0 } },
+    { { 1, 2, 3, 0 }, { 1, 2, 3, 4 } },
+
+    { { 1, 2, 3, 4 }, { 1, 3, 2, 4 } },
+    { { 1, 2, 3, 4 }, { 2, 3, 1, 4 } },
+    { { 1, 2, 3, 4 }, { 2, 4, 3, 1 } },
+    { { 1, 2, 3, 4 }, { 4, 1, 3, 2 } },
+    { { 1, 2, 3, 4 }, { 4, 2, 3, 1 } },
+    { { 1, 2, 3, 4 }, { 1, 3, 2, 0 } },
+    { { 1, 2, 3, 4 }, { 2, 3, 1, 0 } },
+    { { 1, 2, 3, 0 }, { 1, 3, 2, 4 } },
+
+    { { 1, 2, 3, 4 }, { 3, 2, 4, 0 } },
+    { { 1, 2, 3, 4 }, { 4, 2, 3, 0 } },
+
+    { { 1, 2, 3, 4 }, { 1, 4, 2, 3 } },
+    { { 1, 2, 3, 4 }, { 3, 2, 4, 1 } }
+};
+
+/* Keep in sync with the public SmolPixelType enum */
+static const SmolPixelTypeMeta pixel_type_meta [SMOL_PIXEL_MAX] =
+{
+    /* RGBA = 1, 2, 3, 4 */
+    { SMOL_STORAGE_32BPP, SMOL_ALPHA_PREMUL8,      { 1, 2, 3, 4 } },
+    { SMOL_STORAGE_32BPP, SMOL_ALPHA_PREMUL8,      { 3, 2, 1, 4 } },
+    { SMOL_STORAGE_32BPP, SMOL_ALPHA_PREMUL8,      { 4, 1, 2, 3 } },
+    { SMOL_STORAGE_32BPP, SMOL_ALPHA_PREMUL8,      { 4, 3, 2, 1 } },
+    { SMOL_STORAGE_32BPP, SMOL_ALPHA_UNASSOCIATED, { 1, 2, 3, 4 } },
+    { SMOL_STORAGE_32BPP, SMOL_ALPHA_UNASSOCIATED, { 3, 2, 1, 4 } },
+    { SMOL_STORAGE_32BPP, SMOL_ALPHA_UNASSOCIATED, { 4, 1, 2, 3 } },
+    { SMOL_STORAGE_32BPP, SMOL_ALPHA_UNASSOCIATED, { 4, 3, 2, 1 } },
+    { SMOL_STORAGE_24BPP, SMOL_ALPHA_PREMUL8,      { 1, 2, 3, 0 } },
+    { SMOL_STORAGE_24BPP, SMOL_ALPHA_PREMUL8,      { 3, 2, 1, 0 } }
+};
+
+/* Channel ordering corrected for little endian. Only applies when fetching
+ * entire pixels as dwords (i.e. u32), so 3-byte variants don't require any
+ * correction. Keep in sync with the public SmolPixelType enum */
+static const SmolPixelType pixel_type_u32_le [SMOL_PIXEL_MAX] =
+{
+    SMOL_PIXEL_ABGR8_PREMULTIPLIED,
+    SMOL_PIXEL_ARGB8_PREMULTIPLIED,
+    SMOL_PIXEL_BGRA8_PREMULTIPLIED,
+    SMOL_PIXEL_RGBA8_PREMULTIPLIED,
+    SMOL_PIXEL_ABGR8_UNASSOCIATED,
+    SMOL_PIXEL_ARGB8_UNASSOCIATED,
+    SMOL_PIXEL_BGRA8_UNASSOCIATED,
+    SMOL_PIXEL_RGBA8_UNASSOCIATED,
+    SMOL_PIXEL_RGB8,
+    SMOL_PIXEL_BGR8
+};
+
 /* ----------------------------------- *
  * sRGB/linear conversion: Shared code *
  * ----------------------------------- */
@@ -479,74 +545,12 @@ do_rows (const SmolScaleCtx *scale_ctx,
         smol_free (vertical_ctx.in_aligned_storage);
 }
 
-/* ----------------- *
- * Conversion tables *
- * ----------------- */
-
-/* Keep in sync with the private SmolReorderType enum */
-static const SmolReorderMeta reorder_meta [SMOL_REORDER_MAX] =
-{
-    { { 1, 2, 3, 4 }, { 1, 2, 3, 4 } },
-
-    { { 1, 2, 3, 4 }, { 2, 3, 4, 1 } },
-    { { 1, 2, 3, 4 }, { 3, 2, 1, 4 } },
-    { { 1, 2, 3, 4 }, { 4, 1, 2, 3 } },
-    { { 1, 2, 3, 4 }, { 4, 3, 2, 1 } },
-    { { 1, 2, 3, 4 }, { 1, 2, 3, 0 } },
-    { { 1, 2, 3, 4 }, { 3, 2, 1, 0 } },
-    { { 1, 2, 3, 0 }, { 1, 2, 3, 4 } },
-
-    { { 1, 2, 3, 4 }, { 1, 3, 2, 4 } },
-    { { 1, 2, 3, 4 }, { 2, 3, 1, 4 } },
-    { { 1, 2, 3, 4 }, { 2, 4, 3, 1 } },
-    { { 1, 2, 3, 4 }, { 4, 1, 3, 2 } },
-    { { 1, 2, 3, 4 }, { 4, 2, 3, 1 } },
-    { { 1, 2, 3, 4 }, { 1, 3, 2, 0 } },
-    { { 1, 2, 3, 4 }, { 2, 3, 1, 0 } },
-    { { 1, 2, 3, 0 }, { 1, 3, 2, 4 } },
-
-    { { 1, 2, 3, 4 }, { 3, 2, 4, 0 } },
-    { { 1, 2, 3, 4 }, { 4, 2, 3, 0 } },
-
-    { { 1, 2, 3, 4 }, { 1, 4, 2, 3 } },
-    { { 1, 2, 3, 4 }, { 3, 2, 4, 1 } }
-};
-
-/* Keep in sync with the public SmolPixelType enum */
-static const SmolPixelTypeMeta pixel_type_meta [SMOL_PIXEL_MAX] =
-{
-    /* RGBA = 1, 2, 3, 4 */
-    { SMOL_STORAGE_32BPP, SMOL_ALPHA_PREMUL8,      { 1, 2, 3, 4 } },
-    { SMOL_STORAGE_32BPP, SMOL_ALPHA_PREMUL8,      { 3, 2, 1, 4 } },
-    { SMOL_STORAGE_32BPP, SMOL_ALPHA_PREMUL8,      { 4, 1, 2, 3 } },
-    { SMOL_STORAGE_32BPP, SMOL_ALPHA_PREMUL8,      { 4, 3, 2, 1 } },
-    { SMOL_STORAGE_32BPP, SMOL_ALPHA_UNASSOCIATED, { 1, 2, 3, 4 } },
-    { SMOL_STORAGE_32BPP, SMOL_ALPHA_UNASSOCIATED, { 3, 2, 1, 4 } },
-    { SMOL_STORAGE_32BPP, SMOL_ALPHA_UNASSOCIATED, { 4, 1, 2, 3 } },
-    { SMOL_STORAGE_32BPP, SMOL_ALPHA_UNASSOCIATED, { 4, 3, 2, 1 } },
-    { SMOL_STORAGE_24BPP, SMOL_ALPHA_PREMUL8,      { 1, 2, 3, 0 } },
-    { SMOL_STORAGE_24BPP, SMOL_ALPHA_PREMUL8,      { 3, 2, 1, 0 } }
-};
-
-/* Channel ordering corrected for little endian. Only applies when fetching
- * entire pixels as dwords (i.e. u32), so 3-byte variants don't require any
- * correction. Keep in sync with the public SmolPixelType enum */
-static const SmolPixelType pixel_type_u32_le [SMOL_PIXEL_MAX] =
-{
-    SMOL_PIXEL_ABGR8_PREMULTIPLIED,
-    SMOL_PIXEL_ARGB8_PREMULTIPLIED,
-    SMOL_PIXEL_BGRA8_PREMULTIPLIED,
-    SMOL_PIXEL_RGBA8_PREMULTIPLIED,
-    SMOL_PIXEL_ABGR8_UNASSOCIATED,
-    SMOL_PIXEL_ARGB8_UNASSOCIATED,
-    SMOL_PIXEL_BGRA8_UNASSOCIATED,
-    SMOL_PIXEL_RGBA8_UNASSOCIATED,
-    SMOL_PIXEL_RGB8,
-    SMOL_PIXEL_BGR8
-};
+/* ---------------------- *
+ * Context initialization *
+ * ---------------------- */
 
 /* In the absence of a proper build system, runtime detection is more
-   portable than compiler macros. WFM. */
+ * portable than compiler macros. WFM. */
 static SmolBool
 host_is_little_endian (void)
 {
