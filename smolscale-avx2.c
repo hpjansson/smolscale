@@ -163,11 +163,14 @@ precalc_boxes_array (uint16_t *array,
 
         /* Prevent out of bounds access */
         if (ofs >= dim_in - 1)
-            break;
-
-        if (next_ofs > dim_in)
         {
-            next_ofs = dim_in;
+            ofs = dim_in - 1;
+            break;
+        }
+
+        if (next_ofs > dim_in - 1)
+        {
+            next_ofs = dim_in - 1;
             if (next_ofs <= ofs)
                 break;
         }
