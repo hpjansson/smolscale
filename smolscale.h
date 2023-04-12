@@ -11,6 +11,11 @@
 extern "C" {
 #endif
 
+#define SMOL_SUBPIXEL_SHIFT 8
+#define SMOL_SUBPIXEL_MUL (1 << (SMOL_SUBPIXEL_SHIFT))
+#define SMOL_PX_TO_SPX(px) ((px) * (SMOL_SUBPIXEL_MUL))
+#define SMOL_SPX_TO_PX(spx) (((spx) + (SMOL_SUBPIXEL_MUL) - 1) / (SMOL_SUBPIXEL_MUL))
+
 typedef enum
 {
     /* 32 bits per pixel */
@@ -64,6 +69,20 @@ SmolScaleCtx *smol_scale_new_full (const void *pixels_in, SmolPixelType pixel_ty
                                    uint32_t width_out, uint32_t height_out, uint32_t rowstride_out,
                                    uint8_t with_srgb,
                                    SmolPostRowFunc post_row_func, void *user_data);
+
+SmolScaleCtx *smol_scale_new_full_subpixel (const void *pixels_in,
+                                            SmolPixelType pixel_type_in,
+                                            uint32_t width_in,
+                                            uint32_t height_in,
+                                            uint32_t rowstride_in,
+                                            void *pixels_out,
+                                            SmolPixelType pixel_type_out,
+                                            uint32_t width_out,
+                                            uint32_t height_out,
+                                            uint32_t rowstride_out,
+                                            uint8_t with_srgb,
+                                            SmolPostRowFunc post_row_func,
+                                            void *user_data);
 
 void smol_scale_destroy (SmolScaleCtx *scale_ctx);
 

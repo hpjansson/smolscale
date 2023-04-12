@@ -424,16 +424,22 @@ const uint32_t _smol_inv_div_p16l_lut [256] =
  * Precalculation *
  * -------------- */
 
+/* Use whole-pixel dimensions for this one */
 static void
 pick_filter_params (uint32_t dim_in,
+                    uint32_t dim_in_spx,
                     uint32_t dim_out,
+                    uint32_t dim_out_spx,
                     uint32_t *halvings_out,
-                    uint32_t *dim_bilin_out,
+                    uint32_t *dim_prehalving_out,
+                    uint32_t *dim_prehalving_out_spx,
                     SmolFilterType *filter_out,
                     SmolStorageType *storage_out,
+                    uint16_t *first_opacity,
+                    uint16_t *last_opacity,
                     uint8_t with_srgb)
 {
-    *dim_bilin_out = dim_out;
+    *dim_prehalving_out = dim_out;
     *storage_out = with_srgb ? SMOL_STORAGE_128BPP : SMOL_STORAGE_64BPP;
 
     /* The box algorithms are only sufficiently precise when
@@ -449,32 +455,35 @@ pick_filter_params (uint32_t dim_in,
     {
         *filter_out = SMOL_FILTER_BOX;
     }
-    else if (dim_in == 1)
+    else if (dim_in <= 1)
     {
         *filter_out = SMOL_FILTER_ONE;
     }
-    else if (dim_in == dim_out)
+    else if (dim_in_spx == dim_out_spx)
     {
         *filter_out = SMOL_FILTER_COPY;
     }
     else
     {
         uint32_t n_halvings = 0;
-        uint32_t d = dim_out;
+        uint32_t d = dim_out_spx;
 
         for (;;)
         {
             d *= 2;
-            if (d >= dim_in)
+            if (d >= dim_in_spx)
                 break;
             n_halvings++;
         }
 
-        dim_out <<= n_halvings;
-        *dim_bilin_out = dim_out;
+        *dim_prehalving_out = dim_out << n_halvings;
+        *dim_prehalving_out_spx = dim_out_spx << n_halvings;
         *filter_out = SMOL_FILTER_BILINEAR_0H + n_halvings;
         *halvings_out = n_halvings;
     }
+
+    *first_opacity = 256;
+    *last_opacity = ((dim_out_spx - 1) % SMOL_SUBPIXEL_MUL) + 1;
 }
 
 /* ------------------- *
@@ -500,7 +509,7 @@ scale_outrow (const SmolScaleCtx *scale_ctx,
                              row_out);
 
     if (scale_ctx->post_row_func)
-        scale_ctx->post_row_func (row_out, scale_ctx->width_out, scale_ctx->user_data);
+        scale_ctx->post_row_func (row_out, scale_ctx->width_out_px, scale_ctx->user_data);
 }
 
 static void
@@ -524,7 +533,7 @@ do_rows (const SmolScaleCtx *scale_ctx,
     for (i = 0; i < n_stored_rows; i++)
     {
         vertical_ctx.parts_row [i] =
-            smol_alloc_aligned (MAX (scale_ctx->width_in, scale_ctx->width_out)
+            smol_alloc_aligned (MAX (scale_ctx->width_in_px, scale_ctx->width_out_px)
                                 * n_parts_per_pixel * sizeof (uint64_t),
                                 &vertical_ctx.row_storage [i]);
     }
@@ -757,8 +766,8 @@ get_implementations (SmolScaleCtx *scale_ctx)
         scale_ctx->storage_type = SMOL_STORAGE_128BPP;
     }
 
-    if (scale_ctx->width_in > scale_ctx->width_out * 8191
-        || scale_ctx->height_in > scale_ctx->height_out * 8191)
+    if (scale_ctx->width_in_px > scale_ctx->width_out_px * 8191
+        || scale_ctx->height_in_px > scale_ctx->height_out_px * 8191)
     {
         /* Even with 128bpp, there's only enough bits to store 11-bit linearized
          * times 13 bits of summed pixels plus 8 bits of scratch space for
@@ -817,13 +826,13 @@ static void
 smol_scale_init (SmolScaleCtx *scale_ctx,
                  const void *pixels_in,
                  SmolPixelType pixel_type_in,
-                 uint32_t width_in,
-                 uint32_t height_in,
+                 uint32_t width_in_spx,
+                 uint32_t height_in_spx,
                  uint32_t rowstride_in,
                  void *pixels_out,
                  SmolPixelType pixel_type_out,
-                 uint32_t width_out,
-                 uint32_t height_out,
+                 uint32_t width_out_spx,
+                 uint32_t height_out_spx,
                  uint32_t rowstride_out,
                  uint8_t with_srgb,
                  SmolPostRowFunc post_row_func,
@@ -833,38 +842,62 @@ smol_scale_init (SmolScaleCtx *scale_ctx,
 
     scale_ctx->pixels_in = pixels_in;
     scale_ctx->pixel_type_in = pixel_type_in;
-    scale_ctx->width_in = width_in;
-    scale_ctx->height_in = height_in;
+    scale_ctx->width_in_spx = width_in_spx;
+    scale_ctx->width_in_px = SMOL_SPX_TO_PX (width_in_spx);
+    scale_ctx->height_in_spx = height_in_spx;
+    scale_ctx->height_in_px = SMOL_SPX_TO_PX (height_in_spx);
     scale_ctx->rowstride_in = rowstride_in;
     scale_ctx->pixels_out = pixels_out;
     scale_ctx->pixel_type_out = pixel_type_out;
-    scale_ctx->width_out = width_out;
-    scale_ctx->height_out = height_out;
+    scale_ctx->width_out_spx = width_out_spx;
+    scale_ctx->width_out_px = SMOL_SPX_TO_PX (width_out_spx);
+    scale_ctx->height_out_spx = height_out_spx;
+    scale_ctx->height_out_px = SMOL_SPX_TO_PX (height_out_spx);
     scale_ctx->rowstride_out = rowstride_out;
     scale_ctx->gamma_type = with_srgb ? SMOL_GAMMA_SRGB_LINEAR : SMOL_GAMMA_SRGB_COMPRESSED;
+
+
+#if 0
+    printf ("in: %u/%u\nout: %u/%u\n",
+            width_in, scale_ctx->width_in,
+            width_out, scale_ctx->width_out);
+#endif
 
     scale_ctx->post_row_func = post_row_func;
     scale_ctx->user_data = user_data;
 
-    pick_filter_params (width_in, width_out,
+    pick_filter_params (scale_ctx->width_in_px,
+                        scale_ctx->width_in_spx,
+                        scale_ctx->width_out_px,
+                        scale_ctx->width_out_spx,
                         &scale_ctx->width_halvings,
-                        &scale_ctx->width_bilin_out,
+                        &scale_ctx->prehalving_width_out_px,
+                        &scale_ctx->prehalving_width_out_spx,
                         &scale_ctx->filter_h,
                         &storage_type [0],
+                        &scale_ctx->first_opacity_h,
+                        &scale_ctx->last_opacity_h,
                         with_srgb);
-    pick_filter_params (height_in, height_out,
+    pick_filter_params (scale_ctx->height_in_px,
+                        scale_ctx->height_in_spx,
+                        scale_ctx->height_out_px,
+                        scale_ctx->height_out_spx,
                         &scale_ctx->height_halvings,
-                        &scale_ctx->height_bilin_out,
+                        &scale_ctx->prehalving_height_out_px,
+                        &scale_ctx->prehalving_height_out_spx,
                         &scale_ctx->filter_v,
                         &storage_type [1],
+                        &scale_ctx->first_opacity_v,
+                        &scale_ctx->last_opacity_v,
                         with_srgb);
 
     scale_ctx->storage_type = MAX (storage_type [0], storage_type [1]);
 
-    scale_ctx->precalc_x = smol_alloc_aligned (((scale_ctx->width_bilin_out + 1) * 2
-                                                + (scale_ctx->height_bilin_out + 1) * 2) * sizeof (uint16_t),
+    scale_ctx->precalc_x = smol_alloc_aligned (((scale_ctx->prehalving_width_out_px + 1) * 2
+                                                + (scale_ctx->prehalving_height_out_px + 1) * 2)
+                                               * sizeof (uint16_t),
                                                &scale_ctx->precalc_x_storage);
-    scale_ctx->precalc_y = scale_ctx->precalc_x + (scale_ctx->width_bilin_out + 1) * 2;
+    scale_ctx->precalc_y = scale_ctx->precalc_x + (scale_ctx->prehalving_width_out_px + 1) * 2;
 
     get_implementations (scale_ctx);
 }
@@ -898,13 +931,13 @@ smol_scale_new (const void *pixels_in,
     smol_scale_init (scale_ctx,
                      pixels_in,
                      pixel_type_in,
-                     width_in,
-                     height_in,
+                     SMOL_PX_TO_SPX (width_in),
+                     SMOL_PX_TO_SPX (height_in),
                      rowstride_in,
                      pixels_out,
                      pixel_type_out,
-                     width_out,
-                     height_out,
+                     SMOL_PX_TO_SPX (width_out),
+                     SMOL_PX_TO_SPX (height_out),
                      rowstride_out,
                      with_srgb,
                      NULL,
@@ -926,6 +959,41 @@ smol_scale_new_full (const void *pixels_in,
                      uint8_t with_srgb,
                      SmolPostRowFunc post_row_func,
                      void *user_data)
+{
+    SmolScaleCtx *scale_ctx;
+
+    scale_ctx = calloc (sizeof (SmolScaleCtx), 1);
+    smol_scale_init (scale_ctx,
+                     pixels_in,
+                     pixel_type_in,
+                     SMOL_PX_TO_SPX (width_in),
+                     SMOL_PX_TO_SPX (height_in),
+                     rowstride_in,
+                     pixels_out,
+                     pixel_type_out,
+                     SMOL_PX_TO_SPX (width_out),
+                     SMOL_PX_TO_SPX (height_out),
+                     rowstride_out,
+                     with_srgb,
+                     post_row_func,
+                     user_data);
+    return scale_ctx;
+}
+
+SmolScaleCtx *
+smol_scale_new_full_subpixel (const void *pixels_in,
+                              SmolPixelType pixel_type_in,
+                              uint32_t width_in,
+                              uint32_t height_in,
+                              uint32_t rowstride_in,
+                              void *pixels_out,
+                              SmolPixelType pixel_type_out,
+                              uint32_t width_out,
+                              uint32_t height_out,
+                              uint32_t rowstride_out,
+                              uint8_t with_srgb,
+                              SmolPostRowFunc post_row_func,
+                              void *user_data)
 {
     SmolScaleCtx *scale_ctx;
 
@@ -971,16 +1039,22 @@ smol_scale_simple (const void *pixels_in,
     SmolScaleCtx scale_ctx;
 
     smol_scale_init (&scale_ctx,
-                     pixels_in, pixel_type_in,
-                     width_in, height_in, rowstride_in,
-                     pixels_out, pixel_type_out,
-                     width_out, height_out, rowstride_out,
+                     pixels_in,
+                     pixel_type_in,
+                     SMOL_PX_TO_SPX (width_in),
+                     SMOL_PX_TO_SPX (height_in),
+                     rowstride_in,
+                     pixels_out,
+                     pixel_type_out,
+                     SMOL_PX_TO_SPX (width_out),
+                     SMOL_PX_TO_SPX (height_out),
+                     rowstride_out,
                      with_srgb,
                      NULL, NULL);
     do_rows (&scale_ctx,
              outrow_ofs_to_pointer (&scale_ctx, 0),
              0,
-             scale_ctx.height_out);
+             scale_ctx.height_out_px);
     smol_scale_finalize (&scale_ctx);
 }
 

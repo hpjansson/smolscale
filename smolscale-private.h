@@ -283,8 +283,12 @@ struct SmolScaleCtx
 
     const char *pixels_in;
     char *pixels_out;
-    uint32_t width_in, height_in, rowstride_in;
-    uint32_t width_out, height_out, rowstride_out;
+
+    uint32_t width_in_spx, height_in_spx;
+    uint32_t width_out_spx, height_out_spx;
+
+    uint32_t width_in_px, height_in_px, rowstride_in;
+    uint32_t width_out_px, height_out_px, rowstride_out;
 
     SmolPixelType pixel_type_in, pixel_type_out;
     SmolFilterType filter_h, filter_v;
@@ -302,13 +306,21 @@ struct SmolScaleCtx
 
     /* Each offset is split in two uint16s: { pixel index, fraction }. These
      * are relative to the image after halvings have taken place. */
+    /* FIXME: Should be precalc_h and precalc_v */
     uint16_t *precalc_x, *precalc_y;
     uint32_t span_mul_x, span_mul_y;  /* For box filter */
 
     void *precalc_x_storage;
 
-    uint32_t width_bilin_out, height_bilin_out;
+    uint32_t prehalving_width_out_spx, prehalving_height_out_spx;
+    uint32_t prehalving_width_out_px, prehalving_height_out_px;
+    /* FIXME: Should be halvings_h and halvings_v */
     unsigned int width_halvings, height_halvings;
+
+    /* Opacity of first and last column and row. Used for subpixel placement
+     * and applied after each scaling step. */
+    uint16_t first_opacity_h, last_opacity_h;
+    uint16_t first_opacity_v, last_opacity_v;
 };
 
 #define SRGB_LINEAR_BITS 11

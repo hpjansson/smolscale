@@ -2,6 +2,7 @@
 
 /* Copyright © 2019-2023 Hans Petter Jansson. See COPYING for details. */
 
+#include <assert.h>
 #include <stdlib.h> /* malloc, free, alloca */
 #include <string.h> /* memset */
 #include <limits.h>
@@ -13,25 +14,31 @@
 
 static void
 precalc_bilinear_array (uint16_t *array,
-                        uint32_t dim_in,
-                        uint32_t dim_out,
+                        uint64_t dim_in_spx,
+                        uint32_t dim_out_px,
+                        uint64_t dim_out_spx,
                         unsigned int make_absolute_offsets)
 {
-    uint64_t ofs_stepF, fracF, frac_stepF;
     uint16_t *pu16 = array;
     uint16_t last_ofs = 0;
+    uint32_t dim_in = SMOL_SPX_TO_PX (dim_in_spx);
+    uint32_t dim_out = dim_out_px;
+    uint64_t fracF, frac_stepF;
 
-    if (dim_in > dim_out)
+    assert (dim_in > 0);
+    assert (dim_out > 0);
+
+    if (dim_in_spx > dim_out_spx)
     {
         /* Minification */
-        frac_stepF = ofs_stepF = (dim_in * SMOL_BILIN_MULTIPLIER) / dim_out;
+        frac_stepF = ((uint64_t) dim_in_spx * SMOL_BILIN_MULTIPLIER) / dim_out_spx;
         fracF = (frac_stepF - SMOL_BILIN_MULTIPLIER) / 2;
     }
     else
     {
         /* Magnification */
-        frac_stepF = ofs_stepF = ((dim_in - 1) * SMOL_BILIN_MULTIPLIER)
-            / (dim_out > 1 ? (dim_out - 1) : 1);
+        frac_stepF = ((dim_in_spx - SMOL_SUBPIXEL_MUL) * SMOL_BILIN_MULTIPLIER)
+            / (dim_out_spx > SMOL_SUBPIXEL_MUL ? (dim_out_spx - SMOL_SUBPIXEL_MUL) : 1);
         fracF = 0;
     }
 
@@ -68,18 +75,20 @@ precalc_bilinear_array (uint16_t *array,
 static void
 precalc_boxes_array (uint16_t *array,
                      uint32_t *span_mul,
-                     uint32_t dim_in,
-                     uint32_t dim_out,
+                     uint32_t dim_in_spx,
+                     uint32_t dim_out_spx,
                      unsigned int make_absolute_offsets)
 {
     uint64_t fracF, frac_stepF;
     uint16_t *pu16 = array;
     uint16_t ofs, next_ofs;
+    uint32_t dim_in = SMOL_SPX_TO_PX (dim_in_spx);
+    uint32_t dim_out = SMOL_SPX_TO_PX (dim_out_spx);
     uint64_t f;
     uint64_t stride;
     uint64_t a, b;
 
-    frac_stepF = ((uint64_t) dim_in * SMOL_BIG_MUL) / (uint64_t) dim_out;
+    frac_stepF = ((uint64_t) dim_in_spx * SMOL_BIG_MUL) / (uint64_t) dim_out_spx;
     fracF = 0;
     ofs = 0;
 
@@ -144,14 +153,15 @@ init_horizontal (SmolScaleCtx *scale_ctx)
     else if (scale_ctx->filter_h == SMOL_FILTER_BOX)
     {
         precalc_boxes_array (scale_ctx->precalc_x, &scale_ctx->span_mul_x,
-                             scale_ctx->width_in, scale_ctx->width_out,
+                             scale_ctx->width_in_spx, scale_ctx->width_out_spx,
                              FALSE);
     }
     else /* SMOL_FILTER_BILINEAR_?H */
     {
         precalc_bilinear_array (scale_ctx->precalc_x,
-                                scale_ctx->width_in,
-                                scale_ctx->width_bilin_out,
+                                scale_ctx->width_in_spx,
+                                scale_ctx->prehalving_width_out_px,
+                                scale_ctx->prehalving_width_out_spx,
                                 FALSE);
     }
 }
@@ -166,14 +176,15 @@ init_vertical (SmolScaleCtx *scale_ctx)
     else if (scale_ctx->filter_v == SMOL_FILTER_BOX)
     {
         precalc_boxes_array (scale_ctx->precalc_y, &scale_ctx->span_mul_y,
-                             scale_ctx->height_in, scale_ctx->height_out,
+                             scale_ctx->height_in_spx, scale_ctx->height_out_spx,
                              TRUE);
     }
     else /* SMOL_FILTER_BILINEAR_?H */
     {
         precalc_bilinear_array (scale_ctx->precalc_y,
-                                scale_ctx->height_in,
-                                scale_ctx->height_bilin_out,
+                                scale_ctx->height_in_spx,
+                                scale_ctx->prehalving_height_out_px,
+                                scale_ctx->prehalving_height_out_spx,
                                 TRUE);
     }
 }
@@ -1294,7 +1305,7 @@ interp_horizontal_bilinear_##n_halvings##h_64bpp (const SmolScaleCtx *scale_ctx,
                                                   uint64_t * SMOL_RESTRICT row_parts_out) \
 { \
     const uint16_t * SMOL_RESTRICT precalc_x = scale_ctx->precalc_x; \
-    uint64_t *row_parts_out_max = row_parts_out + scale_ctx->width_out; \
+    uint64_t *row_parts_out_max = row_parts_out + scale_ctx->width_out_px; \
     uint64_t p, q; \
     uint64_t F; \
     int i; \
@@ -1327,7 +1338,7 @@ interp_horizontal_bilinear_##n_halvings##h_128bpp (const SmolScaleCtx *scale_ctx
                                                    uint64_t * SMOL_RESTRICT row_parts_out) \
 { \
     const uint16_t * SMOL_RESTRICT precalc_x = scale_ctx->precalc_x; \
-    uint64_t *row_parts_out_max = row_parts_out + scale_ctx->width_out * 2; \
+    uint64_t *row_parts_out_max = row_parts_out + scale_ctx->width_out_px * 2; \
     uint64_t p, q; \
     uint64_t F; \
     int i; \
@@ -1353,7 +1364,7 @@ interp_horizontal_bilinear_##n_halvings##h_128bpp (const SmolScaleCtx *scale_ctx
             q = row_parts_in [3]; \
 \
             accum [1] += ((((p - q) * F) >> 8) + q) & 0x00ffffff00ffffffULL; \
-            } \
+        } \
         *(row_parts_out++) = ((accum [0]) >> (n_halvings)) & 0x00ffffff00ffffffULL; \
         *(row_parts_out++) = ((accum [1]) >> (n_halvings)) & 0x00ffffff00ffffffULL; \
     } \
@@ -1366,7 +1377,7 @@ interp_horizontal_bilinear_0h_64bpp (const SmolScaleCtx *scale_ctx,
                                      uint64_t * SMOL_RESTRICT row_parts_out)
 {
     const uint16_t * SMOL_RESTRICT precalc_x = scale_ctx->precalc_x;
-    uint64_t * SMOL_RESTRICT row_parts_out_max = row_parts_out + scale_ctx->width_out;
+    uint64_t * SMOL_RESTRICT row_parts_out_max = row_parts_out + scale_ctx->width_out_px;
     uint64_t p, q;
     uint64_t F;
 
@@ -1392,7 +1403,7 @@ interp_horizontal_bilinear_0h_128bpp (const SmolScaleCtx *scale_ctx,
                                       uint64_t * SMOL_RESTRICT row_parts_out)
 {
     const uint16_t * SMOL_RESTRICT precalc_x = scale_ctx->precalc_x;
-    uint64_t * SMOL_RESTRICT row_parts_out_max = row_parts_out + scale_ctx->width_out * 2;
+    uint64_t * SMOL_RESTRICT row_parts_out_max = row_parts_out + scale_ctx->width_out_px * 2;
     uint64_t p, q;
     uint64_t F;
 
@@ -1431,7 +1442,7 @@ interp_horizontal_boxes_64bpp (const SmolScaleCtx *scale_ctx,
 {
     const uint64_t * SMOL_RESTRICT pp;
     const uint16_t *precalc_x = scale_ctx->precalc_x;
-    uint64_t *row_parts_out_max = row_parts_out + scale_ctx->width_out - 1;
+    uint64_t *row_parts_out_max = row_parts_out + scale_ctx->width_out_px - 1;
     uint64_t accum = 0;
     uint64_t p, q, r, s;
     uint32_t n;
@@ -1485,7 +1496,7 @@ interp_horizontal_boxes_128bpp (const SmolScaleCtx *scale_ctx,
 {
     const uint64_t * SMOL_RESTRICT pp;
     const uint16_t *precalc_x = scale_ctx->precalc_x;
-    uint64_t *row_parts_out_max = row_parts_out + (scale_ctx->width_out - 1) * 2;
+    uint64_t *row_parts_out_max = row_parts_out + (scale_ctx->width_out_px - 1) * 2;
     uint64_t accum [2] = { 0, 0 };
     uint64_t p [2], q [2], r [2], s [2];
     uint32_t n;
@@ -1560,7 +1571,7 @@ interp_horizontal_one_64bpp (const SmolScaleCtx *scale_ctx,
                              const uint64_t * SMOL_RESTRICT row_parts_in,
                              uint64_t * SMOL_RESTRICT row_parts_out)
 {
-    uint64_t *row_parts_out_max = row_parts_out + scale_ctx->width_out;
+    uint64_t *row_parts_out_max = row_parts_out + scale_ctx->width_out_px;
     uint64_t part;
 
     SMOL_ASSUME_ALIGNED (row_parts_in, const uint64_t *);
@@ -1576,7 +1587,7 @@ interp_horizontal_one_128bpp (const SmolScaleCtx *scale_ctx,
                               const uint64_t * SMOL_RESTRICT row_parts_in,
                               uint64_t * SMOL_RESTRICT row_parts_out)
 {
-    uint64_t *row_parts_out_max = row_parts_out + scale_ctx->width_out * 2;
+    uint64_t *row_parts_out_max = row_parts_out + scale_ctx->width_out_px * 2;
 
     SMOL_ASSUME_ALIGNED (row_parts_in, const uint64_t *);
     SMOL_ASSUME_ALIGNED (row_parts_out, uint64_t *);
@@ -1596,7 +1607,7 @@ interp_horizontal_copy_64bpp (const SmolScaleCtx *scale_ctx,
     SMOL_ASSUME_ALIGNED (row_parts_in, const uint64_t *);
     SMOL_ASSUME_ALIGNED (row_parts_out, uint64_t *);
 
-    memcpy (row_parts_out, row_parts_in, scale_ctx->width_out * sizeof (uint64_t));
+    memcpy (row_parts_out, row_parts_in, scale_ctx->width_out_px * sizeof (uint64_t));
 }
 
 static void
@@ -1607,7 +1618,61 @@ interp_horizontal_copy_128bpp (const SmolScaleCtx *scale_ctx,
     SMOL_ASSUME_ALIGNED (row_parts_in, const uint64_t *);
     SMOL_ASSUME_ALIGNED (row_parts_out, uint64_t *);
 
-    memcpy (row_parts_out, row_parts_in, scale_ctx->width_out * 2 * sizeof (uint64_t));
+    memcpy (row_parts_out, row_parts_in, scale_ctx->width_out_px * 2 * sizeof (uint64_t));
+}
+
+static SMOL_INLINE void
+apply_subpixel_opacity_64bpp (uint64_t *u64_inout, uint16_t opacity)
+{
+    *u64_inout = ((*u64_inout * opacity) >> SMOL_SUBPIXEL_SHIFT) & 0x00ff00ff00ff00ffULL;
+}
+
+static SMOL_INLINE void
+apply_subpixel_opacity_128bpp (uint64_t *u64_inout, uint16_t opacity)
+{
+    uint64_t t [2];
+
+#if 1
+    printf ("Before (p): %016llx, %016llx, opacity=%u\n", u64_inout [0], u64_inout [1], opacity);
+    unpremul_p16_to_u_128bpp (u64_inout, t, (u64_inout [1] >> 8) & 0xff);
+    printf ("Before (u): %016llx, %016llx\n", t [0], t [1]);
+#endif
+
+    u64_inout [0] = ((u64_inout [0] * opacity) >> SMOL_SUBPIXEL_SHIFT) & 0x00ffffff00ffffffULL;
+    u64_inout [1] = ((u64_inout [1] * opacity) >> SMOL_SUBPIXEL_SHIFT) & 0x00ffffff00ffffffULL;
+
+#if 1
+    printf ("After (p):  %016llx, %016llx\n", u64_inout [0], u64_inout [1]);
+    unpremul_p16_to_u_128bpp (u64_inout, t, (u64_inout [1] >> 8) & 0xff);
+    printf ("After (u):  %016llx, %016llx\n\n", t [0], t [1]);
+#endif
+
+    if ((u64_inout [1] & 0xffffffff) < (u64_inout [1] >> 32))
+        u64_inout [1] = (u64_inout [1] & 0xffffffff00000000ULL) | (u64_inout [1] >> 32);
+
+    if ((u64_inout [1] & 0xffffffff) < (u64_inout [0] & 0xffffffff))
+        u64_inout [1] = (u64_inout [1] & 0xffffffff00000000ULL) | (u64_inout [0] & 0xffffffff);
+
+    if ((u64_inout [1] & 0xffffffff) < (u64_inout [0] >> 32))
+        u64_inout [1] = (u64_inout [1] & 0xffffffff00000000ULL) | (u64_inout [0] >> 32);
+
+
+}
+
+static void
+apply_horiz_edge_opacity (const SmolScaleCtx *scale_ctx,
+                          uint64_t *row_parts)
+{
+    if (scale_ctx->storage_type == SMOL_STORAGE_64BPP)
+    {
+        apply_subpixel_opacity_64bpp (&row_parts [0], scale_ctx->first_opacity_h);
+        apply_subpixel_opacity_64bpp (&row_parts [scale_ctx->width_out_px - 1], scale_ctx->last_opacity_h);
+    }
+    else
+    {
+        apply_subpixel_opacity_128bpp (&row_parts [0], scale_ctx->first_opacity_h);
+        apply_subpixel_opacity_128bpp (&row_parts [(scale_ctx->width_out_px - 1) * 2], scale_ctx->last_opacity_h);
+    }
 }
 
 static void
@@ -1627,18 +1692,20 @@ scale_horizontal (const SmolScaleCtx *scale_ctx,
     {
         if (!vertical_ctx->in_aligned)
             vertical_ctx->in_aligned =
-                smol_alloc_aligned (scale_ctx->width_in * sizeof (uint32_t),
+                smol_alloc_aligned (scale_ctx->width_in_px * sizeof (uint32_t),
                                     &vertical_ctx->in_aligned_storage);
-        memcpy (vertical_ctx->in_aligned, row_in, scale_ctx->width_in * sizeof (uint32_t));
+        memcpy (vertical_ctx->in_aligned, row_in, scale_ctx->width_in_px * sizeof (uint32_t));
         row_in = (const char *) vertical_ctx->in_aligned;
     }
 
     scale_ctx->unpack_row_func ((const uint32_t *) row_in,
                                 unpacked_in,
-                                scale_ctx->width_in);
+                                scale_ctx->width_in_px);
     scale_ctx->hfilter_func (scale_ctx,
                              unpacked_in,
                              row_parts_out);
+
+    apply_horiz_edge_opacity (scale_ctx, row_parts_out);
 }
 
 /* ---------------- *
@@ -1853,7 +1920,7 @@ scale_outrow_bilinear_##n_halvings##h_64bpp (const SmolScaleCtx *scale_ctx, \
                                           vertical_ctx->parts_row [0], \
                                           vertical_ctx->parts_row [1], \
                                           vertical_ctx->parts_row [2], \
-                                          scale_ctx->width_out); \
+                                          scale_ctx->width_out_px); \
     bilin_index++; \
 \
     for (i = 0; i < (1 << (n_halvings)) - 2; i++) \
@@ -1863,7 +1930,7 @@ scale_outrow_bilinear_##n_halvings##h_64bpp (const SmolScaleCtx *scale_ctx, \
                                             vertical_ctx->parts_row [0], \
                                             vertical_ctx->parts_row [1], \
                                             vertical_ctx->parts_row [2], \
-                                            scale_ctx->width_out); \
+                                            scale_ctx->width_out_px); \
         bilin_index++; \
     } \
 \
@@ -1872,9 +1939,9 @@ scale_outrow_bilinear_##n_halvings##h_64bpp (const SmolScaleCtx *scale_ctx, \
                                                           vertical_ctx->parts_row [0], \
                                                           vertical_ctx->parts_row [1], \
                                                           vertical_ctx->parts_row [2], \
-                                                          scale_ctx->width_out); \
+                                                          scale_ctx->width_out_px); \
 \
-    scale_ctx->pack_row_func (vertical_ctx->parts_row [2], row_out, scale_ctx->width_out); \
+    scale_ctx->pack_row_func (vertical_ctx->parts_row [2], row_out, scale_ctx->width_out_px); \
 } \
 \
 static void \
@@ -1891,7 +1958,7 @@ scale_outrow_bilinear_##n_halvings##h_128bpp (const SmolScaleCtx *scale_ctx, \
                                            vertical_ctx->parts_row [0], \
                                            vertical_ctx->parts_row [1], \
                                            vertical_ctx->parts_row [2], \
-                                           scale_ctx->width_out * 2); \
+                                           scale_ctx->width_out_px * 2); \
     bilin_index++; \
 \
     for (i = 0; i < (1 << (n_halvings)) - 2; i++) \
@@ -1901,7 +1968,7 @@ scale_outrow_bilinear_##n_halvings##h_128bpp (const SmolScaleCtx *scale_ctx, \
                                              vertical_ctx->parts_row [0], \
                                              vertical_ctx->parts_row [1], \
                                              vertical_ctx->parts_row [2], \
-                                             scale_ctx->width_out * 2); \
+                                             scale_ctx->width_out_px * 2); \
         bilin_index++; \
     } \
 \
@@ -1910,9 +1977,9 @@ scale_outrow_bilinear_##n_halvings##h_128bpp (const SmolScaleCtx *scale_ctx, \
                                                            vertical_ctx->parts_row [0], \
                                                            vertical_ctx->parts_row [1], \
                                                            vertical_ctx->parts_row [2], \
-                                                           scale_ctx->width_out * 2); \
+                                                           scale_ctx->width_out_px * 2); \
 \
-    scale_ctx->pack_row_func (vertical_ctx->parts_row [2], row_out, scale_ctx->width_out); \
+    scale_ctx->pack_row_func (vertical_ctx->parts_row [2], row_out, scale_ctx->width_out_px); \
 }
 
 static void
@@ -1926,8 +1993,8 @@ scale_outrow_bilinear_0h_64bpp (const SmolScaleCtx *scale_ctx,
                                           vertical_ctx->parts_row [0],
                                           vertical_ctx->parts_row [1],
                                           vertical_ctx->parts_row [2],
-                                          scale_ctx->width_out);
-    scale_ctx->pack_row_func (vertical_ctx->parts_row [2], row_out, scale_ctx->width_out);
+                                          scale_ctx->width_out_px);
+    scale_ctx->pack_row_func (vertical_ctx->parts_row [2], row_out, scale_ctx->width_out_px);
 }
 
 static void
@@ -1941,8 +2008,8 @@ scale_outrow_bilinear_0h_128bpp (const SmolScaleCtx *scale_ctx,
                                            vertical_ctx->parts_row [0],
                                            vertical_ctx->parts_row [1],
                                            vertical_ctx->parts_row [2],
-                                           scale_ctx->width_out * 2);
-    scale_ctx->pack_row_func (vertical_ctx->parts_row [2], row_out, scale_ctx->width_out);
+                                           scale_ctx->width_out_px * 2);
+    scale_ctx->pack_row_func (vertical_ctx->parts_row [2], row_out, scale_ctx->width_out_px);
 }
 
 DEF_INTERP_VERTICAL_BILINEAR_FINAL(1)
@@ -1960,15 +2027,15 @@ scale_outrow_bilinear_1h_64bpp (const SmolScaleCtx *scale_ctx,
                                           vertical_ctx->parts_row [0],
                                           vertical_ctx->parts_row [1],
                                           vertical_ctx->parts_row [2],
-                                          scale_ctx->width_out);
+                                          scale_ctx->width_out_px);
     bilin_index++;
     update_vertical_ctx_bilinear (scale_ctx, vertical_ctx, bilin_index);
     interp_vertical_bilinear_final_1h_64bpp (scale_ctx->precalc_y [bilin_index * 2 + 1],
                                              vertical_ctx->parts_row [0],
                                              vertical_ctx->parts_row [1],
                                              vertical_ctx->parts_row [2],
-                                             scale_ctx->width_out);
-    scale_ctx->pack_row_func (vertical_ctx->parts_row [2], row_out, scale_ctx->width_out);
+                                             scale_ctx->width_out_px);
+    scale_ctx->pack_row_func (vertical_ctx->parts_row [2], row_out, scale_ctx->width_out_px);
 }
 
 static void
@@ -1984,15 +2051,15 @@ scale_outrow_bilinear_1h_128bpp (const SmolScaleCtx *scale_ctx,
                                            vertical_ctx->parts_row [0],
                                            vertical_ctx->parts_row [1],
                                            vertical_ctx->parts_row [2],
-                                           scale_ctx->width_out * 2);
+                                           scale_ctx->width_out_px * 2);
     bilin_index++;
     update_vertical_ctx_bilinear (scale_ctx, vertical_ctx, bilin_index);
     interp_vertical_bilinear_final_1h_128bpp (scale_ctx->precalc_y [bilin_index * 2 + 1],
                                               vertical_ctx->parts_row [0],
                                               vertical_ctx->parts_row [1],
                                               vertical_ctx->parts_row [2],
-                                              scale_ctx->width_out * 2);
-    scale_ctx->pack_row_func (vertical_ctx->parts_row [2], row_out, scale_ctx->width_out);
+                                              scale_ctx->width_out_px * 2);
+    scale_ctx->pack_row_func (vertical_ctx->parts_row [2], row_out, scale_ctx->width_out_px);
 }
 
 DEF_INTERP_VERTICAL_BILINEAR_FINAL(2)
@@ -2020,6 +2087,26 @@ finalize_vertical_64bpp (const uint64_t * SMOL_RESTRICT accums,
     while (parts_out != parts_out_max)
     {
         *(parts_out++) = scale_64bpp (*(accums++), multiplier);
+    }
+}
+
+static void
+finalize_vertical_with_opacity_64bpp (const uint64_t * SMOL_RESTRICT accums,
+                                      uint64_t multiplier,
+                                      uint64_t * SMOL_RESTRICT parts_out,
+                                      uint32_t n,
+                                      uint16_t opacity)
+{
+    uint64_t *parts_out_max = parts_out + n;
+
+    SMOL_ASSUME_ALIGNED (accums, const uint64_t *);
+    SMOL_ASSUME_ALIGNED (parts_out, uint64_t *);
+
+    while (parts_out != parts_out_max)
+    {
+        *parts_out = scale_64bpp (*(accums++), multiplier);
+        apply_subpixel_opacity_64bpp (parts_out, opacity);
+        parts_out++;
     }
 }
 
@@ -2089,12 +2176,12 @@ update_vertical_ctx_box_64bpp (const SmolScaleCtx *scale_ctx,
                           vertical_ctx,
                           inrow_ofs_to_pointer (scale_ctx, ofs_y),
                           vertical_ctx->parts_row [0]);
-        weight_edge_row_64bpp (vertical_ctx->parts_row [0], w1, scale_ctx->width_out);
+        weight_edge_row_64bpp (vertical_ctx->parts_row [0], w1, scale_ctx->width_out_px);
     }
 
     /* When w2 == 0, the final inrow may be out of bounds. Don't try to access it in
      * that case. */
-    if (w2 || ofs_y_max < scale_ctx->height_in)
+    if (w2 || ofs_y_max < scale_ctx->height_in_px)
     {
         scale_horizontal (scale_ctx,
                           vertical_ctx,
@@ -2103,7 +2190,7 @@ update_vertical_ctx_box_64bpp (const SmolScaleCtx *scale_ctx,
     }
     else
     {
-        memset (vertical_ctx->parts_row [1], 0, scale_ctx->width_out * sizeof (uint64_t));
+        memset (vertical_ctx->parts_row [1], 0, scale_ctx->width_out_px * sizeof (uint64_t));
     }
 
     vertical_ctx->in_ofs = ofs_y_max;
@@ -2134,7 +2221,7 @@ scale_outrow_box_64bpp (const SmolScaleCtx *scale_ctx,
                                           vertical_ctx->parts_row [1],
                                           vertical_ctx->parts_row [2],
                                           w2,
-                                          scale_ctx->width_out);
+                                          scale_ctx->width_out_px);
 
     ofs_y++;
 
@@ -2148,16 +2235,36 @@ scale_outrow_box_64bpp (const SmolScaleCtx *scale_ctx,
                           vertical_ctx->parts_row [0]);
         add_parts (vertical_ctx->parts_row [0],
                    vertical_ctx->parts_row [2],
-                   scale_ctx->width_out);
+                   scale_ctx->width_out_px);
 
         ofs_y++;
     }
 
-    finalize_vertical_64bpp (vertical_ctx->parts_row [2],
-                             scale_ctx->span_mul_y,
-                             vertical_ctx->parts_row [0],
-                             scale_ctx->width_out);
-    scale_ctx->pack_row_func (vertical_ctx->parts_row [0], row_out, scale_ctx->width_out);
+    if (outrow_index == 0 && scale_ctx->first_opacity_v < 256)
+    {
+        finalize_vertical_with_opacity_64bpp (vertical_ctx->parts_row [2],
+                                              scale_ctx->span_mul_y,
+                                              vertical_ctx->parts_row [0],
+                                              scale_ctx->width_out_px,
+                                              scale_ctx->first_opacity_v);
+    }
+    else if (scale_ctx->height_out_px - 1 && scale_ctx->last_opacity_v < 256)
+    {
+        finalize_vertical_with_opacity_64bpp (vertical_ctx->parts_row [2],
+                                              scale_ctx->span_mul_y,
+                                              vertical_ctx->parts_row [0],
+                                              scale_ctx->width_out_px,
+                                              scale_ctx->last_opacity_v);
+    }
+    else
+    {
+        finalize_vertical_64bpp (vertical_ctx->parts_row [2],
+                                 scale_ctx->span_mul_y,
+                                 vertical_ctx->parts_row [0],
+                                 scale_ctx->width_out_px);
+    }
+
+    scale_ctx->pack_row_func (vertical_ctx->parts_row [0], row_out, scale_ctx->width_out_px);
 }
 
 static void
@@ -2175,6 +2282,27 @@ finalize_vertical_128bpp (const uint64_t * SMOL_RESTRICT accums,
     {
         *(parts_out++) = scale_128bpp_half (*(accums++), multiplier);
         *(parts_out++) = scale_128bpp_half (*(accums++), multiplier);
+    }
+}
+
+static void
+finalize_vertical_with_opacity_128bpp (const uint64_t * SMOL_RESTRICT accums,
+                                       uint64_t multiplier,
+                                       uint64_t * SMOL_RESTRICT parts_out,
+                                       uint32_t n,
+                                       uint16_t opacity)
+{
+    uint64_t *parts_out_max = parts_out + n * 2;
+
+    SMOL_ASSUME_ALIGNED (accums, const uint64_t *);
+    SMOL_ASSUME_ALIGNED (parts_out, uint64_t *);
+
+    while (parts_out != parts_out_max)
+    {
+        parts_out [0] = scale_128bpp_half (*(accums++), multiplier);
+        parts_out [1] = scale_128bpp_half (*(accums++), multiplier);
+        apply_subpixel_opacity_128bpp (parts_out, opacity);
+        parts_out += 2;
     }
 }
 
@@ -2217,7 +2345,7 @@ scale_outrow_box_128bpp (const SmolScaleCtx *scale_ctx,
                       vertical_ctx->parts_row [0]);
     weight_row_128bpp (vertical_ctx->parts_row [0],
                        outrow_index == 0 ? 256 : 255 - scale_ctx->precalc_y [outrow_index * 2 - 1],
-                       scale_ctx->width_out);
+                       scale_ctx->width_out_px);
     ofs_y++;
 
     /* Add up whole rows */
@@ -2230,7 +2358,7 @@ scale_outrow_box_128bpp (const SmolScaleCtx *scale_ctx,
                           vertical_ctx->parts_row [1]);
         add_parts (vertical_ctx->parts_row [1],
                    vertical_ctx->parts_row [0],
-                   scale_ctx->width_out * 2);
+                   scale_ctx->width_out_px * 2);
 
         ofs_y++;
     }
@@ -2246,17 +2374,37 @@ scale_outrow_box_128bpp (const SmolScaleCtx *scale_ctx,
                           vertical_ctx->parts_row [1]);
         weight_row_128bpp (vertical_ctx->parts_row [1],
                            w - 1,  /* Subtract 1 to avoid overflow */
-                           scale_ctx->width_out);
+                           scale_ctx->width_out_px);
         add_parts (vertical_ctx->parts_row [1],
                    vertical_ctx->parts_row [0],
-                   scale_ctx->width_out * 2);
+                   scale_ctx->width_out_px * 2);
     }
 
-    finalize_vertical_128bpp (vertical_ctx->parts_row [0],
-                              scale_ctx->span_mul_y,
-                              vertical_ctx->parts_row [1],
-                              scale_ctx->width_out);
-    scale_ctx->pack_row_func (vertical_ctx->parts_row [1], row_out, scale_ctx->width_out);
+    if (outrow_index == 0 && scale_ctx->first_opacity_v < 256)
+    {
+        finalize_vertical_with_opacity_128bpp (vertical_ctx->parts_row [0],
+                                               scale_ctx->span_mul_y,
+                                               vertical_ctx->parts_row [1],
+                                               scale_ctx->width_out_px,
+                                               scale_ctx->first_opacity_v);
+    }
+    else if (scale_ctx->height_out_px - 1 && scale_ctx->last_opacity_v < 256)
+    {
+        finalize_vertical_with_opacity_128bpp (vertical_ctx->parts_row [0],
+                                               scale_ctx->span_mul_y,
+                                               vertical_ctx->parts_row [1],
+                                               scale_ctx->width_out_px,
+                                               scale_ctx->last_opacity_v);
+    }
+    else
+    {
+        finalize_vertical_128bpp (vertical_ctx->parts_row [0],
+                                  scale_ctx->span_mul_y,
+                                  vertical_ctx->parts_row [1],
+                                  scale_ctx->width_out_px);
+    }
+
+    scale_ctx->pack_row_func (vertical_ctx->parts_row [1], row_out, scale_ctx->width_out_px);
 }
 
 static void
@@ -2278,7 +2426,7 @@ scale_outrow_one_64bpp (const SmolScaleCtx *scale_ctx,
         vertical_ctx->in_ofs = 0;
     }
 
-    scale_ctx->pack_row_func (vertical_ctx->parts_row [0], row_out, scale_ctx->width_out);
+    scale_ctx->pack_row_func (vertical_ctx->parts_row [0], row_out, scale_ctx->width_out_px);
 }
 
 static void
@@ -2300,7 +2448,7 @@ scale_outrow_one_128bpp (const SmolScaleCtx *scale_ctx,
         vertical_ctx->in_ofs = 0;
     }
 
-    scale_ctx->pack_row_func (vertical_ctx->parts_row [0], row_out, scale_ctx->width_out);
+    scale_ctx->pack_row_func (vertical_ctx->parts_row [0], row_out, scale_ctx->width_out_px);
 }
 
 static void
@@ -2314,7 +2462,7 @@ scale_outrow_copy (const SmolScaleCtx *scale_ctx,
                       inrow_ofs_to_pointer (scale_ctx, row_index),
                       vertical_ctx->parts_row [0]);
 
-    scale_ctx->pack_row_func (vertical_ctx->parts_row [0], row_out, scale_ctx->width_out);
+    scale_ctx->pack_row_func (vertical_ctx->parts_row [0], row_out, scale_ctx->width_out_px);
 }
 
 /* --------------- *
