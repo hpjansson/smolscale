@@ -448,20 +448,24 @@ pick_filter_params (uint32_t dim_in,
 
     if (dim_in > dim_out * 255)
     {
-        *filter_out = SMOL_FILTER_BOX;
         *storage_out = SMOL_STORAGE_128BPP;
+        *filter_out = SMOL_FILTER_BOX;
+        *last_opacity = 256; /* The box filter kindly handles edge opacity */
     }
     else if (dim_in > dim_out * 8)
     {
         *filter_out = SMOL_FILTER_BOX;
+        *last_opacity = 256; /* The box filter kindly handles edge opacity */
     }
     else if (dim_in <= 1)
     {
         *filter_out = SMOL_FILTER_ONE;
+        *last_opacity = ((dim_out_spx - 1) % SMOL_SUBPIXEL_MUL) + 1;
     }
     else if (dim_in_spx == dim_out_spx)
     {
         *filter_out = SMOL_FILTER_COPY;
+        *last_opacity = 256;
     }
     else
     {
@@ -480,10 +484,12 @@ pick_filter_params (uint32_t dim_in,
         *dim_prehalving_out_spx = dim_out_spx << n_halvings;
         *filter_out = SMOL_FILTER_BILINEAR_0H + n_halvings;
         *halvings_out = n_halvings;
+
+        *last_opacity = ((dim_out_spx - 1) % SMOL_SUBPIXEL_MUL) + 1;
     }
 
+    /* Offsetting is not supported yet */
     *first_opacity = 256;
-    *last_opacity = ((dim_out_spx - 1) % SMOL_SUBPIXEL_MUL) + 1;
 }
 
 /* ------------------- *
@@ -532,10 +538,21 @@ do_rows (const SmolScaleCtx *scale_ctx,
 
     for (i = 0; i < n_stored_rows; i++)
     {
+        /* Allocate space for an extra pixel at the rightmost edge. This pixel
+         * allows bilinear horizontal sampling to exceed the input width and
+         * produce transparency when the output is smaller than its whole-pixel
+         * count. This is especially noticeable with halving, which can
+         * produce 2^n such samples (the extra pixel is sampled repeatedly in
+         * those cases). */
+
         vertical_ctx.parts_row [i] =
-            smol_alloc_aligned (MAX (scale_ctx->width_in_px, scale_ctx->width_out_px)
+            smol_alloc_aligned (MAX (scale_ctx->width_in_px + 1, scale_ctx->width_out_px)
                                 * n_parts_per_pixel * sizeof (uint64_t),
                                 &vertical_ctx.row_storage [i]);
+
+        vertical_ctx.parts_row [i] [scale_ctx->width_in_px * n_parts_per_pixel] = 0;
+        if (n_parts_per_pixel == 2)
+            vertical_ctx.parts_row [i] [scale_ctx->width_in_px * n_parts_per_pixel + 1] = 0;
     }
 
     for (i = row_out_index; i < row_out_index + n_rows; i++)

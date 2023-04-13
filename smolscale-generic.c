@@ -48,7 +48,7 @@ precalc_bilinear_array (uint16_t *array,
 
         /* We sample ofs and its neighbor -- prevent out of bounds access
          * for the latter. */
-        if (ofs >= dim_in - 1)
+        if (ofs >= dim_in)
             break;
 
         *(pu16++) = make_absolute_offsets ? ofs : ofs - last_ofs;
@@ -64,11 +64,11 @@ precalc_bilinear_array (uint16_t *array,
      * bias towards the last pixel */
     while (dim_out)
     {
-        *(pu16++) = make_absolute_offsets ? dim_in - 2 : (dim_in - 2) - last_ofs;
+        *(pu16++) = make_absolute_offsets ? dim_in - 1 : (dim_in - 1) - last_ofs;
         *(pu16++) = 0;
         dim_out--;
 
-        last_ofs = dim_in - 2;
+        last_ofs = dim_in - 1;
     }
 }
 
