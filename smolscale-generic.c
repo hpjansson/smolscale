@@ -1294,6 +1294,91 @@ add_parts (const uint64_t * SMOL_RESTRICT parts_in,
         *(parts_acc_out++) += *(parts_in++);
 }
 
+static SMOL_INLINE void
+apply_subpixel_opacity_64bpp (uint64_t * SMOL_RESTRICT u64_inout, uint16_t opacity)
+{
+    *u64_inout = ((*u64_inout * opacity) >> SMOL_SUBPIXEL_SHIFT) & 0x00ff00ff00ff00ffULL;
+}
+
+static SMOL_INLINE void
+apply_subpixel_opacity_128bpp_half (uint64_t * SMOL_RESTRICT u64_inout, uint16_t opacity)
+{
+    *u64_inout = ((*u64_inout * opacity) >> SMOL_SUBPIXEL_SHIFT) & 0x00ffffff00ffffffULL;
+}
+
+static SMOL_INLINE void
+apply_subpixel_opacity_128bpp (uint64_t *u64_inout, uint16_t opacity)
+{
+    uint64_t t [2];
+
+#if 0
+    printf ("Before (p): %016llx, %016llx, opacity=%u\n", u64_inout [0], u64_inout [1], opacity);
+    unpremul_p16_to_u_128bpp (u64_inout, t, (u64_inout [1] >> 8) & 0xff);
+    printf ("Before (u): %016llx, %016llx\n", t [0], t [1]);
+#endif
+
+    apply_subpixel_opacity_128bpp_half (u64_inout, opacity);
+    apply_subpixel_opacity_128bpp_half (u64_inout + 1, opacity);
+
+#if 0
+    printf ("After (p):  %016llx, %016llx\n", u64_inout [0], u64_inout [1]);
+    unpremul_p16_to_u_128bpp (u64_inout, t, (u64_inout [1] >> 8) & 0xff);
+    printf ("After (u):  %016llx, %016llx\n\n", t [0], t [1]);
+#endif
+
+    if ((u64_inout [1] & 0xffffffff) < (u64_inout [1] >> 32))
+        u64_inout [1] = (u64_inout [1] & 0xffffffff00000000ULL) | (u64_inout [1] >> 32);
+
+    if ((u64_inout [1] & 0xffffffff) < (u64_inout [0] & 0xffffffff))
+        u64_inout [1] = (u64_inout [1] & 0xffffffff00000000ULL) | (u64_inout [0] & 0xffffffff);
+
+    if ((u64_inout [1] & 0xffffffff) < (u64_inout [0] >> 32))
+        u64_inout [1] = (u64_inout [1] & 0xffffffff00000000ULL) | (u64_inout [0] >> 32);
+
+
+}
+
+static void
+apply_subpixel_opacity_row_64bpp (uint64_t * SMOL_RESTRICT u64_inout, int n_pixels, uint16_t opacity)
+{
+    uint64_t *u64_inout_max = u64_inout + n_pixels;
+
+    while (u64_inout != u64_inout_max)
+    {
+        apply_subpixel_opacity_64bpp (u64_inout, opacity);
+        u64_inout++;
+    }
+}
+
+static void
+apply_subpixel_opacity_row_128bpp (uint64_t * SMOL_RESTRICT u64_inout, int n_pixels, uint16_t opacity)
+{
+    uint64_t *u64_inout_max = u64_inout + (n_pixels * 2);
+
+    while (u64_inout != u64_inout_max)
+    {
+        apply_subpixel_opacity_128bpp_half (u64_inout, opacity);
+        apply_subpixel_opacity_128bpp_half (u64_inout + 1, opacity);
+        u64_inout += 2;
+    }
+}
+
+static void
+apply_horiz_edge_opacity (const SmolScaleCtx *scale_ctx,
+                          uint64_t *row_parts)
+{
+    if (scale_ctx->storage_type == SMOL_STORAGE_64BPP)
+    {
+        apply_subpixel_opacity_64bpp (&row_parts [0], scale_ctx->first_opacity_h);
+        apply_subpixel_opacity_64bpp (&row_parts [scale_ctx->width_out_px - 1], scale_ctx->last_opacity_h);
+    }
+    else
+    {
+        apply_subpixel_opacity_128bpp (&row_parts [0], scale_ctx->first_opacity_h);
+        apply_subpixel_opacity_128bpp (&row_parts [(scale_ctx->width_out_px - 1) * 2], scale_ctx->last_opacity_h);
+    }
+}
+
 /* ------------------ *
  * Horizontal scaling *
  * ------------------ */
@@ -1619,91 +1704,6 @@ interp_horizontal_copy_128bpp (const SmolScaleCtx *scale_ctx,
     SMOL_ASSUME_ALIGNED (row_parts_out, uint64_t *);
 
     memcpy (row_parts_out, row_parts_in, scale_ctx->width_out_px * 2 * sizeof (uint64_t));
-}
-
-static SMOL_INLINE void
-apply_subpixel_opacity_64bpp (uint64_t * SMOL_RESTRICT u64_inout, uint16_t opacity)
-{
-    *u64_inout = ((*u64_inout * opacity) >> SMOL_SUBPIXEL_SHIFT) & 0x00ff00ff00ff00ffULL;
-}
-
-static SMOL_INLINE void
-apply_subpixel_opacity_128bpp_half (uint64_t * SMOL_RESTRICT u64_inout, uint16_t opacity)
-{
-    *u64_inout = ((*u64_inout * opacity) >> SMOL_SUBPIXEL_SHIFT) & 0x00ffffff00ffffffULL;
-}
-
-static void
-apply_subpixel_opacity_row_64bpp (uint64_t * SMOL_RESTRICT u64_inout, int n_pixels, uint16_t opacity)
-{
-    uint64_t *u64_inout_max = u64_inout + n_pixels;
-
-    while (u64_inout != u64_inout_max)
-    {
-        apply_subpixel_opacity_64bpp (u64_inout, opacity);
-        u64_inout++;
-    }
-}
-
-static void
-apply_subpixel_opacity_row_128bpp (uint64_t * SMOL_RESTRICT u64_inout, int n_pixels, uint16_t opacity)
-{
-    uint64_t *u64_inout_max = u64_inout + (n_pixels * 2);
-
-    while (u64_inout != u64_inout_max)
-    {
-        apply_subpixel_opacity_128bpp_half (u64_inout, opacity);
-        apply_subpixel_opacity_128bpp_half (u64_inout + 1, opacity);
-        u64_inout += 2;
-    }
-}
-
-static SMOL_INLINE void
-apply_subpixel_opacity_128bpp (uint64_t *u64_inout, uint16_t opacity)
-{
-    uint64_t t [2];
-
-#if 1
-    printf ("Before (p): %016llx, %016llx, opacity=%u\n", u64_inout [0], u64_inout [1], opacity);
-    unpremul_p16_to_u_128bpp (u64_inout, t, (u64_inout [1] >> 8) & 0xff);
-    printf ("Before (u): %016llx, %016llx\n", t [0], t [1]);
-#endif
-
-    apply_subpixel_opacity_128bpp_half (u64_inout, opacity);
-    apply_subpixel_opacity_128bpp_half (u64_inout + 1, opacity);
-
-#if 1
-    printf ("After (p):  %016llx, %016llx\n", u64_inout [0], u64_inout [1]);
-    unpremul_p16_to_u_128bpp (u64_inout, t, (u64_inout [1] >> 8) & 0xff);
-    printf ("After (u):  %016llx, %016llx\n\n", t [0], t [1]);
-#endif
-
-    if ((u64_inout [1] & 0xffffffff) < (u64_inout [1] >> 32))
-        u64_inout [1] = (u64_inout [1] & 0xffffffff00000000ULL) | (u64_inout [1] >> 32);
-
-    if ((u64_inout [1] & 0xffffffff) < (u64_inout [0] & 0xffffffff))
-        u64_inout [1] = (u64_inout [1] & 0xffffffff00000000ULL) | (u64_inout [0] & 0xffffffff);
-
-    if ((u64_inout [1] & 0xffffffff) < (u64_inout [0] >> 32))
-        u64_inout [1] = (u64_inout [1] & 0xffffffff00000000ULL) | (u64_inout [0] >> 32);
-
-
-}
-
-static void
-apply_horiz_edge_opacity (const SmolScaleCtx *scale_ctx,
-                          uint64_t *row_parts)
-{
-    if (scale_ctx->storage_type == SMOL_STORAGE_64BPP)
-    {
-        apply_subpixel_opacity_64bpp (&row_parts [0], scale_ctx->first_opacity_h);
-        apply_subpixel_opacity_64bpp (&row_parts [scale_ctx->width_out_px - 1], scale_ctx->last_opacity_h);
-    }
-    else
-    {
-        apply_subpixel_opacity_128bpp (&row_parts [0], scale_ctx->first_opacity_h);
-        apply_subpixel_opacity_128bpp (&row_parts [(scale_ctx->width_out_px - 1) * 2], scale_ctx->last_opacity_h);
-    }
 }
 
 static void
