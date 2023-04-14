@@ -2622,8 +2622,6 @@ scale_outrow_one_64bpp (const SmolScaleCtx *scale_ctx,
                         uint32_t row_index,
                         uint32_t *row_out)
 {
-    SMOL_UNUSED (row_index);
-
     /* Scale the row and store it */
 
     if (vertical_ctx->in_ofs != 0)
@@ -2648,8 +2646,6 @@ scale_outrow_one_128bpp (const SmolScaleCtx *scale_ctx,
                          uint32_t row_index,
                          uint32_t *row_out)
 {
-    SMOL_UNUSED (row_index);
-
     /* Scale the row and store it */
 
     if (vertical_ctx->in_ofs != 0)
