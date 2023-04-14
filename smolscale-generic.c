@@ -1622,15 +1622,40 @@ interp_horizontal_copy_128bpp (const SmolScaleCtx *scale_ctx,
 }
 
 static SMOL_INLINE void
-apply_subpixel_opacity_64bpp (uint64_t *u64_inout, uint16_t opacity)
+apply_subpixel_opacity_64bpp (uint64_t * SMOL_RESTRICT u64_inout, uint16_t opacity)
 {
     *u64_inout = ((*u64_inout * opacity) >> SMOL_SUBPIXEL_SHIFT) & 0x00ff00ff00ff00ffULL;
 }
 
 static SMOL_INLINE void
-apply_subpixel_opacity_128bpp_half (uint64_t *u64_inout, uint16_t opacity)
+apply_subpixel_opacity_128bpp_half (uint64_t * SMOL_RESTRICT u64_inout, uint16_t opacity)
 {
     *u64_inout = ((*u64_inout * opacity) >> SMOL_SUBPIXEL_SHIFT) & 0x00ffffff00ffffffULL;
+}
+
+static void
+apply_subpixel_opacity_row_64bpp (uint64_t * SMOL_RESTRICT u64_inout, int n_pixels, uint16_t opacity)
+{
+    uint64_t *u64_inout_max = u64_inout + n_pixels;
+
+    while (u64_inout != u64_inout_max)
+    {
+        apply_subpixel_opacity_64bpp (u64_inout, opacity);
+        u64_inout++;
+    }
+}
+
+static void
+apply_subpixel_opacity_row_128bpp (uint64_t * SMOL_RESTRICT u64_inout, int n_pixels, uint16_t opacity)
+{
+    uint64_t *u64_inout_max = u64_inout + (n_pixels * 2);
+
+    while (u64_inout != u64_inout_max)
+    {
+        apply_subpixel_opacity_128bpp_half (u64_inout, opacity);
+        apply_subpixel_opacity_128bpp_half (u64_inout + 1, opacity);
+        u64_inout += 2;
+    }
 }
 
 static SMOL_INLINE void
@@ -2606,6 +2631,10 @@ scale_outrow_one_64bpp (const SmolScaleCtx *scale_ctx,
         vertical_ctx->in_ofs = 0;
     }
 
+    if (row_index == (scale_ctx->height_out_px - 1) && scale_ctx->last_opacity_v < 256)
+        apply_subpixel_opacity_row_64bpp (vertical_ctx->parts_row [0], scale_ctx->width_out_px,
+                                          scale_ctx->last_opacity_v);
+
     scale_ctx->pack_row_func (vertical_ctx->parts_row [0], row_out, scale_ctx->width_out_px);
 }
 
@@ -2627,6 +2656,10 @@ scale_outrow_one_128bpp (const SmolScaleCtx *scale_ctx,
                           vertical_ctx->parts_row [0]);
         vertical_ctx->in_ofs = 0;
     }
+
+    if (row_index == (scale_ctx->height_out_px - 1) && scale_ctx->last_opacity_v < 256)
+        apply_subpixel_opacity_row_128bpp (vertical_ctx->parts_row [0], scale_ctx->width_out_px,
+                                           scale_ctx->last_opacity_v);
 
     scale_ctx->pack_row_func (vertical_ctx->parts_row [0], row_out, scale_ctx->width_out_px);
 }
