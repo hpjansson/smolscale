@@ -1628,6 +1628,12 @@ apply_subpixel_opacity_64bpp (uint64_t *u64_inout, uint16_t opacity)
 }
 
 static SMOL_INLINE void
+apply_subpixel_opacity_128bpp_half (uint64_t *u64_inout, uint16_t opacity)
+{
+    *u64_inout = ((*u64_inout * opacity) >> SMOL_SUBPIXEL_SHIFT) & 0x00ffffff00ffffffULL;
+}
+
+static SMOL_INLINE void
 apply_subpixel_opacity_128bpp (uint64_t *u64_inout, uint16_t opacity)
 {
     uint64_t t [2];
@@ -1638,8 +1644,8 @@ apply_subpixel_opacity_128bpp (uint64_t *u64_inout, uint16_t opacity)
     printf ("Before (u): %016llx, %016llx\n", t [0], t [1]);
 #endif
 
-    u64_inout [0] = ((u64_inout [0] * opacity) >> SMOL_SUBPIXEL_SHIFT) & 0x00ffffff00ffffffULL;
-    u64_inout [1] = ((u64_inout [1] * opacity) >> SMOL_SUBPIXEL_SHIFT) & 0x00ffffff00ffffffULL;
+    apply_subpixel_opacity_128bpp_half (u64_inout, opacity);
+    apply_subpixel_opacity_128bpp_half (u64_inout + 1, opacity);
 
 #if 1
     printf ("After (p):  %016llx, %016llx\n", u64_inout [0], u64_inout [1]);
@@ -1774,6 +1780,34 @@ interp_vertical_bilinear_store_64bpp (uint64_t F,
 }
 
 static void
+interp_vertical_bilinear_store_with_opacity_64bpp (uint64_t F,
+                                                   const uint64_t * SMOL_RESTRICT top_row_parts_in,
+                                                   const uint64_t * SMOL_RESTRICT bottom_row_parts_in,
+                                                   uint64_t * SMOL_RESTRICT parts_out,
+                                                   uint32_t width,
+                                                   uint16_t opacity)
+{
+    uint64_t *parts_out_last = parts_out + width;
+
+    SMOL_ASSUME_ALIGNED (top_row_parts_in, const uint64_t *);
+    SMOL_ASSUME_ALIGNED (bottom_row_parts_in, const uint64_t *);
+    SMOL_ASSUME_ALIGNED (parts_out, uint64_t *);
+
+    do
+    {
+        uint64_t p, q;
+
+        p = *(top_row_parts_in++);
+        q = *(bottom_row_parts_in++);
+
+        *parts_out = ((((p - q) * F) >> 8) + q) & 0x00ff00ff00ff00ffULL;
+        apply_subpixel_opacity_64bpp (parts_out, opacity);
+        parts_out++;
+    }
+    while (parts_out != parts_out_last);
+}
+
+static void
 interp_vertical_bilinear_add_64bpp (uint64_t F,
                                     const uint64_t * SMOL_RESTRICT top_row_parts_in,
                                     const uint64_t * SMOL_RESTRICT bottom_row_parts_in,
@@ -1819,6 +1853,34 @@ interp_vertical_bilinear_store_128bpp (uint64_t F,
         q = *(bottom_row_parts_in++);
 
         *(parts_out++) = ((((p - q) * F) >> 8) + q) & 0x00ffffff00ffffffULL;
+    }
+    while (parts_out != parts_out_last);
+}
+
+static void
+interp_vertical_bilinear_store_with_opacity_128bpp (uint64_t F,
+                                                    const uint64_t * SMOL_RESTRICT top_row_parts_in,
+                                                    const uint64_t * SMOL_RESTRICT bottom_row_parts_in,
+                                                    uint64_t * SMOL_RESTRICT parts_out,
+                                                    uint32_t width,
+                                                    uint16_t opacity)
+{
+    uint64_t *parts_out_last = parts_out + width;
+
+    SMOL_ASSUME_ALIGNED (top_row_parts_in, const uint64_t *);
+    SMOL_ASSUME_ALIGNED (bottom_row_parts_in, const uint64_t *);
+    SMOL_ASSUME_ALIGNED (parts_out, uint64_t *);
+
+    do
+    {
+        uint64_t p, q;
+
+        p = *(top_row_parts_in++);
+        q = *(bottom_row_parts_in++);
+
+        *parts_out = ((((p - q) * F) >> 8) + q) & 0x00ffffff00ffffffULL;
+        apply_subpixel_opacity_128bpp_half (parts_out, opacity);
+        parts_out++;
     }
     while (parts_out != parts_out_last);
 }
@@ -1878,6 +1940,36 @@ interp_vertical_bilinear_final_##n_halvings##h_64bpp (uint64_t F, \
 } \
 \
 static void \
+interp_vertical_bilinear_final_##n_halvings##h_with_opacity_64bpp (uint64_t F, \
+                                                                   const uint64_t * SMOL_RESTRICT top_row_parts_in, \
+                                                                   const uint64_t * SMOL_RESTRICT bottom_row_parts_in, \
+                                                                   uint64_t * SMOL_RESTRICT accum_inout, \
+                                                                   uint32_t width, \
+                                                                   uint16_t opacity) \
+{ \
+    uint64_t *accum_inout_last = accum_inout + width; \
+\
+    SMOL_ASSUME_ALIGNED (top_row_parts_in, const uint64_t *); \
+    SMOL_ASSUME_ALIGNED (bottom_row_parts_in, const uint64_t *); \
+    SMOL_ASSUME_ALIGNED (accum_inout, uint64_t *); \
+\
+    do \
+    { \
+        uint64_t p, q; \
+\
+        p = *(top_row_parts_in++); \
+        q = *(bottom_row_parts_in++); \
+\
+        p = ((((p - q) * F) >> 8) + q) & 0x00ff00ff00ff00ffULL; \
+        p = ((p + *accum_inout) >> n_halvings) & 0x00ff00ff00ff00ffULL; \
+\
+        apply_subpixel_opacity_64bpp (&p, opacity); \
+        *(accum_inout++) = p; \
+    } \
+    while (accum_inout != accum_inout_last); \
+} \
+\
+static void \
 interp_vertical_bilinear_final_##n_halvings##h_128bpp (uint64_t F, \
                                                        const uint64_t * SMOL_RESTRICT top_row_parts_in, \
                                                        const uint64_t * SMOL_RESTRICT bottom_row_parts_in, \
@@ -1900,6 +1992,36 @@ interp_vertical_bilinear_final_##n_halvings##h_128bpp (uint64_t F, \
         p = ((((p - q) * F) >> 8) + q) & 0x00ffffff00ffffffULL; \
         p = ((p + *accum_inout) >> n_halvings) & 0x00ffffff00ffffffULL; \
 \
+        *(accum_inout++) = p; \
+    } \
+    while (accum_inout != accum_inout_last); \
+} \
+\
+static void \
+interp_vertical_bilinear_final_##n_halvings##h_with_opacity_128bpp (uint64_t F, \
+                                                                    const uint64_t * SMOL_RESTRICT top_row_parts_in, \
+                                                                    const uint64_t * SMOL_RESTRICT bottom_row_parts_in, \
+                                                                    uint64_t * SMOL_RESTRICT accum_inout, \
+                                                                    uint32_t width, \
+                                                                    uint16_t opacity) \
+{ \
+    uint64_t *accum_inout_last = accum_inout + width; \
+\
+    SMOL_ASSUME_ALIGNED (top_row_parts_in, const uint64_t *); \
+    SMOL_ASSUME_ALIGNED (bottom_row_parts_in, const uint64_t *); \
+    SMOL_ASSUME_ALIGNED (accum_inout, uint64_t *); \
+\
+    do \
+    { \
+        uint64_t p, q; \
+\
+        p = *(top_row_parts_in++); \
+        q = *(bottom_row_parts_in++); \
+\
+        p = ((((p - q) * F) >> 8) + q) & 0x00ffffff00ffffffULL; \
+        p = ((p + *accum_inout) >> n_halvings) & 0x00ffffff00ffffffULL; \
+\
+        apply_subpixel_opacity_128bpp_half (&p, opacity); \
         *(accum_inout++) = p; \
     } \
     while (accum_inout != accum_inout_last); \
@@ -1935,11 +2057,20 @@ scale_outrow_bilinear_##n_halvings##h_64bpp (const SmolScaleCtx *scale_ctx, \
     } \
 \
     update_vertical_ctx_bilinear (scale_ctx, vertical_ctx, bilin_index); \
-    interp_vertical_bilinear_final_##n_halvings##h_64bpp (scale_ctx->precalc_y [bilin_index * 2 + 1], \
-                                                          vertical_ctx->parts_row [0], \
-                                                          vertical_ctx->parts_row [1], \
-                                                          vertical_ctx->parts_row [2], \
-                                                          scale_ctx->width_out_px); \
+\
+    if (outrow_index == (scale_ctx->height_out_px - 1) && scale_ctx->last_opacity_v < 256) \
+        interp_vertical_bilinear_final_##n_halvings##h_with_opacity_64bpp (scale_ctx->precalc_y [bilin_index * 2 + 1], \
+                                                                           vertical_ctx->parts_row [0], \
+                                                                           vertical_ctx->parts_row [1], \
+                                                                           vertical_ctx->parts_row [2], \
+                                                                           scale_ctx->width_out_px, \
+                                                                           scale_ctx->last_opacity_v); \
+    else \
+        interp_vertical_bilinear_final_##n_halvings##h_64bpp (scale_ctx->precalc_y [bilin_index * 2 + 1], \
+                                                              vertical_ctx->parts_row [0], \
+                                                              vertical_ctx->parts_row [1], \
+                                                              vertical_ctx->parts_row [2], \
+                                                              scale_ctx->width_out_px); \
 \
     scale_ctx->pack_row_func (vertical_ctx->parts_row [2], row_out, scale_ctx->width_out_px); \
 } \
@@ -1973,11 +2104,20 @@ scale_outrow_bilinear_##n_halvings##h_128bpp (const SmolScaleCtx *scale_ctx, \
     } \
 \
     update_vertical_ctx_bilinear (scale_ctx, vertical_ctx, bilin_index); \
-    interp_vertical_bilinear_final_##n_halvings##h_128bpp (scale_ctx->precalc_y [bilin_index * 2 + 1], \
-                                                           vertical_ctx->parts_row [0], \
-                                                           vertical_ctx->parts_row [1], \
-                                                           vertical_ctx->parts_row [2], \
-                                                           scale_ctx->width_out_px * 2); \
+\
+    if (outrow_index == (scale_ctx->height_out_px - 1) && scale_ctx->last_opacity_v < 256) \
+        interp_vertical_bilinear_final_##n_halvings##h_with_opacity_128bpp (scale_ctx->precalc_y [bilin_index * 2 + 1], \
+                                                                            vertical_ctx->parts_row [0], \
+                                                                            vertical_ctx->parts_row [1], \
+                                                                            vertical_ctx->parts_row [2], \
+                                                                            scale_ctx->width_out_px * 2, \
+                                                                            scale_ctx->last_opacity_v); \
+    else \
+        interp_vertical_bilinear_final_##n_halvings##h_128bpp (scale_ctx->precalc_y [bilin_index * 2 + 1], \
+                                                               vertical_ctx->parts_row [0], \
+                                                               vertical_ctx->parts_row [1], \
+                                                               vertical_ctx->parts_row [2], \
+                                                               scale_ctx->width_out_px * 2); \
 \
     scale_ctx->pack_row_func (vertical_ctx->parts_row [2], row_out, scale_ctx->width_out_px); \
 }
@@ -1989,11 +2129,21 @@ scale_outrow_bilinear_0h_64bpp (const SmolScaleCtx *scale_ctx,
                                 uint32_t *row_out)
 {
     update_vertical_ctx_bilinear (scale_ctx, vertical_ctx, outrow_index);
-    interp_vertical_bilinear_store_64bpp (scale_ctx->precalc_y [outrow_index * 2 + 1],
-                                          vertical_ctx->parts_row [0],
-                                          vertical_ctx->parts_row [1],
-                                          vertical_ctx->parts_row [2],
-                                          scale_ctx->width_out_px);
+
+    if (outrow_index == (scale_ctx->height_out_px - 1) && scale_ctx->last_opacity_v < 256)
+        interp_vertical_bilinear_store_with_opacity_64bpp (scale_ctx->precalc_y [outrow_index * 2 + 1],
+                                                           vertical_ctx->parts_row [0],
+                                                           vertical_ctx->parts_row [1],
+                                                           vertical_ctx->parts_row [2],
+                                                           scale_ctx->width_out_px,
+                                                           scale_ctx->last_opacity_v);
+    else
+        interp_vertical_bilinear_store_64bpp (scale_ctx->precalc_y [outrow_index * 2 + 1],
+                                              vertical_ctx->parts_row [0],
+                                              vertical_ctx->parts_row [1],
+                                              vertical_ctx->parts_row [2],
+                                              scale_ctx->width_out_px);
+
     scale_ctx->pack_row_func (vertical_ctx->parts_row [2], row_out, scale_ctx->width_out_px);
 }
 
@@ -2004,11 +2154,21 @@ scale_outrow_bilinear_0h_128bpp (const SmolScaleCtx *scale_ctx,
                                  uint32_t *row_out)
 {
     update_vertical_ctx_bilinear (scale_ctx, vertical_ctx, outrow_index);
-    interp_vertical_bilinear_store_128bpp (scale_ctx->precalc_y [outrow_index * 2 + 1],
-                                           vertical_ctx->parts_row [0],
-                                           vertical_ctx->parts_row [1],
-                                           vertical_ctx->parts_row [2],
-                                           scale_ctx->width_out_px * 2);
+
+    if (outrow_index == (scale_ctx->height_out_px - 1) && scale_ctx->last_opacity_v < 256)
+        interp_vertical_bilinear_store_with_opacity_128bpp (scale_ctx->precalc_y [outrow_index * 2 + 1],
+                                                            vertical_ctx->parts_row [0],
+                                                            vertical_ctx->parts_row [1],
+                                                            vertical_ctx->parts_row [2],
+                                                            scale_ctx->width_out_px * 2,
+                                                            scale_ctx->last_opacity_v);
+    else
+        interp_vertical_bilinear_store_128bpp (scale_ctx->precalc_y [outrow_index * 2 + 1],
+                                               vertical_ctx->parts_row [0],
+                                               vertical_ctx->parts_row [1],
+                                               vertical_ctx->parts_row [2],
+                                               scale_ctx->width_out_px * 2);
+
     scale_ctx->pack_row_func (vertical_ctx->parts_row [2], row_out, scale_ctx->width_out_px);
 }
 
@@ -2030,11 +2190,21 @@ scale_outrow_bilinear_1h_64bpp (const SmolScaleCtx *scale_ctx,
                                           scale_ctx->width_out_px);
     bilin_index++;
     update_vertical_ctx_bilinear (scale_ctx, vertical_ctx, bilin_index);
-    interp_vertical_bilinear_final_1h_64bpp (scale_ctx->precalc_y [bilin_index * 2 + 1],
-                                             vertical_ctx->parts_row [0],
-                                             vertical_ctx->parts_row [1],
-                                             vertical_ctx->parts_row [2],
-                                             scale_ctx->width_out_px);
+
+    if (outrow_index == (scale_ctx->height_out_px - 1) && scale_ctx->last_opacity_v < 256)
+        interp_vertical_bilinear_final_1h_with_opacity_64bpp (scale_ctx->precalc_y [bilin_index * 2 + 1],
+                                                              vertical_ctx->parts_row [0],
+                                                              vertical_ctx->parts_row [1],
+                                                              vertical_ctx->parts_row [2],
+                                                              scale_ctx->width_out_px,
+                                                              scale_ctx->last_opacity_v);
+    else
+        interp_vertical_bilinear_final_1h_64bpp (scale_ctx->precalc_y [bilin_index * 2 + 1],
+                                                 vertical_ctx->parts_row [0],
+                                                 vertical_ctx->parts_row [1],
+                                                 vertical_ctx->parts_row [2],
+                                                 scale_ctx->width_out_px);
+
     scale_ctx->pack_row_func (vertical_ctx->parts_row [2], row_out, scale_ctx->width_out_px);
 }
 
@@ -2054,11 +2224,21 @@ scale_outrow_bilinear_1h_128bpp (const SmolScaleCtx *scale_ctx,
                                            scale_ctx->width_out_px * 2);
     bilin_index++;
     update_vertical_ctx_bilinear (scale_ctx, vertical_ctx, bilin_index);
-    interp_vertical_bilinear_final_1h_128bpp (scale_ctx->precalc_y [bilin_index * 2 + 1],
-                                              vertical_ctx->parts_row [0],
-                                              vertical_ctx->parts_row [1],
-                                              vertical_ctx->parts_row [2],
-                                              scale_ctx->width_out_px * 2);
+
+    if (outrow_index == (scale_ctx->height_out_px - 1) && scale_ctx->last_opacity_v < 256)
+        interp_vertical_bilinear_final_1h_with_opacity_128bpp (scale_ctx->precalc_y [bilin_index * 2 + 1],
+                                                               vertical_ctx->parts_row [0],
+                                                               vertical_ctx->parts_row [1],
+                                                               vertical_ctx->parts_row [2],
+                                                               scale_ctx->width_out_px * 2,
+                                                               scale_ctx->last_opacity_v);
+    else
+        interp_vertical_bilinear_final_1h_128bpp (scale_ctx->precalc_y [bilin_index * 2 + 1],
+                                                  vertical_ctx->parts_row [0],
+                                                  vertical_ctx->parts_row [1],
+                                                  vertical_ctx->parts_row [2],
+                                                  scale_ctx->width_out_px * 2);
+
     scale_ctx->pack_row_func (vertical_ctx->parts_row [2], row_out, scale_ctx->width_out_px);
 }
 
