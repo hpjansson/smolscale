@@ -1046,7 +1046,7 @@ smol_scale_simple (const void *pixels_in,
                    uint8_t with_srgb)
 
 {
-    SmolScaleCtx scale_ctx;
+    SmolScaleCtx scale_ctx = { 0 };
 
     smol_scale_init (&scale_ctx,
                      pixels_in,
