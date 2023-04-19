@@ -420,78 +420,6 @@ const uint32_t _smol_inv_div_p16l_lut [256] =
     0x00000843, 0x0000083a, 0x00000832, 0x00000829, 0x00000821, 0x00000819, 0x00000811, 0x00000809
 };
 
-/* -------------- *
- * Precalculation *
- * -------------- */
-
-/* Use whole-pixel dimensions for this one */
-static void
-pick_filter_params (uint32_t dim_in,
-                    uint32_t dim_in_spx,
-                    uint32_t dim_out,
-                    uint32_t dim_out_spx,
-                    uint32_t *halvings_out,
-                    uint32_t *dim_prehalving_out,
-                    uint32_t *dim_prehalving_out_spx,
-                    SmolFilterType *filter_out,
-                    SmolStorageType *storage_out,
-                    uint16_t *first_opacity,
-                    uint16_t *last_opacity,
-                    uint8_t with_srgb)
-{
-    *dim_prehalving_out = dim_out;
-    *storage_out = with_srgb ? SMOL_STORAGE_128BPP : SMOL_STORAGE_64BPP;
-
-    /* The box algorithms are only sufficiently precise when
-     * dim_in > dim_out * 5. box_64bpp typically starts outperforming
-     * bilinear+halving at dim_in > dim_out * 8. */
-
-    if (dim_in > dim_out * 255)
-    {
-        *storage_out = SMOL_STORAGE_128BPP;
-        *filter_out = SMOL_FILTER_BOX;
-        *last_opacity = 256; /* The box filter kindly handles edge opacity */
-    }
-    else if (dim_in > dim_out * 8)
-    {
-        *filter_out = SMOL_FILTER_BOX;
-        *last_opacity = 256; /* The box filter kindly handles edge opacity */
-    }
-    else if (dim_in <= 1)
-    {
-        *filter_out = SMOL_FILTER_ONE;
-        *last_opacity = ((dim_out_spx - 1) % SMOL_SUBPIXEL_MUL) + 1;
-    }
-    else if (dim_in_spx == dim_out_spx)
-    {
-        *filter_out = SMOL_FILTER_COPY;
-        *last_opacity = 256;
-    }
-    else
-    {
-        uint32_t n_halvings = 0;
-        uint32_t d = dim_out_spx;
-
-        for (;;)
-        {
-            d *= 2;
-            if (d >= dim_in_spx)
-                break;
-            n_halvings++;
-        }
-
-        *dim_prehalving_out = dim_out << n_halvings;
-        *dim_prehalving_out_spx = dim_out_spx << n_halvings;
-        *filter_out = SMOL_FILTER_BILINEAR_0H + n_halvings;
-        *halvings_out = n_halvings;
-
-        *last_opacity = ((dim_out_spx - 1) % SMOL_SUBPIXEL_MUL) + 1;
-    }
-
-    /* Offsetting is not supported yet */
-    *first_opacity = 256;
-}
-
 /* ------------------- *
  * Scaling: Outer loop *
  * ------------------- */
@@ -590,8 +518,6 @@ have_avx2 (void)
 
 #endif
 
-/* In the absence of a proper build system, runtime detection is more
- * portable than compiler macros. WFM. */
 static SmolBool
 host_is_little_endian (void)
 {
@@ -624,6 +550,73 @@ get_host_pixel_type (SmolPixelType pixel_type)
 /* ---------------------- *
  * Context initialization *
  * ---------------------- */
+
+static void
+pick_filter_params (uint32_t dim_in,
+                    uint32_t dim_in_spx,
+                    uint32_t dim_out,
+                    uint32_t dim_out_spx,
+                    uint32_t *halvings_out,
+                    uint32_t *dim_prehalving_out,
+                    uint32_t *dim_prehalving_out_spx,
+                    SmolFilterType *filter_out,
+                    SmolStorageType *storage_out,
+                    uint16_t *first_opacity,
+                    uint16_t *last_opacity,
+                    uint8_t with_srgb)
+{
+    *dim_prehalving_out = dim_out;
+    *storage_out = with_srgb ? SMOL_STORAGE_128BPP : SMOL_STORAGE_64BPP;
+
+    /* The box algorithms are only sufficiently precise when
+     * dim_in > dim_out * 5. box_64bpp typically starts outperforming
+     * bilinear+halving at dim_in > dim_out * 8. */
+
+    if (dim_in > dim_out * 255)
+    {
+        *storage_out = SMOL_STORAGE_128BPP;
+        *filter_out = SMOL_FILTER_BOX;
+        *last_opacity = 256; /* The box filter kindly handles edge opacity */
+    }
+    else if (dim_in > dim_out * 8)
+    {
+        *filter_out = SMOL_FILTER_BOX;
+        *last_opacity = 256; /* The box filter kindly handles edge opacity */
+    }
+    else if (dim_in <= 1)
+    {
+        *filter_out = SMOL_FILTER_ONE;
+        *last_opacity = ((dim_out_spx - 1) % SMOL_SUBPIXEL_MUL) + 1;
+    }
+    else if (dim_in_spx == dim_out_spx)
+    {
+        *filter_out = SMOL_FILTER_COPY;
+        *last_opacity = 256;
+    }
+    else
+    {
+        uint32_t n_halvings = 0;
+        uint32_t d = dim_out_spx;
+
+        for (;;)
+        {
+            d *= 2;
+            if (d >= dim_in_spx)
+                break;
+            n_halvings++;
+        }
+
+        *dim_prehalving_out = dim_out << n_halvings;
+        *dim_prehalving_out_spx = dim_out_spx << n_halvings;
+        *filter_out = SMOL_FILTER_BILINEAR_0H + n_halvings;
+        *halvings_out = n_halvings;
+
+        *last_opacity = ((dim_out_spx - 1) % SMOL_SUBPIXEL_MUL) + 1;
+    }
+
+    /* Offsetting is not supported yet */
+    *first_opacity = 256;
+}
 
 static const SmolRepackMeta *
 find_repack_match (const SmolRepackMeta *meta, uint16_t sig, uint16_t mask)
