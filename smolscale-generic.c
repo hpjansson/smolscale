@@ -1729,7 +1729,7 @@ scale_horizontal (const SmolScaleCtx *scale_ctx,
         row_in = (const char *) local_ctx->in_aligned;
     }
 
-    scale_ctx->unpack_row_func ((const uint32_t *) row_in,
+    scale_ctx->unpack_row_func (row_in,
                                 unpacked_in,
                                 scale_ctx->width_in_px);
     scale_ctx->hfilter_func (scale_ctx,
