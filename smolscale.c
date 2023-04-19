@@ -437,10 +437,15 @@ scale_outrow (const SmolScaleCtx *scale_ctx,
               uint32_t outrow_index,
               uint32_t *row_out)
 {
-    scale_ctx->vfilter_func (scale_ctx,
-                             vertical_ctx,
-                             outrow_index,
-                             row_out);
+    int temp_row_index;
+
+    temp_row_index = scale_ctx->vfilter_func (scale_ctx,
+                                              vertical_ctx,
+                                              outrow_index);
+
+    scale_ctx->pack_row_func (vertical_ctx->parts_row [temp_row_index],
+                              row_out,
+                              scale_ctx->width_out_px);
 
     if (scale_ctx->post_row_func)
         scale_ctx->post_row_func (row_out, scale_ctx->width_out_px, scale_ctx->user_data);

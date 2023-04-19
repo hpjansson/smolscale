@@ -198,10 +198,9 @@ typedef void (SmolRepackRowFunc) (const void *row_in,
 typedef void (SmolHFilterFunc) (const SmolScaleCtx *scale_ctx,
                                 const uint64_t *row_limbs_in,
                                 uint64_t *row_limbs_out);
-typedef void (SmolVFilterFunc) (const SmolScaleCtx *scale_ctx,
-                                SmolVerticalCtx *vertical_ctx,
-                                uint32_t outrow_index,
-                                uint32_t *row_out);
+typedef int (SmolVFilterFunc) (const SmolScaleCtx *scale_ctx,
+                               SmolVerticalCtx *vertical_ctx,
+                               uint32_t outrow_index);
 
 #define SMOL_REPACK_SIGNATURE_GET_REORDER(sig) ((sig) >> (2 * (SMOL_GAMMA_BITS + SMOL_ALPHA_BITS + SMOL_STORAGE_BITS)))
 
