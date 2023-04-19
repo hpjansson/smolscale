@@ -1665,8 +1665,6 @@ interp_horizontal_one_64bpp (const SmolScaleCtx *scale_ctx,
     part = *row_parts_in;
     while (row_parts_out != row_parts_out_max)
         *(row_parts_out++) = part;
-
-    apply_horiz_edge_opacity (scale_ctx, row_parts_out);
 }
 
 static void
@@ -1684,8 +1682,6 @@ interp_horizontal_one_128bpp (const SmolScaleCtx *scale_ctx,
         *(row_parts_out++) = row_parts_in [0];
         *(row_parts_out++) = row_parts_in [1];
     }
-
-    apply_horiz_edge_opacity (scale_ctx, row_parts_out);
 }
 
 static void
