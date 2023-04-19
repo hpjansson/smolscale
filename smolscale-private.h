@@ -189,7 +189,7 @@ typedef struct
     uint32_t *in_aligned;
     uint32_t *in_aligned_storage;
 }
-SmolVerticalCtx;
+SmolLocalCtx;
 
 typedef void (SmolInitFunc) (SmolScaleCtx *scale_ctx);
 typedef void (SmolRepackRowFunc) (const void *row_in,
@@ -199,7 +199,7 @@ typedef void (SmolHFilterFunc) (const SmolScaleCtx *scale_ctx,
                                 const uint64_t *row_limbs_in,
                                 uint64_t *row_limbs_out);
 typedef int (SmolVFilterFunc) (const SmolScaleCtx *scale_ctx,
-                               SmolVerticalCtx *vertical_ctx,
+                               SmolLocalCtx *local_ctx,
                                uint32_t outrow_index);
 
 #define SMOL_REPACK_SIGNATURE_GET_REORDER(sig) ((sig) >> (2 * (SMOL_GAMMA_BITS + SMOL_ALPHA_BITS + SMOL_STORAGE_BITS)))

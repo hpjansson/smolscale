@@ -433,17 +433,17 @@ outrow_ofs_to_pointer (const SmolScaleCtx *scale_ctx,
 
 static void
 scale_outrow (const SmolScaleCtx *scale_ctx,
-              SmolVerticalCtx *vertical_ctx,
+              SmolLocalCtx *local_ctx,
               uint32_t outrow_index,
               uint32_t *row_out)
 {
     int temp_row_index;
 
     temp_row_index = scale_ctx->vfilter_func (scale_ctx,
-                                              vertical_ctx,
+                                              local_ctx,
                                               outrow_index);
 
-    scale_ctx->pack_row_func (vertical_ctx->parts_row [temp_row_index],
+    scale_ctx->pack_row_func (local_ctx->parts_row [temp_row_index],
                               row_out,
                               scale_ctx->width_out_px);
 
@@ -457,7 +457,7 @@ do_rows (const SmolScaleCtx *scale_ctx,
          uint32_t row_out_index,
          uint32_t n_rows)
 {
-    SmolVerticalCtx vertical_ctx = { 0 };
+    SmolLocalCtx local_ctx = { 0 };
     uint32_t n_parts_per_pixel = 1;
     uint32_t n_stored_rows = 4;
     uint32_t i;
@@ -465,9 +465,9 @@ do_rows (const SmolScaleCtx *scale_ctx,
     if (scale_ctx->storage_type == SMOL_STORAGE_128BPP)
         n_parts_per_pixel = 2;
 
-    /* Must be one less, or this test in update_vertical_ctx() will wrap around:
-     * if (new_in_ofs == vertical_ctx->in_ofs + 1) { ... } */
-    vertical_ctx.in_ofs = UINT_MAX - 1;
+    /* Must be one less, or this test in update_local_ctx() will wrap around:
+     * if (new_in_ofs == local_ctx->in_ofs + 1) { ... } */
+    local_ctx.in_ofs = UINT_MAX - 1;
 
     for (i = 0; i < n_stored_rows; i++)
     {
@@ -478,30 +478,30 @@ do_rows (const SmolScaleCtx *scale_ctx,
          * produce 2^n such samples (the extra pixel is sampled repeatedly in
          * those cases). */
 
-        vertical_ctx.parts_row [i] =
+        local_ctx.parts_row [i] =
             smol_alloc_aligned (MAX (scale_ctx->width_in_px + 1, scale_ctx->width_out_px)
                                 * n_parts_per_pixel * sizeof (uint64_t),
-                                &vertical_ctx.row_storage [i]);
+                                &local_ctx.row_storage [i]);
 
-        vertical_ctx.parts_row [i] [scale_ctx->width_in_px * n_parts_per_pixel] = 0;
+        local_ctx.parts_row [i] [scale_ctx->width_in_px * n_parts_per_pixel] = 0;
         if (n_parts_per_pixel == 2)
-            vertical_ctx.parts_row [i] [scale_ctx->width_in_px * n_parts_per_pixel + 1] = 0;
+            local_ctx.parts_row [i] [scale_ctx->width_in_px * n_parts_per_pixel + 1] = 0;
     }
 
     for (i = row_out_index; i < row_out_index + n_rows; i++)
     {
-        scale_outrow (scale_ctx, &vertical_ctx, i, outrows_dest);
+        scale_outrow (scale_ctx, &local_ctx, i, outrows_dest);
         outrows_dest = (char *) outrows_dest + scale_ctx->rowstride_out;
     }
 
     for (i = 0; i < n_stored_rows; i++)
     {
-        smol_free (vertical_ctx.row_storage [i]);
+        smol_free (local_ctx.row_storage [i]);
     }
 
     /* Used to align row data if needed. May be allocated in scale_horizontal(). */
-    if (vertical_ctx.in_aligned)
-        smol_free (vertical_ctx.in_aligned_storage);
+    if (local_ctx.in_aligned)
+        smol_free (local_ctx.in_aligned_storage);
 }
 
 /* -------------------- *
