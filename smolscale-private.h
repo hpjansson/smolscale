@@ -192,12 +192,6 @@ typedef struct
 SmolVerticalCtx;
 
 typedef void (SmolInitFunc) (SmolScaleCtx *scale_ctx);
-typedef void (SmolUnpackRowFunc) (const uint32_t *row_in,
-                                  uint64_t *row_out,
-                                  uint32_t n_pixels);
-typedef void (SmolPackRowFunc) (const uint64_t *row_in,
-                                uint32_t *row_out,
-                                uint32_t n_pixels);
 typedef void (SmolRepackRowFunc) (const void *row_in,
                                   void *row_out,
                                   uint32_t n_pixels);
