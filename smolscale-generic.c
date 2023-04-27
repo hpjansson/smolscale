@@ -111,9 +111,9 @@ precalc_boxes_array (uint16_t *array,
             break;
         }
 
-        if (next_ofs > dim_in - 1)
+        if (next_ofs > dim_in)
         {
-            next_ofs = dim_in - 1;
+            next_ofs = dim_in;
             if (next_ofs <= ofs)
                 break;
         }
