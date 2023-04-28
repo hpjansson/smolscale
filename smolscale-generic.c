@@ -2563,7 +2563,7 @@ scale_outrow_box_128bpp (const SmolScaleCtx *scale_ctx,
     /* Final row is optional; if this is the bottommost outrow it could be out of bounds */
 
     w = scale_ctx->precalc_y [outrow_index * 2 + 1];
-    if (w > 0)
+    if (w > 0 && ofs_y_max < scale_ctx->height_in_px)
     {
         scale_horizontal (scale_ctx,
                           local_ctx,
