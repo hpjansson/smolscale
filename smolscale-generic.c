@@ -1201,7 +1201,7 @@ static SMOL_INLINE uint64_t
 weight_pixel_64bpp (uint64_t p,
                     uint16_t w)
 {
-    return ((p * w) >> 8) & 0x00ff00ff00ff00ff;
+    return ((p * w) >> 8) & 0x00ff00ff00ff00ffULL;
 }
 
 /* p and out may be the same address */
@@ -1257,13 +1257,11 @@ scale_64bpp (uint64_t accum,
 {
     uint64_t a, b;
 
-    /* Average the inputs */
     a = ((accum & 0x0000ffff0000ffffULL) * multiplier
          + (SMOL_BOXES_MULTIPLIER / 2) + ((SMOL_BOXES_MULTIPLIER / 2) << 32)) / SMOL_BOXES_MULTIPLIER;
     b = (((accum & 0xffff0000ffff0000ULL) >> 16) * multiplier
          + (SMOL_BOXES_MULTIPLIER / 2) + ((SMOL_BOXES_MULTIPLIER / 2) << 32)) / SMOL_BOXES_MULTIPLIER;
 
-    /* Return pixel */
     return (a & 0x000000ff000000ffULL) | ((b & 0x000000ff000000ffULL) << 16);
 }
 
@@ -1625,14 +1623,15 @@ interp_horizontal_boxes_128bpp (const SmolScaleCtx *scale_ctx,
         s [0] = r [0] * F;
         s [1] = r [1] * F;
 
-        q [0] = (s [0] >> 8) & 0x00ffffff00ffffff;
-        q [1] = (s [1] >> 8) & 0x00ffffff00ffffff;
+        q [0] = (s [0] >> 8) & 0x00ffffff00ffffffULL;
+        q [1] = (s [1] >> 8) & 0x00ffffff00ffffffULL;
 
         accum [0] += p [0] + q [0];
         accum [1] += p [1] + q [1];
 
-        p [0] = (((r [0] << 8) - r [0] - s [0]) >> 8) & 0x00ffffff00ffffff;
-        p [1] = (((r [1] << 8) - r [1] - s [1]) >> 8) & 0x00ffffff00ffffff;
+        /* (255 * r) - (F * r) */
+        p [0] = (((r [0] << 8) - r [0] - s [0]) >> 8) & 0x00ffffff00ffffffULL;
+        p [1] = (((r [1] << 8) - r [1] - s [1]) >> 8) & 0x00ffffff00ffffffULL;
 
         scale_and_store_128bpp (accum,
                                 scale_ctx->span_mul_x,

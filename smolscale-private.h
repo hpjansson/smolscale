@@ -23,6 +23,9 @@ extern "C" {
 # define SMOL_ASSERT(x) if (!(x)) abort ()
 #endif
 
+/* We'll use at most ~4MB of scratch space. That won't fit on the stack
+ * everywhere, so we default to malloc(). If you know better, you can define
+ * SMOL_USE_ALLOCA. */
 #ifdef SMOL_USE_ALLOCA
 # define _SMOL_ALLOC(n) alloca (n)
 # define _SMOL_FREE(p)
