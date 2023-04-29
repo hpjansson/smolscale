@@ -95,9 +95,16 @@ precalc_boxes_array (uint16_t *array,
     stride = frac_stepF / (uint64_t) SMOL_BIG_MUL;
     f = (frac_stepF / SMOL_SMALL_MUL) % SMOL_SMALL_MUL;
 
+    /* We divide by (b + 1) instead of just (b) to avoid overflows in
+     * scale_128bpp_half(), which would affect horizontal box scaling. The
+     * fudge factor counters limited precision in the inverted division
+     * operation. It causes 16-bit values to undershoot by less than 127/65535
+     * (<.2%). Since the final output is 8-bit, and rounding neutralizes the
+     * error, this doesn't matter. */
+
     a = (SMOL_BOXES_MULTIPLIER * 255);
     b = ((stride * 255) + ((f * 255) / 256));
-    *span_mul = (a + (b / 2)) / b;
+    *span_mul = (a + (b / 2)) / (b + 1);
 
     do
     {
@@ -122,7 +129,7 @@ precalc_boxes_array (uint16_t *array,
         f = (fracF / SMOL_SMALL_MUL) % SMOL_SMALL_MUL;
 
         /* Fraction is the other way around, since left pixel of each span
-         * comes first, and it's on the right side of the fractional sample. */
+         * comes first, and it's on the right-hand side of the fractional sample. */
         *(pu16++) = make_absolute_offsets ? ofs : stride;
         *(pu16++) = f;
 
@@ -294,8 +301,8 @@ static SMOL_INLINE void
 premul_u_to_p16_128bpp (uint64_t *inout,
                         uint8_t alpha)
 {
-    inout [0] = inout [0] * alpha;
-    inout [1] = inout [1] * alpha;
+    inout [0] = inout [0] * ((uint16_t) alpha + 2);
+    inout [1] = inout [1] * ((uint16_t) alpha + 2);
 }
 
 static SMOL_INLINE void
@@ -631,8 +638,11 @@ unpack_pixel_a234_u_to_234a_p16_128bpp (uint32_t p,
     uint64_t p64 = p;
     uint8_t alpha = p >> 24;
 
-    out [0] = (((((p64 & 0x00ff0000) << 16) | ((p64 & 0x0000ff00) >> 8)) * alpha));
-    out [1] = (((((p64 & 0x000000ff) << 32) * alpha))) | ((uint16_t) alpha << 8) | 0x80;
+    out [0] = ((p64 & 0x00ff0000) << 16) | ((p64 & 0x0000ff00) >> 8);
+    out [1] = ((p64 & 0x000000ff) << 32);
+
+    premul_u_to_p16_128bpp (out, alpha);
+    out [1] |= (((uint16_t) alpha) << 8) | alpha;
 }
 
 SMOL_REPACK_ROW_DEF (1234,  32, 32, UNASSOCIATED, COMPRESSED,
@@ -658,7 +668,7 @@ unpack_pixel_a234_u_to_234a_p16l_128bpp (uint32_t p,
     out [0] *= alpha;
     out [1] *= alpha;
 
-    out [1] = (out [1] & 0xffffffff00000000ULL) | (alpha << 8) | 0x80;
+    out [1] = (out [1] & 0xffffffff00000000ULL) | (alpha << 8) | alpha;
 }
 
 SMOL_REPACK_ROW_DEF (1234,  32, 32, UNASSOCIATED, COMPRESSED,
@@ -723,8 +733,11 @@ unpack_pixel_123a_u_to_123a_p16_128bpp (uint32_t p,
     uint64_t p64 = p;
     uint8_t alpha = p;
 
-    out [0] = (((((p64 & 0xff000000) << 8) | ((p64 & 0x00ff0000) >> 16)) * alpha));
-    out [1] = (((((p64 & 0x0000ff00) << 24) * alpha))) | ((uint16_t) alpha << 8) | 0x80;
+    out [0] = ((p64 & 0xff000000) << 8) | ((p64 & 0x00ff0000) >> 16);
+    out [1] = ((p64 & 0x0000ff00) << 24);
+
+    premul_u_to_p16_128bpp (out, alpha);
+    out [1] |= (((uint16_t) alpha) << 8) | alpha;
 }
 
 SMOL_REPACK_ROW_DEF (1234,  32, 32, UNASSOCIATED, COMPRESSED,
@@ -747,10 +760,9 @@ unpack_pixel_123a_u_to_123a_p16l_128bpp (uint32_t p,
     out [1] = ((p64 & 0x0000ff00) << 24);
 
     from_srgb_pixel_xxxa_128bpp (out);
-    out [0] *= alpha;
-    out [1] *= alpha;
+    premul_ul_to_p16l_128bpp (out, alpha);
 
-    out [1] = (out [1] & 0xffffffffffffff00ULL) | ((uint16_t) alpha << 8) | 0x80;
+    out [1] = (out [1] & 0xffffffff00000000ULL) | ((uint16_t) alpha << 8) | alpha;
 }
 
 SMOL_REPACK_ROW_DEF (1234,  32, 32, UNASSOCIATED, COMPRESSED,
