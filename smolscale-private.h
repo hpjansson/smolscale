@@ -19,6 +19,10 @@
 extern "C" {
 #endif
 
+#ifdef SMOL_ENABLE_ASSERTS
+# define SMOL_ASSERT(x) if (!(x)) abort ()
+#endif
+
 #ifdef SMOL_USE_ALLOCA
 # define _SMOL_ALLOC(n) alloca (n)
 # define _SMOL_FREE(p)
