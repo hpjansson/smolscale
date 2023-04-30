@@ -21,6 +21,8 @@ extern "C" {
 
 #ifdef SMOL_ENABLE_ASSERTS
 # define SMOL_ASSERT(x) if (!(x)) abort ()
+#else
+# define SMOL_ASSERT(x)
 #endif
 
 /* We'll use at most ~4MB of scratch space. That won't fit on the stack
