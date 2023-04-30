@@ -799,10 +799,14 @@ get_implementations (SmolScaleCtx *scale_ctx)
 
     /* Enumerate implementations, preferred first */
 
+    if (!(scale_ctx->flags & SMOL_FORCE_GENERIC_IMPL))
+    {
 #ifdef SMOL_WITH_AVX2
-    if (have_avx2 ())
-        implementations [i++] = _smol_get_avx2_implementation ();
+        if (have_avx2 ())
+            implementations [i++] = _smol_get_avx2_implementation ();
 #endif
+    }
+
     implementations [i++] = _smol_get_generic_implementation ();
     implementations [i] = NULL;
 
@@ -911,6 +915,7 @@ smol_scale_init (SmolScaleCtx *scale_ctx,
     scale_ctx->height_out_spx = height_out_spx;
     scale_ctx->height_out_px = SMOL_SPX_TO_PX (height_out_spx);
     scale_ctx->rowstride_out = rowstride_out;
+    scale_ctx->flags = flags;
     scale_ctx->gamma_type = (flags & SMOL_LINEARIZE_SRGB) ? SMOL_GAMMA_SRGB_LINEAR : SMOL_GAMMA_SRGB_COMPRESSED;
 
 #if 0

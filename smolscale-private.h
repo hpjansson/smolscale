@@ -298,6 +298,9 @@ struct SmolScaleCtx
     SmolStorageType storage_type;
     SmolGammaType gamma_type;
 
+    /* Raw flags passed in by user */
+    SmolFlags flags;
+
     SmolRepackRowFunc *unpack_row_func;
     SmolRepackRowFunc *pack_row_func;
     SmolHFilterFunc *hfilter_func;
