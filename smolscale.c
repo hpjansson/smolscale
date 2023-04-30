@@ -842,8 +842,8 @@ get_implementations (SmolScaleCtx *scale_ctx)
                   pmeta_in, pmeta_out,
                   &rmeta_in, &rmeta_out);
 
-    if (!rmeta_in || !rmeta_out)
-        abort ();
+    SMOL_ASSERT (rmeta_in != NULL);
+    SMOL_ASSERT (rmeta_out != NULL);
 
     scale_ctx->unpack_row_func = rmeta_in->repack_row_func;
     scale_ctx->pack_row_func = rmeta_out->repack_row_func;
@@ -875,8 +875,8 @@ get_implementations (SmolScaleCtx *scale_ctx)
         }
     }
 
-    if (!scale_ctx->hfilter_func || !scale_ctx->vfilter_func)
-        abort ();
+    SMOL_ASSERT (scale_ctx->hfilter_func != NULL);
+    SMOL_ASSERT (scale_ctx->vfilter_func != NULL);
 }
 
 static void
