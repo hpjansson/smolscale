@@ -424,6 +424,19 @@ const uint32_t _smol_inv_div_p16l_lut [256] =
  * Scaling: Outer loop *
  * ------------------- */
 
+static SMOL_INLINE int
+bytes_per_pixel (SmolPixelType ptype)
+{
+    return pixel_type_meta [ptype].storage == SMOL_STORAGE_24BPP ? 3 : 4;
+}
+
+static SMOL_INLINE const char *
+inrow_ofs_to_pointer (const SmolScaleCtx *scale_ctx,
+                      uint32_t inrow_ofs)
+{
+    return scale_ctx->pixels_in + scale_ctx->rowstride_in * inrow_ofs;
+}
+
 static SMOL_INLINE char *
 outrow_ofs_to_pointer (const SmolScaleCtx *scale_ctx,
                        uint32_t outrow_ofs)
@@ -432,23 +445,40 @@ outrow_ofs_to_pointer (const SmolScaleCtx *scale_ctx,
 }
 
 static void
+copy_row (const SmolScaleCtx *scale_ctx,
+          uint32_t outrow_index,
+          uint32_t *row_out)
+{
+    memcpy (outrow_ofs_to_pointer (scale_ctx, outrow_index),
+            inrow_ofs_to_pointer (scale_ctx, outrow_index),
+            scale_ctx->width_out_px * bytes_per_pixel (scale_ctx->pixel_type_out));
+}
+
+static void
 scale_outrow (const SmolScaleCtx *scale_ctx,
               SmolLocalCtx *local_ctx,
               uint32_t outrow_index,
               uint32_t *row_out)
 {
-    int temp_row_index;
+    if (scale_ctx->is_noop)
+    {
+        copy_row (scale_ctx, outrow_index, row_out);
+    }
+    else
+    {
+        int scaled_row_index;
 
-    temp_row_index = scale_ctx->vfilter_func (scale_ctx,
-                                              local_ctx,
-                                              outrow_index);
+        scaled_row_index = scale_ctx->vfilter_func (scale_ctx,
+                                                    local_ctx,
+                                                    outrow_index);
 
-    scale_ctx->pack_row_func (local_ctx->parts_row [temp_row_index],
-                              row_out,
-                              scale_ctx->width_out_px);
+        scale_ctx->pack_row_func (local_ctx->parts_row [scaled_row_index],
+                                  row_out,
+                                  scale_ctx->width_out_px);
 
-    if (scale_ctx->post_row_func)
-        scale_ctx->post_row_func (row_out, scale_ctx->width_out_px, scale_ctx->user_data);
+        if (scale_ctx->post_row_func)
+            scale_ctx->post_row_func (row_out, scale_ctx->width_out_px, scale_ctx->user_data);
+    }
 }
 
 static void
@@ -754,6 +784,18 @@ get_implementations (SmolScaleCtx *scale_ctx)
     SmolAlphaType internal_alpha = SMOL_ALPHA_PREMUL8;
     const SmolImplementation *implementations [IMPLEMENTATION_MAX];
     int i = 0;
+
+    /* Check for noop (direct copy) */
+
+    if (scale_ctx->width_in_spx == scale_ctx->width_out_spx
+        && scale_ctx->height_in_spx == scale_ctx->height_out_spx
+        && scale_ctx->pixel_type_in == scale_ctx->pixel_type_out)
+    {
+        /* NOTE: When compositing is implemented, check that we're not
+         * compositing too. */
+        scale_ctx->is_noop = TRUE;
+        return;
+    }
 
     /* Enumerate implementations, preferred first */
 

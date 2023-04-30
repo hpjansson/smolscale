@@ -321,6 +321,9 @@ struct SmolScaleCtx
      * and applied after each scaling step. */
     uint16_t first_opacity_h, last_opacity_h;
     uint16_t first_opacity_v, last_opacity_v;
+
+    /* TRUE if input rows can be copied directly to output. */
+    unsigned int is_noop : 1;
 };
 
 #define SRGB_LINEAR_BITS 11
