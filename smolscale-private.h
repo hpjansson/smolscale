@@ -20,7 +20,8 @@ extern "C" {
 #endif
 
 #ifdef SMOL_ENABLE_ASSERTS
-# define SMOL_ASSERT(x) if (!(x)) abort ()
+# include <assert.h>
+# define SMOL_ASSERT(x) assert (x)
 #else
 # define SMOL_ASSERT(x)
 #endif
