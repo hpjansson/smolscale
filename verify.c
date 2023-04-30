@@ -360,7 +360,7 @@ verify_saturation (void)
     int type_in_index, type_out_index;
     int result = 0;
 
-    fprintf (stdout, "Saturation: ");
+    fprintf (stdout, "Register saturation: ");
     fflush (stdout);
 
     memset (input, 0xff, sizeof (input));
@@ -491,7 +491,7 @@ verify_preunmul (void)
     int result = 0;
     int i;
 
-    fprintf (stdout, "Pre/unmul: ");
+    fprintf (stdout, "Unpremultiply precision: ");
     fflush (stdout);
 
     for (i = 1; i <= 0xff; i++)
