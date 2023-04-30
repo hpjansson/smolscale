@@ -256,21 +256,30 @@ verify_unassociated_alpha (void)
                            (uint32_t *) output, SMOL_PIXEL_ARGB8_UNASSOCIATED, 1, 1, 4,
                            0);
 
+        /* Version 2 produced better results in this test, but it had other
+         * issues. Here are its tolerances:
+         *
+         * i < 0x0a ? 0x7f :
+         * i < 0x20 ? 0x16 :
+         * i < 0x30 ? 0x10 :
+         * i < 0x40 ? 0x08 : 4
+         */
+
         if (fuzzy_compare_bytes (output, expected_output, 4,
                                  i < 0x0a ? 0x7f :
+                                 i < 0x19 ? 0x26 :
                                  i < 0x20 ? 0x16 :
-                                 i < 0x30 ? 0x10 :
-                                 i < 0x40 ? 0x08 :
-                                 4))
+                                 i < 0x31 ? 0x11 :
+                                 i < 0x40 ? 0x10 :
+                                 8))
         {
-            fprintf (stdout, "mismatch\n");
+            fprintf (stdout, "mismatch, i=%d\n", i);
             fprintf (stdout, "in:   "); print_bytes (input, 8, 4);
             fprintf (stdout, "want: "); print_bytes (expected_output, 4, 4);
             fprintf (stdout, "out:  "); print_bytes (output, 4, 4);
             result = 1;
         }
     }
-
 
     input [0] = 0xff;
 
@@ -284,7 +293,10 @@ verify_unassociated_alpha (void)
                            (uint32_t *) output, SMOL_PIXEL_ARGB8_UNASSOCIATED, 1, 1, 4,
                            0);
 
-        if (fuzzy_compare_bytes (output, expected_output, 4, 1))
+        /* Version 2 had a tolerance of 1, which is better. We may want to
+         * revisit the conversion to see if we can improve. */
+
+        if (fuzzy_compare_bytes (output, expected_output, 4, 3))
         {
             fprintf (stdout, "mismatch\n");
             fprintf (stdout, "in:   "); print_bytes (input, 8, 4);
@@ -418,7 +430,11 @@ verify_preunmul_dir (const unsigned char *input, int n_in,
         int j;
 
         c = output [i];
-        if (c != alpha)
+        if (fuzzy_compare_bytes (&c, &alpha, 1, 
+                                 alpha < 0x0a ? 0x3f :
+                                 alpha < 0x20 ? 0x16 :
+                                 alpha < 0x30 ? 0x10 :
+                                 alpha < 0x40 ? 0x08 : 4))
         {
             fprintf (stdout, "%c %s(%d) -> (%d): ",
                      dir ? 'V' : 'H',
@@ -431,9 +447,15 @@ verify_preunmul_dir (const unsigned char *input, int n_in,
 
         for (j = 1; j < 4; j++)
         {
+            unsigned char ff = 0xff;
+
             c = output [i + j];
 
-            if (c != 0xff)
+            if (fuzzy_compare_bytes (&c, &ff, 1, 
+                                     alpha < 0x0a ? 0x7f :
+                                     alpha < 0x20 ? 0x16 :
+                                     alpha < 0x30 ? 0x10 :
+                                     alpha < 0x40 ? 0x08 : 4))
             {
                 fprintf (stdout, "%c %s(%d) -> (%d): ",
                          dir ? 'V' : 'H',
@@ -502,6 +524,9 @@ verify_preunmul (void)
                                                i, dir, with_srgb);
                 result |= verify_preunmul_dir (input, 65535,
                                                output, 65534,
+                                               i, dir, with_srgb);
+                result |= verify_preunmul_dir (input, 65535,
+                                               output, 8191,
                                                i, dir, with_srgb);
             }
         }
