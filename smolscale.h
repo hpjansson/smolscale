@@ -18,6 +18,14 @@ extern "C" {
 
 typedef enum
 {
+    SMOL_NO_FLAGS               = 0,
+    SMOL_FORCE_GENERIC_IMPL     = (1 << 0),
+    SMOL_LINEARIZE_SRGB         = (1 << 1)
+}
+SmolFlags;
+
+typedef enum
+{
     /* 32 bits per pixel */
 
     SMOL_PIXEL_RGBA8_PREMULTIPLIED,
@@ -53,7 +61,7 @@ void smol_scale_simple (const void *pixels_in, SmolPixelType pixel_type_in,
                         uint32_t width_in, uint32_t height_in, uint32_t rowstride_in,
                         void *pixels_out, SmolPixelType pixel_type_out,
                         uint32_t width_out, uint32_t height_out, uint32_t rowstride_out,
-                        uint8_t with_srgb);
+                        SmolFlags flags);
 
 /* Batch API: Allows scaling a few rows at a time. Suitable for multithreading. */
 
@@ -61,13 +69,13 @@ SmolScaleCtx *smol_scale_new (const void *pixels_in, SmolPixelType pixel_type_in
                               uint32_t width_in, uint32_t height_in, uint32_t rowstride_in,
                               void *pixels_out, SmolPixelType pixel_type_out,
                               uint32_t width_out, uint32_t height_out, uint32_t rowstride_out,
-                              uint8_t with_srgb);
+                              SmolFlags flags);
 
 SmolScaleCtx *smol_scale_new_full (const void *pixels_in, SmolPixelType pixel_type_in,
                                    uint32_t width_in, uint32_t height_in, uint32_t rowstride_in,
                                    void *pixels_out, SmolPixelType pixel_type_out,
                                    uint32_t width_out, uint32_t height_out, uint32_t rowstride_out,
-                                   uint8_t with_srgb,
+                                   SmolFlags flags,
                                    SmolPostRowFunc post_row_func, void *user_data);
 
 SmolScaleCtx *smol_scale_new_full_subpixel (const void *pixels_in,
@@ -80,7 +88,7 @@ SmolScaleCtx *smol_scale_new_full_subpixel (const void *pixels_in,
                                             uint32_t width_out,
                                             uint32_t height_out,
                                             uint32_t rowstride_out,
-                                            uint8_t with_srgb,
+                                            SmolFlags flags,
                                             SmolPostRowFunc post_row_func,
                                             void *user_data);
 

@@ -324,11 +324,11 @@ verify_saturation_dir (const unsigned char *input, int n_in, const PixelInfo *pi
     if (dir)
         smol_scale_simple (input, pinfo_in->type, 1, n_in, pinfo_in->n_channels,
                            output, pinfo_out->type, 1, n_out, pinfo_out->n_channels,
-                           with_srgb);
+                           with_srgb ? SMOL_LINEARIZE_SRGB : SMOL_NO_FLAGS);
     else
         smol_scale_simple (input, pinfo_in->type, n_in, 1, n_in * pinfo_in->n_channels,
                            output, pinfo_out->type, n_out, 1, n_out * pinfo_out->n_channels,
-                           with_srgb);
+                           with_srgb ? SMOL_LINEARIZE_SRGB : SMOL_NO_FLAGS);
 
     for (i = 0; i < n_out * pinfo_out->n_channels; i++)
     {
@@ -419,11 +419,11 @@ verify_preunmul_dir (const unsigned char *input, int n_in,
     if (dir)
         smol_scale_simple (input, SMOL_PIXEL_ARGB8_PREMULTIPLIED, 1, n_in, 4,
                            output, SMOL_PIXEL_ARGB8_UNASSOCIATED, 1, n_out, 4,
-                           with_srgb);
+                           with_srgb ? SMOL_LINEARIZE_SRGB : SMOL_NO_FLAGS);
     else
         smol_scale_simple (input, SMOL_PIXEL_ARGB8_PREMULTIPLIED, n_in, 1, n_in * 4,
                            output, SMOL_PIXEL_ARGB8_UNASSOCIATED, n_out, 1, n_out * 4,
-                           with_srgb);
+                           with_srgb ? SMOL_LINEARIZE_SRGB : SMOL_NO_FLAGS);
 
     for (i = 0; i < n_out * 4; i += 4)
     {

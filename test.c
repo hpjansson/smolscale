@@ -47,6 +47,7 @@ void smoltest_save_image (const gchar *prefix,
 
 static SmolPixelType smol_ptype_in = PIXEL_TYPE_SMOL;
 static SmolPixelType smol_ptype_out = PIXEL_TYPE_SMOL;
+static SmolFlags smol_flags = SMOL_NO_FLAGS;
 
 typedef struct
 {
@@ -801,7 +802,7 @@ scale_do_smol (ScaleParams *params, guint out_width, guint out_height)
                        smol_ptype_out,
                        out_width, out_height,
                        out_width * sizeof (guint32),
-                       FALSE);
+                       smol_flags);
 
     params->out_data = scaled;
 }
@@ -1176,6 +1177,10 @@ check_all_levels (const guint32 * const *canvas_array,
 {
     ScaleParams params = { 0 };
     guint c;
+
+    smol_ptype_in = SMOL_PIXEL_ARGB8_PREMULTIPLIED;
+    smol_ptype_out = SMOL_PIXEL_ARGB8_PREMULTIPLIED;
+    smol_flags = SMOL_NO_FLAGS;
 
     for (c = 0; c < 256 / 4; c++)
     {
