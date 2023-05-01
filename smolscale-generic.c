@@ -320,8 +320,8 @@ static SMOL_INLINE void
 premul_ul_to_p16l_128bpp (uint64_t *inout,
                           uint8_t alpha)
 {
-    inout [0] = inout [0] * alpha;
-    inout [1] = inout [1] * alpha;
+    inout [0] = inout [0] * ((uint16_t) alpha + 2);
+    inout [1] = inout [1] * ((uint16_t) alpha + 2);
 }
 
 static SMOL_INLINE void
