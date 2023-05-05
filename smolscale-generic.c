@@ -16,8 +16,7 @@ static void
 precalc_bilinear_array (uint16_t *array,
                         uint64_t dim_in_spx,
                         uint32_t dim_out_px,
-                        uint64_t dim_out_spx,
-                        unsigned int make_absolute_offsets)
+                        uint64_t dim_out_spx)
 {
     uint16_t *pu16 = array;
     uint16_t last_ofs = 0;
@@ -51,7 +50,7 @@ precalc_bilinear_array (uint16_t *array,
         if (ofs >= dim_in)
             break;
 
-        *(pu16++) = make_absolute_offsets ? ofs : ofs - last_ofs;
+        *(pu16++) = ofs;
         *(pu16++) = SMOL_SMALL_MUL - ((fracF / (SMOL_BILIN_MULTIPLIER / SMOL_SMALL_MUL))
                                       % SMOL_SMALL_MUL);
         fracF += frac_stepF;
@@ -64,7 +63,7 @@ precalc_bilinear_array (uint16_t *array,
      * bias towards the last pixel */
     while (dim_out)
     {
-        *(pu16++) = make_absolute_offsets ? dim_in - 1 : (dim_in - 1) - last_ofs;
+        *(pu16++) = dim_in - 1;
         *(pu16++) = 0;
         dim_out--;
 
@@ -168,8 +167,7 @@ init_horizontal (SmolScaleCtx *scale_ctx)
         precalc_bilinear_array (scale_ctx->precalc_x,
                                 scale_ctx->width_in_spx,
                                 scale_ctx->prehalving_width_out_px,
-                                scale_ctx->prehalving_width_out_spx,
-                                FALSE);
+                                scale_ctx->prehalving_width_out_spx);
     }
 }
 
@@ -191,8 +189,7 @@ init_vertical (SmolScaleCtx *scale_ctx)
         precalc_bilinear_array (scale_ctx->precalc_y,
                                 scale_ctx->height_in_spx,
                                 scale_ctx->prehalving_height_out_px,
-                                scale_ctx->prehalving_height_out_spx,
-                                TRUE);
+                                scale_ctx->prehalving_height_out_spx);
     }
 }
 
@@ -1416,11 +1413,11 @@ interp_horizontal_bilinear_##n_halvings##h_64bpp (const SmolScaleCtx *scale_ctx,
 \
         for (i = 0; i < (1 << (n_halvings)); i++) \
         { \
-            row_parts_in += *(precalc_x++); \
+            uint64_t pixel_ofs = *(precalc_x++); \
             F = *(precalc_x++); \
 \
-            p = *row_parts_in; \
-            q = *(row_parts_in + 1); \
+            p = row_parts_in [pixel_ofs]; \
+            q = row_parts_in [pixel_ofs + 1]; \
 \
             accum += ((((p - q) * F) >> 8) + q) & 0x00ff00ff00ff00ffULL; \
             } \
@@ -1449,16 +1446,16 @@ interp_horizontal_bilinear_##n_halvings##h_128bpp (const SmolScaleCtx *scale_ctx
          \
         for (i = 0; i < (1 << (n_halvings)); i++) \
         { \
-            row_parts_in += *(precalc_x++) * 2; \
+            uint32_t pixel_ofs = *(precalc_x++) * 2; \
             F = *(precalc_x++); \
 \
-            p = row_parts_in [0]; \
-            q = row_parts_in [2]; \
+            p = row_parts_in [pixel_ofs]; \
+            q = row_parts_in [pixel_ofs + 2]; \
 \
             accum [0] += ((((p - q) * F) >> 8) + q) & 0x00ffffff00ffffffULL; \
 \
-            p = row_parts_in [1]; \
-            q = row_parts_in [3]; \
+            p = row_parts_in [pixel_ofs + 1]; \
+            q = row_parts_in [pixel_ofs + 3]; \
 \
             accum [1] += ((((p - q) * F) >> 8) + q) & 0x00ffffff00ffffffULL; \
         } \
@@ -1483,11 +1480,11 @@ interp_horizontal_bilinear_0h_64bpp (const SmolScaleCtx *scale_ctx,
 
     do
     {
-        row_parts_in += *(precalc_x++);
+        uint32_t pixel_ofs = *(precalc_x++);
         F = *(precalc_x++);
 
-        p = *row_parts_in;
-        q = *(row_parts_in + 1);
+        p = row_parts_in [pixel_ofs];
+        q = row_parts_in [pixel_ofs + 1];
 
         *(row_parts_out++) = ((((p - q) * F) >> 8) + q) & 0x00ff00ff00ff00ffULL;
     }
@@ -1509,16 +1506,16 @@ interp_horizontal_bilinear_0h_128bpp (const SmolScaleCtx *scale_ctx,
 
     do
     {
-        row_parts_in += *(precalc_x++) * 2;
+        uint32_t pixel_ofs = *(precalc_x++) * 2;
         F = *(precalc_x++);
 
-        p = row_parts_in [0];
-        q = row_parts_in [2];
+        p = row_parts_in [pixel_ofs];
+        q = row_parts_in [pixel_ofs + 2];
 
         *(row_parts_out++) = ((((p - q) * F) >> 8) + q) & 0x00ffffff00ffffffULL;
 
-        p = row_parts_in [1];
-        q = row_parts_in [3];
+        p = row_parts_in [pixel_ofs + 1];
+        q = row_parts_in [pixel_ofs + 3];
 
         *(row_parts_out++) = ((((p - q) * F) >> 8) + q) & 0x00ffffff00ffffffULL;
     }
