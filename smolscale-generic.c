@@ -12,19 +12,38 @@
  * Context initialization *
  * ---------------------- */
 
+/* Linear precalc array:
+ *
+ * Each sample is extracted from a pair of adjacent pixels. The sample precalc
+ * consists of the first pixel's index, followed by its sample fraction [0..256].
+ * The second sample is implicitly taken at index+1 and weighted as 256-fraction.
+ *       _   _   _
+ * In   |_| |_| |_|
+ *        \_/ \_/   <- two samples per output pixel
+ * Out    |_| |_|
+ *
+ * When halving,
+ *       _   _   _
+ * In   |_| |_| |_|
+ *        \_/ \_/   <- four samples per output pixel
+ *        |_| |_|
+ *          \_/     <- halving
+ * Out      |_|
+ */
+
 static void
 precalc_bilinear_array (uint16_t *array,
                         uint64_t dim_in_spx,
                         uint32_t dim_out_px,
-                        uint64_t dim_out_spx)
+                        uint64_t dim_out_spx,
+                        unsigned int n_halvings)
 {
     uint16_t *pu16 = array;
-    uint16_t last_ofs = 0;
     uint32_t dim_in = SMOL_SPX_TO_PX (dim_in_spx);
     uint32_t dim_out = dim_out_px;
     uint64_t fracF, frac_stepF;
 
-    assert (dim_in > 0);
+    assert (dim_in > 1);
     assert (dim_out > 0);
 
     if (dim_in_spx > dim_out_spx)
@@ -41,33 +60,44 @@ precalc_bilinear_array (uint16_t *array,
         fracF = 0;
     }
 
-    do
+    for (; dim_out > (1U << n_halvings); dim_out--)
     {
         uint16_t ofs = fracF / SMOL_BILIN_MULTIPLIER;
 
-        /* We sample ofs and its neighbor -- prevent out of bounds access
-         * for the latter. */
-        if (ofs >= dim_in)
-            break;
+        if (ofs >= dim_in - 1)
+        {
+            *(pu16++) = dim_in - 2;
+            *(pu16++) = 0;
+            continue;
+        }
 
         *(pu16++) = ofs;
         *(pu16++) = SMOL_SMALL_MUL - ((fracF / (SMOL_BILIN_MULTIPLIER / SMOL_SMALL_MUL))
                                       % SMOL_SMALL_MUL);
         fracF += frac_stepF;
-
-        last_ofs = ofs;
     }
-    while (--dim_out);
 
-    /* Instead of going out of bounds, sample the final pair of pixels with a 100%
-     * bias towards the last pixel */
-    while (dim_out)
+    /* Right fringe, special subpixel handling */
+
+    fracF = (((uint64_t) dim_in_spx * SMOL_BILIN_MULTIPLIER) / SMOL_SUBPIXEL_MUL)
+        - frac_stepF * dim_out + ((frac_stepF - SMOL_BILIN_MULTIPLIER) / 2);
+
+    for ( ; dim_out > 0; dim_out--)
     {
-        *(pu16++) = dim_in - 1;
-        *(pu16++) = 0;
-        dim_out--;
+        uint16_t ofs = fracF / SMOL_BILIN_MULTIPLIER;
 
-        last_ofs = dim_in - 1;
+        if (ofs >= dim_in - 1)
+        {
+            *(pu16++) = dim_in - 2;
+            *(pu16++) = 0;
+            continue;
+        }
+
+        *(pu16++) = ofs;
+        *(pu16++) = SMOL_SMALL_MUL - ((fracF / (SMOL_BILIN_MULTIPLIER / SMOL_SMALL_MUL))
+                                      % SMOL_SMALL_MUL);
+
+        fracF += frac_stepF;
     }
 }
 
@@ -167,7 +197,8 @@ init_horizontal (SmolScaleCtx *scale_ctx)
         precalc_bilinear_array (scale_ctx->precalc_x,
                                 scale_ctx->width_in_spx,
                                 scale_ctx->prehalving_width_out_px,
-                                scale_ctx->prehalving_width_out_spx);
+                                scale_ctx->prehalving_width_out_spx,
+                                scale_ctx->width_halvings);
     }
 }
 
@@ -189,7 +220,8 @@ init_vertical (SmolScaleCtx *scale_ctx)
         precalc_bilinear_array (scale_ctx->precalc_y,
                                 scale_ctx->height_in_spx,
                                 scale_ctx->prehalving_height_out_px,
-                                scale_ctx->prehalving_height_out_spx);
+                                scale_ctx->prehalving_height_out_spx,
+                                scale_ctx->height_halvings);
     }
 }
 
