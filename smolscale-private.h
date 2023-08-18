@@ -293,6 +293,9 @@ struct SmolScaleCtx
     uint32_t width_in_px, height_in_px, rowstride_in;
     uint32_t width_out_px, height_out_px, rowstride_out;
 
+    int32_t placement_x_spx, placement_y_spx;
+    uint32_t placement_width_spx, placement_height_spx;
+
     SmolPixelType pixel_type_in, pixel_type_out;
     SmolFilterType filter_h, filter_v;
     SmolStorageType storage_type;
@@ -300,6 +303,14 @@ struct SmolScaleCtx
 
     /* Raw flags passed in by user */
     SmolFlags flags;
+
+    uint64_t bg_color [2];
+
+    /* One row of bg_color pixels in internal storage format. Used for
+     * compositing on top of. Dynamically allocated.
+     *
+     * FIXME: Have separate compositing functions that deal with this? */
+    uint64_t *bg_pixels;
 
     SmolRepackRowFunc *unpack_row_func;
     SmolRepackRowFunc *pack_row_func;
@@ -327,6 +338,11 @@ struct SmolScaleCtx
      * and applied after each scaling step. */
     uint16_t first_opacity_h, last_opacity_h;
     uint16_t first_opacity_v, last_opacity_v;
+
+    /* Rows and cols to add consisting of unbroken bg_color. This is done
+     * after scaling but before conversion to output pixel format. */
+    uint16_t splice_rows_before, splice_rows_after;
+    uint16_t splice_cols_before, splice_cols_after;
 
     /* TRUE if input rows can be copied directly to output. */
     unsigned int is_noop : 1;

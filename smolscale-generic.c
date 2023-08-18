@@ -34,17 +34,21 @@
 static void
 precalc_bilinear_array (uint16_t *array,
                         uint64_t dim_in_spx,
-                        uint32_t dim_out_px,
+                        uint64_t ofs_out_spx,
                         uint64_t dim_out_spx,
+                        uint32_t dim_out_prehalving_px,
                         unsigned int n_halvings)
 {
     uint16_t *pu16 = array;
-    uint32_t dim_in = SMOL_SPX_TO_PX (dim_in_spx);
-    uint32_t dim_out = dim_out_px;
+    uint32_t dim_in_px = SMOL_SPX_TO_PX (dim_in_spx);
+    uint32_t dim_out;
     uint64_t fracF, frac_stepF;
+    uint32_t i = 0;
 
-    assert (dim_in > 1);
-    assert (dim_out > 0);
+    assert (dim_in_px > 1);
+
+    ofs_out_spx %= SMOL_SUBPIXEL_MUL;
+    dim_out = dim_out_prehalving_px;
 
     if (dim_in_spx > dim_out_spx)
     {
@@ -60,13 +64,52 @@ precalc_bilinear_array (uint16_t *array,
         fracF = 0;
     }
 
-    for (; dim_out > (1U << n_halvings); dim_out--)
+    /* Left fringe, special subpixel handling */
+
+#if 0
+    if (ofs_out_spx != 0)
+#endif
+    {
+        for (i = 0; i < (1U << n_halvings); i++)
+        {
+            uint16_t ofs = fracF / SMOL_BILIN_MULTIPLIER;
+
+            if (ofs >= dim_in_px - 1)
+            {
+                *(pu16++) = dim_in_px - 2;
+                *(pu16++) = 0;
+                continue;
+            }
+
+            *(pu16++) = ofs;
+            *(pu16++) = SMOL_SMALL_MUL - ((fracF / (SMOL_BILIN_MULTIPLIER / SMOL_SMALL_MUL))
+                                          % SMOL_SMALL_MUL);
+            fracF += frac_stepF;
+        }
+    }
+
+    /* Main range */
+
+    if (dim_in_spx > dim_out_spx)
+    {
+        /* Minification */
+        fracF = ((frac_stepF - SMOL_BILIN_MULTIPLIER) / 2)
+            + ((frac_stepF * (SMOL_SUBPIXEL_MUL - ofs_out_spx) * (1 << n_halvings)) / SMOL_SUBPIXEL_MUL);
+    }
+    else
+    {
+        /* Magnification */
+        fracF = 0;
+        fracF = (frac_stepF * (SMOL_SUBPIXEL_MUL - ofs_out_spx)) / SMOL_SUBPIXEL_MUL;
+    }
+
+    for ( ; i + (1U << n_halvings) < dim_out; i++)
     {
         uint16_t ofs = fracF / SMOL_BILIN_MULTIPLIER;
 
-        if (ofs >= dim_in - 1)
+        if (ofs >= dim_in_px - 1)
         {
-            *(pu16++) = dim_in - 2;
+            *(pu16++) = dim_in_px - 2;
             *(pu16++) = 0;
             continue;
         }
@@ -77,18 +120,23 @@ precalc_bilinear_array (uint16_t *array,
         fracF += frac_stepF;
     }
 
+#if 0
+    printf ("\ni=%d, dim_out=%d\n", i, dim_out);
+#endif
+
     /* Right fringe, special subpixel handling */
 
     fracF = (((uint64_t) dim_in_spx * SMOL_BILIN_MULTIPLIER) / SMOL_SUBPIXEL_MUL)
-        - frac_stepF * dim_out + ((frac_stepF - SMOL_BILIN_MULTIPLIER) / 2);
+        + ((frac_stepF - SMOL_BILIN_MULTIPLIER) / 2)
+        - frac_stepF * (1U << n_halvings);
 
-    for ( ; dim_out > 0; dim_out--)
+    for ( ; i < dim_out; i++)
     {
         uint16_t ofs = fracF / SMOL_BILIN_MULTIPLIER;
 
-        if (ofs >= dim_in - 1)
+        if (ofs >= dim_in_px - 1)
         {
-            *(pu16++) = dim_in - 2;
+            *(pu16++) = dim_in_px - 2;
             *(pu16++) = 0;
             continue;
         }
@@ -196,8 +244,9 @@ init_horizontal (SmolScaleCtx *scale_ctx)
     {
         precalc_bilinear_array (scale_ctx->precalc_x,
                                 scale_ctx->width_in_spx,
-                                scale_ctx->prehalving_width_out_px,
+                                scale_ctx->placement_x_spx,
                                 scale_ctx->prehalving_width_out_spx,
+                                scale_ctx->prehalving_width_out_px,
                                 scale_ctx->width_halvings);
     }
 }
@@ -219,8 +268,9 @@ init_vertical (SmolScaleCtx *scale_ctx)
     {
         precalc_bilinear_array (scale_ctx->precalc_y,
                                 scale_ctx->height_in_spx,
-                                scale_ctx->prehalving_height_out_px,
+                                scale_ctx->placement_y_spx,
                                 scale_ctx->prehalving_height_out_spx,
+                                scale_ctx->prehalving_height_out_px,
                                 scale_ctx->height_halvings);
     }
 }

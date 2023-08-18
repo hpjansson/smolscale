@@ -13,6 +13,10 @@ extern "C" {
 
 #define SMOL_SUBPIXEL_SHIFT 8
 #define SMOL_SUBPIXEL_MUL (1 << (SMOL_SUBPIXEL_SHIFT))
+
+/* Applies modulo twice, yielding a positive fraction for negative offsets */
+#define SMOL_SUBPIXEL_MOD(n) ((((n) % SMOL_SUBPIXEL_MUL) + SMOL_SUBPIXEL_MUL) % SMOL_SUBPIXEL_MUL)
+
 #define SMOL_PX_TO_SPX(px) ((px) * (SMOL_SUBPIXEL_MUL))
 #define SMOL_SPX_TO_PX(spx) (((spx) + (SMOL_SUBPIXEL_MUL) - 1) / (SMOL_SUBPIXEL_MUL))
 
@@ -91,6 +95,44 @@ SmolScaleCtx *smol_scale_new_full_subpixel (const void *pixels_in,
                                             SmolFlags flags,
                                             SmolPostRowFunc post_row_func,
                                             void *user_data);
+
+SmolScaleCtx *smol_scale_new_over_color (const void *pixels_fg,
+                                         SmolPixelType pixel_type_fg,
+                                         uint32_t width_fg,
+                                         uint32_t height_fg,
+                                         uint32_t rowstride_fg,
+                                         const void *pixel_color,
+                                         SmolPixelType pixel_type_color,
+                                         void *pixels_out,
+                                         SmolPixelType pixel_type_out,
+                                         uint32_t width_out,
+                                         uint32_t height_out,
+                                         uint32_t rowstride_out,
+                                         int32_t placement_x_fg,
+                                         int32_t placement_y_fg,
+                                         uint32_t placement_width_fg,
+                                         uint32_t placement_height_fg,
+                                         SmolFlags flags,
+                                         SmolPostRowFunc post_row_func,
+                                         void *user_data);
+
+SmolScaleCtx *smol_scale_new_over_bg (const void *pixels_fg,
+                                      SmolPixelType pixel_type_fg,
+                                      uint32_t width_fg,
+                                      uint32_t height_fg,
+                                      uint32_t rowstride_fg,
+                                      void *pixels_bg,
+                                      SmolPixelType pixel_type_bg,
+                                      uint32_t width_bg,
+                                      uint32_t height_bg,
+                                      uint32_t rowstride_bg,
+                                      int32_t placement_x_fg,
+                                      int32_t placement_y_fg,
+                                      uint32_t placement_width_fg,
+                                      uint32_t placement_height_fg,
+                                      SmolFlags flags,
+                                      SmolPostRowFunc post_row_func,
+                                      void *user_data);
 
 void smol_scale_destroy (SmolScaleCtx *scale_ctx);
 
