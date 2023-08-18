@@ -32,6 +32,35 @@
  */
 
 static void
+precalc_linear_range (uint16_t *array_out,
+                      int first_index, int last_index,
+                      uint64_t first_sample_ofs, uint64_t sample_step,
+                      int sample_ofs_px_max)
+{
+    uint64_t sample_ofs;
+    int i;
+
+    sample_ofs = first_sample_ofs;
+
+    for (i = first_index; i < last_index; i++)
+    {
+        uint16_t sample_ofs_px = sample_ofs / SMOL_BILIN_MULTIPLIER;
+
+        if (sample_ofs_px >= sample_ofs_px_max - 1)
+        {
+            array_out [i * 2] = sample_ofs_px_max - 2;
+            array_out [i * 2 + 1] = 0;
+            continue;
+        }
+
+        array_out [i * 2] = sample_ofs_px;
+        array_out [i * 2 + 1] = SMOL_SMALL_MUL
+            - ((sample_ofs / (SMOL_BILIN_MULTIPLIER / SMOL_SMALL_MUL)) % SMOL_SMALL_MUL);
+        sample_ofs += sample_step;
+    }
+}
+
+static void
 precalc_bilinear_array (uint16_t *array,
                         uint64_t dim_in_spx,
                         uint64_t ofs_out_spx,
@@ -39,11 +68,10 @@ precalc_bilinear_array (uint16_t *array,
                         uint32_t dim_out_prehalving_px,
                         unsigned int n_halvings)
 {
-    uint16_t *pu16 = array;
     uint32_t dim_in_px = SMOL_SPX_TO_PX (dim_in_spx);
     uint32_t dim_out;
-    uint64_t fracF, frac_stepF;
-    uint32_t i = 0;
+    uint64_t sample_step;
+    uint64_t first_sample_ofs [3];
 
     assert (dim_in_px > 1);
 
@@ -53,100 +81,41 @@ precalc_bilinear_array (uint16_t *array,
     if (dim_in_spx > dim_out_spx)
     {
         /* Minification */
-        frac_stepF = ((uint64_t) dim_in_spx * SMOL_BILIN_MULTIPLIER) / dim_out_spx;
-        fracF = (frac_stepF - SMOL_BILIN_MULTIPLIER) / 2;
+        sample_step = ((uint64_t) dim_in_spx * SMOL_BILIN_MULTIPLIER) / dim_out_spx;
+        first_sample_ofs [0] = (sample_step - SMOL_BILIN_MULTIPLIER) / 2;
+        first_sample_ofs [1] = ((sample_step - SMOL_BILIN_MULTIPLIER) / 2)
+            + ((sample_step * (SMOL_SUBPIXEL_MUL - ofs_out_spx) * (1 << n_halvings)) / SMOL_SUBPIXEL_MUL);
     }
     else
     {
         /* Magnification */
-        frac_stepF = ((dim_in_spx - SMOL_SUBPIXEL_MUL) * SMOL_BILIN_MULTIPLIER)
+        sample_step = ((dim_in_spx - SMOL_SUBPIXEL_MUL) * SMOL_BILIN_MULTIPLIER)
             / (dim_out_spx > SMOL_SUBPIXEL_MUL ? (dim_out_spx - SMOL_SUBPIXEL_MUL) : 1);
-        fracF = 0;
+        first_sample_ofs [0] = 0;
+        first_sample_ofs [1] = (sample_step * (SMOL_SUBPIXEL_MUL - ofs_out_spx)) / SMOL_SUBPIXEL_MUL;
     }
+
+    first_sample_ofs [2] = (((uint64_t) dim_in_spx * SMOL_BILIN_MULTIPLIER) / SMOL_SUBPIXEL_MUL)
+        + ((sample_step - SMOL_BILIN_MULTIPLIER) / 2)
+        - sample_step * (1U << n_halvings);
 
     /* Left fringe, special subpixel handling */
-
-#if 0
-    if (ofs_out_spx != 0)
-#endif
-    {
-        for (i = 0; i < (1U << n_halvings); i++)
-        {
-            uint16_t ofs = fracF / SMOL_BILIN_MULTIPLIER;
-
-            if (ofs >= dim_in_px - 1)
-            {
-                *(pu16++) = dim_in_px - 2;
-                *(pu16++) = 0;
-                continue;
-            }
-
-            *(pu16++) = ofs;
-            *(pu16++) = SMOL_SMALL_MUL - ((fracF / (SMOL_BILIN_MULTIPLIER / SMOL_SMALL_MUL))
-                                          % SMOL_SMALL_MUL);
-            fracF += frac_stepF;
-        }
-    }
+    precalc_linear_range (array,
+                          0, 1 << n_halvings,
+                          first_sample_ofs [0], sample_step,
+                          dim_in_px);
 
     /* Main range */
-
-    if (dim_in_spx > dim_out_spx)
-    {
-        /* Minification */
-        fracF = ((frac_stepF - SMOL_BILIN_MULTIPLIER) / 2)
-            + ((frac_stepF * (SMOL_SUBPIXEL_MUL - ofs_out_spx) * (1 << n_halvings)) / SMOL_SUBPIXEL_MUL);
-    }
-    else
-    {
-        /* Magnification */
-        fracF = 0;
-        fracF = (frac_stepF * (SMOL_SUBPIXEL_MUL - ofs_out_spx)) / SMOL_SUBPIXEL_MUL;
-    }
-
-    for ( ; i + (1U << n_halvings) < dim_out; i++)
-    {
-        uint16_t ofs = fracF / SMOL_BILIN_MULTIPLIER;
-
-        if (ofs >= dim_in_px - 1)
-        {
-            *(pu16++) = dim_in_px - 2;
-            *(pu16++) = 0;
-            continue;
-        }
-
-        *(pu16++) = ofs;
-        *(pu16++) = SMOL_SMALL_MUL - ((fracF / (SMOL_BILIN_MULTIPLIER / SMOL_SMALL_MUL))
-                                      % SMOL_SMALL_MUL);
-        fracF += frac_stepF;
-    }
-
-#if 0
-    printf ("\ni=%d, dim_out=%d\n", i, dim_out);
-#endif
+    precalc_linear_range (array,
+                          1 << n_halvings, dim_out - (1 << n_halvings),
+                          first_sample_ofs [1], sample_step,
+                          dim_in_px);
 
     /* Right fringe, special subpixel handling */
-
-    fracF = (((uint64_t) dim_in_spx * SMOL_BILIN_MULTIPLIER) / SMOL_SUBPIXEL_MUL)
-        + ((frac_stepF - SMOL_BILIN_MULTIPLIER) / 2)
-        - frac_stepF * (1U << n_halvings);
-
-    for ( ; i < dim_out; i++)
-    {
-        uint16_t ofs = fracF / SMOL_BILIN_MULTIPLIER;
-
-        if (ofs >= dim_in_px - 1)
-        {
-            *(pu16++) = dim_in_px - 2;
-            *(pu16++) = 0;
-            continue;
-        }
-
-        *(pu16++) = ofs;
-        *(pu16++) = SMOL_SMALL_MUL - ((fracF / (SMOL_BILIN_MULTIPLIER / SMOL_SMALL_MUL))
-                                      % SMOL_SMALL_MUL);
-
-        fracF += frac_stepF;
-    }
+    precalc_linear_range (array,
+                          dim_out - (1 << n_halvings), dim_out,
+                          first_sample_ofs [2], sample_step,
+                          dim_in_px);
 }
 
 static void
