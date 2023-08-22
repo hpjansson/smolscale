@@ -1223,11 +1223,41 @@ smol_scale_new_over_bg (const void *pixels_fg,
     return scale_ctx;
 }
 
+static SMOL_INLINE int
+check_row_range (const SmolScaleCtx *scale_ctx,
+                 int32_t *first_out_row,
+                 int32_t *n_out_rows)
+{
+    if (*first_out_row < 0)
+    {
+        *n_out_rows += *first_out_row;
+        *first_out_row = 0;
+    }
+    else if (*first_out_row >= (int32_t) scale_ctx->height_out_px)
+    {
+        return 0;
+    }
+
+    if (*n_out_rows < 0 || *first_out_row + *n_out_rows > (int32_t) scale_ctx->height_out_px)
+    {
+        *n_out_rows = scale_ctx->height_out_px - *first_out_row;
+    }
+    else if (*n_out_rows == 0)
+    {
+        return 0;
+    }
+
+    return 1;
+}
+
 void
 smol_scale_batch (const SmolScaleCtx *scale_ctx,
-                  uint32_t first_out_row,
-                  uint32_t n_out_rows)
+                  int32_t first_out_row,
+                  int32_t n_out_rows)
 {
+    if (!check_row_range (scale_ctx, &first_out_row, &n_out_rows))
+        return;
+
     do_rows (scale_ctx,
              outrow_ofs_to_pointer (scale_ctx, first_out_row),
              first_out_row,
@@ -1237,9 +1267,12 @@ smol_scale_batch (const SmolScaleCtx *scale_ctx,
 void
 smol_scale_batch_full (const SmolScaleCtx *scale_ctx,
                        void *outrows_dest,
-                       uint32_t first_out_row,
-                       uint32_t n_out_rows)
+                       int32_t first_out_row,
+                       int32_t n_out_rows)
 {
+    if (!check_row_range (scale_ctx, &first_out_row, &n_out_rows))
+        return;
+
     do_rows (scale_ctx,
              outrows_dest,
              first_out_row,

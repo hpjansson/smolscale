@@ -140,7 +140,7 @@ void smol_scale_destroy (SmolScaleCtx *scale_ctx);
  * threads, as long as the outrows do not overlap. Make sure all workers are
  * finished before you call smol_scale_destroy(). */
 
-void smol_scale_batch (const SmolScaleCtx *scale_ctx, uint32_t first_outrow, uint32_t n_outrows);
+void smol_scale_batch (const SmolScaleCtx *scale_ctx, int32_t first_outrow, int32_t n_outrows);
 
 /* Like smol_scale_batch(), but will write the output rows to outrows_dest
  * instead of relative to pixels_out address handed to smol_scale_new(). The
@@ -148,7 +148,7 @@ void smol_scale_batch (const SmolScaleCtx *scale_ctx, uint32_t first_outrow, uin
 
 void smol_scale_batch_full (const SmolScaleCtx *scale_ctx,
                             void *outrows_dest,
-                            uint32_t first_outrow, uint32_t n_outrows);
+                            int32_t first_outrow, int32_t n_outrows);
 
 #ifdef __cplusplus
 }
