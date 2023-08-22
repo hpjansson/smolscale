@@ -127,13 +127,13 @@ precalc_boxes_array (uint32_t *array,
                      uint32_t *span_step,
                      uint32_t *span_mul,
                      uint32_t dim_in_spx,
+                     int32_t dim_out,
                      uint32_t ofs_out_spx,
                      uint32_t dim_out_spx,
                      unsigned int make_absolute_offsets)
 {
     uint64_t fracF, frac_stepF;
     uint32_t dim_in = SMOL_SPX_TO_PX (dim_in_spx);
-    int32_t dim_out = SMOL_SPX_TO_PX (dim_out_spx);
     uint64_t f;
     uint64_t stride;
     uint64_t a, b;
@@ -169,7 +169,7 @@ precalc_boxes_array (uint32_t *array,
 
     /* Main range */
     fracF = ((frac_stepF * (SMOL_SUBPIXEL_MUL - ofs_out_spx)) / SMOL_SUBPIXEL_MUL);
-    for (i = 1; i < dim_out - 1 ; i++)
+    for (i = 1; i < dim_out - 1; i++)
     {
         array [i] = fracF / SMOL_SMALL_MUL;
         fracF += frac_stepF;
@@ -193,6 +193,7 @@ init_horizontal (SmolScaleCtx *scale_ctx)
                              &scale_ctx->span_step_x,
                              &scale_ctx->span_mul_x,
                              scale_ctx->width_in_spx,
+                             scale_ctx->width_out_px,
                              scale_ctx->placement_x_spx,
                              scale_ctx->width_out_spx,
                              FALSE);
@@ -221,6 +222,7 @@ init_vertical (SmolScaleCtx *scale_ctx)
                              &scale_ctx->span_step_y,
                              &scale_ctx->span_mul_y,
                              scale_ctx->height_in_spx,
+                             scale_ctx->height_out_px,
                              scale_ctx->placement_y_spx,
                              scale_ctx->height_out_spx,
                              TRUE);
