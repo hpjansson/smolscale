@@ -325,6 +325,7 @@ struct SmolScaleCtx
      * are relative to the image after halvings have taken place. */
     /* FIXME: Should be precalc_h and precalc_v */
     uint16_t *precalc_x, *precalc_y;
+    uint32_t span_step_x, span_step_y;  /* For box filter, in spx */
     uint32_t span_mul_x, span_mul_y;  /* For box filter */
 
     void *precalc_x_storage;

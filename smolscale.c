@@ -623,14 +623,10 @@ pick_filter_params (uint32_t dim_in,
     {
         *storage_out = SMOL_STORAGE_128BPP;
         *filter_out = SMOL_FILTER_BOX;
-        *first_opacity = 256;
-        *last_opacity = 256; /* The box filter kindly handles edge opacity */
     }
     else if (dim_in > dim_out * 8)
     {
         *filter_out = SMOL_FILTER_BOX;
-        *first_opacity = 256;
-        *last_opacity = 256; /* The box filter kindly handles edge opacity */
     }
     else if (dim_in <= 1)
     {
