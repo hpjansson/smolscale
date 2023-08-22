@@ -69,14 +69,12 @@ precalc_bilinear_array (uint16_t *array,
                         unsigned int n_halvings)
 {
     uint32_t dim_in_px = SMOL_SPX_TO_PX (dim_in_spx);
-    uint32_t dim_out;
-    uint64_t sample_step;
     uint64_t first_sample_ofs [3];
+    uint64_t sample_step;
 
     assert (dim_in_px > 1);
 
     ofs_out_spx %= SMOL_SUBPIXEL_MUL;
-    dim_out = dim_out_prehalving_px;
 
     if (dim_in_spx > dim_out_spx)
     {
@@ -99,22 +97,28 @@ precalc_bilinear_array (uint16_t *array,
         + ((sample_step - SMOL_BILIN_MULTIPLIER) / 2)
         - sample_step * (1U << n_halvings);
 
-    /* Left fringe, special subpixel handling */
+    /* Left fringe */
     precalc_linear_range (array,
-                          0, 1 << n_halvings,
-                          first_sample_ofs [0], sample_step,
+                          0,
+                          1 << n_halvings,
+                          first_sample_ofs [0],
+                          sample_step,
                           dim_in_px);
 
     /* Main range */
     precalc_linear_range (array,
-                          1 << n_halvings, dim_out - (1 << n_halvings),
-                          first_sample_ofs [1], sample_step,
+                          1 << n_halvings,
+                          dim_out_prehalving_px - (1 << n_halvings),
+                          first_sample_ofs [1],
+                          sample_step,
                           dim_in_px);
 
-    /* Right fringe, special subpixel handling */
+    /* Right fringe */
     precalc_linear_range (array,
-                          dim_out - (1 << n_halvings), dim_out,
-                          first_sample_ofs [2], sample_step,
+                          dim_out_prehalving_px - (1 << n_halvings),
+                          dim_out_prehalving_px,
+                          first_sample_ofs [2],
+                          sample_step,
                           dim_in_px);
 }
 
