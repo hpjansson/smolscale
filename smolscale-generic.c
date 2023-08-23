@@ -179,59 +179,42 @@ precalc_boxes_array (uint32_t *array,
 }
 
 static void
-init_horizontal (SmolScaleCtx *scale_ctx)
+init_dim (SmolDim *dim)
 {
-    if (scale_ctx->hdim.filter_type == SMOL_FILTER_ONE
-        || scale_ctx->hdim.filter_type == SMOL_FILTER_COPY)
+    if (dim->filter_type == SMOL_FILTER_ONE || dim->filter_type == SMOL_FILTER_COPY)
     {
     }
-    else if (scale_ctx->hdim.filter_type == SMOL_FILTER_BOX)
+    else if (dim->filter_type == SMOL_FILTER_BOX)
     {
-        precalc_boxes_array (scale_ctx->hdim.precalc,
-                             &scale_ctx->hdim.span_step,
-                             &scale_ctx->hdim.span_mul,
-                             scale_ctx->hdim.in_size_spx,
-                             scale_ctx->hdim.out_size_px,
-                             scale_ctx->hdim.placement_ofs_spx,
-                             scale_ctx->hdim.out_size_spx);
+        precalc_boxes_array (dim->precalc,
+                             &dim->span_step,
+                             &dim->span_mul,
+                             dim->in_size_spx,
+                             dim->out_size_px,
+                             dim->placement_ofs_spx,
+                             dim->out_size_spx);
     }
     else /* SMOL_FILTER_BILINEAR_?H */
     {
-        precalc_bilinear_array (scale_ctx->hdim.precalc,
-                                scale_ctx->hdim.in_size_spx,
-                                scale_ctx->hdim.placement_ofs_spx,
-                                scale_ctx->hdim.out_size_prehalving_spx,
-                                scale_ctx->hdim.out_size_prehalving_px,
-                                scale_ctx->hdim.n_halvings);
+        precalc_bilinear_array (dim->precalc,
+                                dim->in_size_spx,
+                                dim->placement_ofs_spx,
+                                dim->out_size_prehalving_spx,
+                                dim->out_size_prehalving_px,
+                                dim->n_halvings);
     }
+}
+
+static void
+init_horizontal (SmolScaleCtx *scale_ctx)
+{
+    init_dim (&scale_ctx->hdim);
 }
 
 static void
 init_vertical (SmolScaleCtx *scale_ctx)
 {
-    if (scale_ctx->vdim.filter_type == SMOL_FILTER_ONE
-        || scale_ctx->vdim.filter_type == SMOL_FILTER_COPY)
-    {
-    }
-    else if (scale_ctx->vdim.filter_type == SMOL_FILTER_BOX)
-    {
-        precalc_boxes_array (scale_ctx->vdim.precalc,
-                             &scale_ctx->vdim.span_step,
-                             &scale_ctx->vdim.span_mul,
-                             scale_ctx->vdim.in_size_spx,
-                             scale_ctx->vdim.out_size_px,
-                             scale_ctx->vdim.placement_ofs_spx,
-                             scale_ctx->vdim.out_size_spx);
-    }
-    else /* SMOL_FILTER_BILINEAR_?H */
-    {
-        precalc_bilinear_array (scale_ctx->vdim.precalc,
-                                scale_ctx->vdim.in_size_spx,
-                                scale_ctx->vdim.placement_ofs_spx,
-                                scale_ctx->vdim.out_size_prehalving_spx,
-                                scale_ctx->vdim.out_size_prehalving_px,
-                                scale_ctx->vdim.n_halvings);
-    }
+    init_dim (&scale_ctx->vdim);
 }
 
 /* ---------------------- *
