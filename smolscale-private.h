@@ -280,6 +280,33 @@ typedef struct
 }
 SmolImplementation;
 
+typedef struct
+{
+    void *precalc;
+    SmolFilterType filter_type;
+
+    uint32_t in_size_px, in_size_spx;
+    uint32_t out_size_prehalving_px, out_size_prehalving_spx;
+    uint32_t out_size_px, out_size_spx;
+
+    unsigned int n_halvings;
+
+    uint32_t placement_ofs_spx;
+    uint32_t placement_size_spx;
+
+    uint32_t span_step;  /* For box filter, in spx */
+    uint32_t span_mul;  /* For box filter */
+
+    /* Opacity of first and last column or row. Used for subpixel placement
+     * and applied after each scaling step. */
+    uint16_t first_opacity, last_opacity;
+
+    /* Rows or cols to add consisting of unbroken bg_color. This is done
+     * after scaling but before conversion to output pixel format. */
+    uint16_t before_splice_px, after_splice_px;
+}
+SmolDim;
+
 struct SmolScaleCtx
 {
     /* <private> */
@@ -287,23 +314,17 @@ struct SmolScaleCtx
     const char *pixels_in;
     char *pixels_out;
 
-    uint32_t width_in_spx, height_in_spx;
-    uint32_t width_out_spx, height_out_spx;
-
-    uint32_t width_in_px, height_in_px, rowstride_in;
-    uint32_t width_out_px, height_out_px, rowstride_out;
-
-    int32_t placement_x_spx, placement_y_spx;
-    uint32_t placement_width_spx, placement_height_spx;
+    uint32_t in_rowstride;
+    uint32_t out_rowstride;
 
     SmolPixelType pixel_type_in, pixel_type_out;
-    SmolFilterType filter_h, filter_v;
     SmolStorageType storage_type;
     SmolGammaType gamma_type;
 
     /* Raw flags passed in by user */
     SmolFlags flags;
 
+    /* Unpacked BG color to composite on */
     uint64_t bg_color [2];
 
     /* One row of bg_color pixels in internal storage format. Used for
@@ -321,29 +342,11 @@ struct SmolScaleCtx
     SmolPostRowFunc *post_row_func;
     void *user_data;
 
-    /* Each offset is split in two uint16s: { pixel index, fraction }. These
-     * are relative to the image after halvings have taken place. */
-    /* FIXME: Should be precalc_h and precalc_v */
-    void *precalc_x, *precalc_y;
-    uint32_t span_step_x, span_step_y;  /* For box filter, in spx */
-    uint32_t span_mul_x, span_mul_y;  /* For box filter */
+    /* Storage for dimensions' precalc arrays. Single allocation. */
+    void *precalc_storage;
 
-    void *precalc_x_storage;
-
-    uint32_t prehalving_width_out_spx, prehalving_height_out_spx;
-    uint32_t prehalving_width_out_px, prehalving_height_out_px;
-    /* FIXME: Should be halvings_h and halvings_v */
-    unsigned int width_halvings, height_halvings;
-
-    /* Opacity of first and last column and row. Used for subpixel placement
-     * and applied after each scaling step. */
-    uint16_t first_opacity_h, last_opacity_h;
-    uint16_t first_opacity_v, last_opacity_v;
-
-    /* Rows and cols to add consisting of unbroken bg_color. This is done
-     * after scaling but before conversion to output pixel format. */
-    uint16_t splice_rows_before, splice_rows_after;
-    uint16_t splice_cols_before, splice_cols_after;
+    /* Specifics for each dimension */
+    SmolDim hdim, vdim;
 
     /* TRUE if input rows can be copied directly to output. */
     unsigned int is_noop : 1;
