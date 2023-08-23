@@ -129,11 +129,9 @@ precalc_boxes_array (uint32_t *array,
                      uint32_t dim_in_spx,
                      int32_t dim_out,
                      uint32_t ofs_out_spx,
-                     uint32_t dim_out_spx,
-                     unsigned int make_absolute_offsets)
+                     uint32_t dim_out_spx)
 {
     uint64_t fracF, frac_stepF;
-    uint32_t dim_in = SMOL_SPX_TO_PX (dim_in_spx);
     uint64_t f;
     uint64_t stride;
     uint64_t a, b;
@@ -195,8 +193,7 @@ init_horizontal (SmolScaleCtx *scale_ctx)
                              scale_ctx->width_in_spx,
                              scale_ctx->width_out_px,
                              scale_ctx->placement_x_spx,
-                             scale_ctx->width_out_spx,
-                             FALSE);
+                             scale_ctx->width_out_spx);
     }
     else /* SMOL_FILTER_BILINEAR_?H */
     {
@@ -224,8 +221,7 @@ init_vertical (SmolScaleCtx *scale_ctx)
                              scale_ctx->height_in_spx,
                              scale_ctx->height_out_px,
                              scale_ctx->placement_y_spx,
-                             scale_ctx->height_out_spx,
-                             TRUE);
+                             scale_ctx->height_out_spx);
     }
     else /* SMOL_FILTER_BILINEAR_?H */
     {
@@ -1427,17 +1423,13 @@ add_weighted_parts_128bpp (const uint64_t * SMOL_RESTRICT parts_in,
 static SMOL_INLINE void
 apply_subpixel_opacity_64bpp (uint64_t * SMOL_RESTRICT u64_inout, uint16_t opacity)
 {
-#ifdef SUBPIXEL_FIXUP
     *u64_inout = ((*u64_inout * opacity) >> SMOL_SUBPIXEL_SHIFT) & 0x00ff00ff00ff00ffULL;
-#endif
 }
 
 static SMOL_INLINE void
 apply_subpixel_opacity_128bpp_half (uint64_t * SMOL_RESTRICT u64_inout, uint16_t opacity)
 {
-#ifdef SUBPIXEL_FIXUP
     *u64_inout = ((*u64_inout * opacity) >> SMOL_SUBPIXEL_SHIFT) & 0x00ffffff00ffffffULL;
-#endif
 }
 
 static SMOL_INLINE void
@@ -1468,8 +1460,6 @@ apply_subpixel_opacity_128bpp (uint64_t *u64_inout, uint16_t opacity)
 
     if ((u64_inout [1] & 0xffffffff) < (u64_inout [0] >> 32))
         u64_inout [1] = (u64_inout [1] & 0xffffffff00000000ULL) | (u64_inout [0] >> 32);
-
-
 }
 
 static void
@@ -2673,23 +2663,6 @@ finalize_vertical_with_opacity_128bpp (const uint64_t * SMOL_RESTRICT accums,
         parts_out [1] = scale_128bpp_half (*(accums++), multiplier);
         apply_subpixel_opacity_128bpp (parts_out, opacity);
         parts_out += 2;
-    }
-}
-
-static void
-weight_row_128bpp (uint64_t *row,
-                   uint16_t w,
-                   uint32_t n)
-{
-    uint64_t *row_max = row + (n * 2);
-
-    SMOL_ASSUME_ALIGNED (row, uint64_t *);
-
-    while (row != row_max)
-    {
-        row [0] = ((row [0] * w) >> 8) & 0x00ffffff00ffffffULL;
-        row [1] = ((row [1] * w) >> 8) & 0x00ffffff00ffffffULL;
-        row += 2;
     }
 }
 
