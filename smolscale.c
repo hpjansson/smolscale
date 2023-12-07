@@ -940,12 +940,6 @@ smol_scale_init (SmolScaleCtx *scale_ctx,
     scale_ctx->flags = flags;
     scale_ctx->gamma_type = (flags & SMOL_LINEARIZE_SRGB) ? SMOL_GAMMA_SRGB_LINEAR : SMOL_GAMMA_SRGB_COMPRESSED;
 
-#if 0
-    printf ("in: %u/%u\nout: %u/%u\n",
-            width_in, scale_ctx->width_in,
-            width_out, scale_ctx->width_out);
-#endif
-
     scale_ctx->post_row_func = post_row_func;
     scale_ctx->user_data = user_data;
 
