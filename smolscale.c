@@ -12,7 +12,11 @@
  * Misc. conversion tables *
  * ----------------------- */
 
-/* Keep in sync with the private SmolReorderType enum */
+/* Table of channel reorderings. Each entry describes an available shuffle
+ * implementation indexed by its SmolReorderType. Channel indexes are 1-based.
+ * A zero index denotes that the channel is not present (e.g. 3-channel RGB).
+ *
+ * Keep in sync with the private SmolReorderType enum. */
 static const SmolReorderMeta reorder_meta [SMOL_REORDER_MAX] =
 {
     { { 1, 2, 3, 4 }, { 1, 2, 3, 4 } },
@@ -41,7 +45,13 @@ static const SmolReorderMeta reorder_meta [SMOL_REORDER_MAX] =
     { { 1, 2, 3, 4 }, { 3, 2, 4, 1 } }
 };
 
-/* Keep in sync with the public SmolPixelType enum */
+/* Metadata for each pixel type. Storage type, number of channels, alpha type,
+ * channel ordering. Channel indexes are 1-based, and 4 is always alpha. A
+ * zero index denotes that the channel is not present.
+ *
+ * RGBA = 1, 2, 3, 4.
+ *
+ * Keep in sync with the public SmolPixelType enum. */
 static const SmolPixelTypeMeta pixel_type_meta [SMOL_PIXEL_MAX] =
 {
     { SMOL_STORAGE_32BPP, 4, SMOL_ALPHA_PREMUL8,      { 1, 2, 3, 4 } },
@@ -58,7 +68,9 @@ static const SmolPixelTypeMeta pixel_type_meta [SMOL_PIXEL_MAX] =
 
 /* Channel ordering corrected for little endian. Only applies when fetching
  * entire pixels as dwords (i.e. u32), so 3-byte variants don't require any
- * correction. Keep in sync with the public SmolPixelType enum */
+ * correction.
+ *
+ * Keep in sync with the public SmolPixelType enum. */
 static const SmolPixelType pixel_type_u32_le [SMOL_PIXEL_MAX] =
 {
     SMOL_PIXEL_ABGR8_PREMULTIPLIED,
