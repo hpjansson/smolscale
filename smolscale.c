@@ -1102,6 +1102,33 @@ smol_scale_destroy (SmolScaleCtx *scale_ctx)
     free (scale_ctx);
 }
 
+static SMOL_INLINE int
+check_row_range (const SmolScaleCtx *scale_ctx,
+                 int32_t *first_out_row,
+                 int32_t *n_out_rows)
+{
+    if (*first_out_row < 0)
+    {
+        *n_out_rows += *first_out_row;
+        *first_out_row = 0;
+    }
+    else if (*first_out_row >= (int32_t) scale_ctx->vdim.out_size_px)
+    {
+        return 0;
+    }
+
+    if (*n_out_rows < 0 || *first_out_row + *n_out_rows > (int32_t) scale_ctx->vdim.out_size_px)
+    {
+        *n_out_rows = scale_ctx->vdim.out_size_px - *first_out_row;
+    }
+    else if (*n_out_rows == 0)
+    {
+        return 0;
+    }
+
+    return 1;
+}
+
 void
 smol_scale_simple (const void *pixels_in,
                    SmolPixelType pixel_type_in,
@@ -1116,6 +1143,7 @@ smol_scale_simple (const void *pixels_in,
                    SmolFlags flags)
 {
     SmolScaleCtx scale_ctx = { 0 };
+    int first_row, n_rows;
 
     smol_scale_init (&scale_ctx,
                      pixels_in,
@@ -1132,10 +1160,18 @@ smol_scale_simple (const void *pixels_in,
                      0,
                      flags,
                      NULL, NULL);
-    do_rows (&scale_ctx,
-             outrow_ofs_to_pointer (&scale_ctx, 0),
-             0,
-             scale_ctx.vdim.out_size_px);
+
+    first_row = 0;
+    n_rows = scale_ctx.vdim.out_size_px;
+
+    if (check_row_range (&scale_ctx, &first_row, &n_rows))
+    {
+        do_rows (&scale_ctx,
+                 outrow_ofs_to_pointer (&scale_ctx, 0),
+                 first_row,
+                 n_rows);
+    }
+
     smol_scale_finalize (&scale_ctx);
 }
 
@@ -1221,33 +1257,6 @@ smol_scale_new_over_bg (const void *pixels_fg,
                      post_row_func,
                      user_data);
     return scale_ctx;
-}
-
-static SMOL_INLINE int
-check_row_range (const SmolScaleCtx *scale_ctx,
-                 int32_t *first_out_row,
-                 int32_t *n_out_rows)
-{
-    if (*first_out_row < 0)
-    {
-        *n_out_rows += *first_out_row;
-        *first_out_row = 0;
-    }
-    else if (*first_out_row >= (int32_t) scale_ctx->vdim.out_size_px)
-    {
-        return 0;
-    }
-
-    if (*n_out_rows < 0 || *first_out_row + *n_out_rows > (int32_t) scale_ctx->vdim.out_size_px)
-    {
-        *n_out_rows = scale_ctx->vdim.out_size_px - *first_out_row;
-    }
-    else if (*n_out_rows == 0)
-    {
-        return 0;
-    }
-
-    return 1;
 }
 
 void
