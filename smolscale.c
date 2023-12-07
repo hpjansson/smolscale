@@ -44,17 +44,16 @@ static const SmolReorderMeta reorder_meta [SMOL_REORDER_MAX] =
 /* Keep in sync with the public SmolPixelType enum */
 static const SmolPixelTypeMeta pixel_type_meta [SMOL_PIXEL_MAX] =
 {
-    /* RGBA = 1, 2, 3, 4 */
-    { SMOL_STORAGE_32BPP, SMOL_ALPHA_PREMUL8,      { 1, 2, 3, 4 } },
-    { SMOL_STORAGE_32BPP, SMOL_ALPHA_PREMUL8,      { 3, 2, 1, 4 } },
-    { SMOL_STORAGE_32BPP, SMOL_ALPHA_PREMUL8,      { 4, 1, 2, 3 } },
-    { SMOL_STORAGE_32BPP, SMOL_ALPHA_PREMUL8,      { 4, 3, 2, 1 } },
-    { SMOL_STORAGE_32BPP, SMOL_ALPHA_UNASSOCIATED, { 1, 2, 3, 4 } },
-    { SMOL_STORAGE_32BPP, SMOL_ALPHA_UNASSOCIATED, { 3, 2, 1, 4 } },
-    { SMOL_STORAGE_32BPP, SMOL_ALPHA_UNASSOCIATED, { 4, 1, 2, 3 } },
-    { SMOL_STORAGE_32BPP, SMOL_ALPHA_UNASSOCIATED, { 4, 3, 2, 1 } },
-    { SMOL_STORAGE_24BPP, SMOL_ALPHA_PREMUL8,      { 1, 2, 3, 0 } },
-    { SMOL_STORAGE_24BPP, SMOL_ALPHA_PREMUL8,      { 3, 2, 1, 0 } }
+    { SMOL_STORAGE_32BPP, 4, SMOL_ALPHA_PREMUL8,      { 1, 2, 3, 4 } },
+    { SMOL_STORAGE_32BPP, 4, SMOL_ALPHA_PREMUL8,      { 3, 2, 1, 4 } },
+    { SMOL_STORAGE_32BPP, 4, SMOL_ALPHA_PREMUL8,      { 4, 1, 2, 3 } },
+    { SMOL_STORAGE_32BPP, 4, SMOL_ALPHA_PREMUL8,      { 4, 3, 2, 1 } },
+    { SMOL_STORAGE_32BPP, 4, SMOL_ALPHA_UNASSOCIATED, { 1, 2, 3, 4 } },
+    { SMOL_STORAGE_32BPP, 4, SMOL_ALPHA_UNASSOCIATED, { 3, 2, 1, 4 } },
+    { SMOL_STORAGE_32BPP, 4, SMOL_ALPHA_UNASSOCIATED, { 4, 1, 2, 3 } },
+    { SMOL_STORAGE_32BPP, 4, SMOL_ALPHA_UNASSOCIATED, { 4, 3, 2, 1 } },
+    { SMOL_STORAGE_24BPP, 3, SMOL_ALPHA_PREMUL8,      { 1, 2, 3, 0 } },
+    { SMOL_STORAGE_24BPP, 3, SMOL_ALPHA_PREMUL8,      { 3, 2, 1, 0 } }
 };
 
 /* Channel ordering corrected for little endian. Only applies when fetching

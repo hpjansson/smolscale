@@ -185,6 +185,7 @@ SmolReorderMeta;
 typedef struct
 {
     unsigned char storage;
+    unsigned char pixel_stride;
     unsigned char alpha;
     unsigned char order [4];
 }
