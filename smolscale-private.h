@@ -194,24 +194,24 @@ SmolPixelTypeMeta;
 /* For reusing rows that have already undergone horizontal scaling */
 typedef struct
 {
-    uint32_t in_ofs;
+    uint32_t src_ofs;
     uint64_t *parts_row [4];
     uint64_t *row_storage [4];
-    uint32_t *in_aligned;
-    uint32_t *in_aligned_storage;
+    uint32_t *src_aligned;
+    uint32_t *src_aligned_storage;
 }
 SmolLocalCtx;
 
 typedef void (SmolInitFunc) (SmolScaleCtx *scale_ctx);
-typedef void (SmolRepackRowFunc) (const void *row_in,
-                                  void *row_out,
+typedef void (SmolRepackRowFunc) (const void *src_row,
+                                  void *dest_row,
                                   uint32_t n_pixels);
 typedef void (SmolHFilterFunc) (const SmolScaleCtx *scale_ctx,
-                                const uint64_t *row_limbs_in,
-                                uint64_t *row_limbs_out);
+                                const uint64_t *src_row_limbs,
+                                uint64_t *dest_row_limbs);
 typedef int (SmolVFilterFunc) (const SmolScaleCtx *scale_ctx,
                                SmolLocalCtx *local_ctx,
-                               uint32_t outrow_index);
+                               uint32_t dest_row_index);
 
 #define SMOL_REPACK_SIGNATURE_GET_REORDER(sig) ((sig) >> (2 * (SMOL_GAMMA_BITS + SMOL_ALPHA_BITS + SMOL_STORAGE_BITS)))
 
@@ -220,34 +220,34 @@ typedef int (SmolVFilterFunc) (const SmolScaleCtx *scale_ctx,
 #define SMOL_ALPHA_BITS 2
 #define SMOL_GAMMA_BITS 1
 
-#define SMOL_MAKE_REPACK_SIGNATURE_ANY_ORDER(storage_in, alpha_in, gamma_in, \
-                                             storage_out, alpha_out, gamma_out) \
-    (((storage_in) << (SMOL_GAMMA_BITS + SMOL_ALPHA_BITS + SMOL_STORAGE_BITS + SMOL_GAMMA_BITS + SMOL_ALPHA_BITS)) \
-     | ((alpha_in) << (SMOL_GAMMA_BITS + SMOL_ALPHA_BITS + SMOL_STORAGE_BITS + SMOL_GAMMA_BITS)) \
-     | ((gamma_in) << (SMOL_GAMMA_BITS + SMOL_ALPHA_BITS + SMOL_STORAGE_BITS)) \
-     | ((storage_out) << (SMOL_GAMMA_BITS + SMOL_ALPHA_BITS))           \
-     | ((alpha_out) << (SMOL_GAMMA_BITS))                               \
-     | ((gamma_out) << 0))                                              \
+#define SMOL_MAKE_REPACK_SIGNATURE_ANY_ORDER(src_storage, src_alpha, src_gamma, \
+                                             dest_storage, dest_alpha, dest_gamma) \
+    (((src_storage) << (SMOL_GAMMA_BITS + SMOL_ALPHA_BITS + SMOL_STORAGE_BITS + SMOL_GAMMA_BITS + SMOL_ALPHA_BITS)) \
+     | ((src_alpha) << (SMOL_GAMMA_BITS + SMOL_ALPHA_BITS + SMOL_STORAGE_BITS + SMOL_GAMMA_BITS)) \
+     | ((src_gamma) << (SMOL_GAMMA_BITS + SMOL_ALPHA_BITS + SMOL_STORAGE_BITS)) \
+     | ((dest_storage) << (SMOL_GAMMA_BITS + SMOL_ALPHA_BITS))           \
+     | ((dest_alpha) << (SMOL_GAMMA_BITS))                               \
+     | ((dest_gamma) << 0))                                              \
 
 #define MASK_ITEM(m, n_bits) ((m) ? (1 << (n_bits)) - 1 : 0)
 
-#define SMOL_REPACK_SIGNATURE_ANY_ORDER_MASK(storage_in, alpha_in, gamma_in, \
-                                             storage_out, alpha_out, gamma_out) \
-    SMOL_MAKE_REPACK_SIGNATURE_ANY_ORDER(MASK_ITEM (storage_in, SMOL_STORAGE_BITS), \
-                                         MASK_ITEM (alpha_in, SMOL_ALPHA_BITS), \
-                                         MASK_ITEM (gamma_in, SMOL_GAMMA_BITS), \
-                                         MASK_ITEM (storage_out, SMOL_STORAGE_BITS), \
-                                         MASK_ITEM (alpha_out, SMOL_ALPHA_BITS), \
-                                         MASK_ITEM (gamma_out, SMOL_GAMMA_BITS))
+#define SMOL_REPACK_SIGNATURE_ANY_ORDER_MASK(src_storage, src_alpha, src_gamma, \
+                                             dest_storage, dest_alpha, dest_gamma) \
+    SMOL_MAKE_REPACK_SIGNATURE_ANY_ORDER(MASK_ITEM (src_storage, SMOL_STORAGE_BITS), \
+                                         MASK_ITEM (src_alpha, SMOL_ALPHA_BITS), \
+                                         MASK_ITEM (src_gamma, SMOL_GAMMA_BITS), \
+                                         MASK_ITEM (dest_storage, SMOL_STORAGE_BITS), \
+                                         MASK_ITEM (dest_alpha, SMOL_ALPHA_BITS), \
+                                         MASK_ITEM (dest_gamma, SMOL_GAMMA_BITS))
 
-#define SMOL_REPACK_META(order_in, storage_in, alpha_in, gamma_in,      \
-                         order_out, storage_out, alpha_out, gamma_out)  \
-    { (((SMOL_REORDER_##order_in##_TO_##order_out) << 10)               \
-       | ((SMOL_STORAGE_##storage_in##BPP) << 8) | ((SMOL_ALPHA_##alpha_in) << 6) \
-       | ((SMOL_GAMMA_SRGB_##gamma_in) << 5)                            \
-       | ((SMOL_STORAGE_##storage_out##BPP) << 3) | ((SMOL_ALPHA_##alpha_out) << 1) \
-       | ((SMOL_GAMMA_SRGB_##gamma_out) << 0)), \
-    (SmolRepackRowFunc *) repack_row_##order_in##_##storage_in##_##alpha_in##_##gamma_in##_to_##order_out##_##storage_out##_##alpha_out##_##gamma_out }
+#define SMOL_REPACK_META(src_order, src_storage, src_alpha, src_gamma,      \
+                         dest_order, dest_storage, dest_alpha, dest_gamma)  \
+    { (((SMOL_REORDER_##src_order##_TO_##dest_order) << 10)               \
+       | ((SMOL_STORAGE_##src_storage##BPP) << 8) | ((SMOL_ALPHA_##src_alpha) << 6) \
+       | ((SMOL_GAMMA_SRGB_##src_gamma) << 5)                            \
+       | ((SMOL_STORAGE_##dest_storage##BPP) << 3) | ((SMOL_ALPHA_##dest_alpha) << 1) \
+       | ((SMOL_GAMMA_SRGB_##dest_gamma) << 0)), \
+    (SmolRepackRowFunc *) repack_row_##src_order##_##src_storage##_##src_alpha##_##src_gamma##_to_##dest_order##_##dest_storage##_##dest_alpha##_##dest_gamma }
 
 #define SMOL_REPACK_META_LAST { 0xffff, NULL }
 
@@ -258,16 +258,16 @@ typedef struct
 }
 SmolRepackMeta;
 
-#define SMOL_REPACK_ROW_DEF(order_in, storage_in, limb_bits_in, alpha_in, gamma_in, \
-                            order_out, storage_out, limb_bits_out, alpha_out, gamma_out) \
-    static void repack_row_##order_in##_##storage_in##_##alpha_in##_##gamma_in##_to_##order_out##_##storage_out##_##alpha_out##_##gamma_out \
-    (const uint##limb_bits_in##_t * SMOL_RESTRICT row_in,               \
-     uint##limb_bits_out##_t * SMOL_RESTRICT row_out,                   \
+#define SMOL_REPACK_ROW_DEF(src_order, src_storage, src_limb_bits, src_alpha, src_gamma, \
+                            dest_order, dest_storage, dest_limb_bits, dest_alpha, dest_gamma) \
+    static void repack_row_##src_order##_##src_storage##_##src_alpha##_##src_gamma##_to_##dest_order##_##dest_storage##_##dest_alpha##_##dest_gamma \
+    (const uint##src_limb_bits##_t * SMOL_RESTRICT src_row,               \
+     uint##dest_limb_bits##_t * SMOL_RESTRICT dest_row,                   \
      uint32_t n_pixels)                                                 \
     {                                                                   \
-        uint##limb_bits_out##_t *row_out_max = row_out + n_pixels * (storage_out / limb_bits_out); \
-        SMOL_ASSUME_ALIGNED_TO (row_in, uint##limb_bits_in##_t *, limb_bits_in / 8); \
-        SMOL_ASSUME_ALIGNED_TO (row_out, uint##limb_bits_out##_t *, limb_bits_out / 8);
+        uint##dest_limb_bits##_t *dest_row_max = dest_row + n_pixels * (dest_storage / dest_limb_bits); \
+        SMOL_ASSUME_ALIGNED_TO (src_row, uint##src_limb_bits##_t *, src_limb_bits / 8); \
+        SMOL_ASSUME_ALIGNED_TO (dest_row, uint##dest_limb_bits##_t *, dest_limb_bits / 8);
 
 #define SMOL_REPACK_ROW_DEF_END }
 
@@ -286,9 +286,9 @@ typedef struct
     void *precalc;
     SmolFilterType filter_type;
 
-    uint32_t in_size_px, in_size_spx;
-    uint32_t out_size_prehalving_px, out_size_prehalving_spx;
-    uint32_t out_size_px, out_size_spx;
+    uint32_t src_size_px, src_size_spx;
+    uint32_t dest_size_prehalving_px, dest_size_prehalving_spx;
+    uint32_t dest_size_px, dest_size_spx;
 
     unsigned int n_halvings;
 
@@ -312,13 +312,13 @@ struct SmolScaleCtx
 {
     /* <private> */
 
-    const char *pixels_in;
-    char *pixels_out;
+    const char *src_pixels;
+    char *dest_pixels;
 
-    uint32_t in_rowstride;
-    uint32_t out_rowstride;
+    uint32_t src_rowstride;
+    uint32_t dest_rowstride;
 
-    SmolPixelType pixel_type_in, pixel_type_out;
+    SmolPixelType src_pixel_type, dest_pixel_type;
     SmolStorageType storage_type;
     SmolGammaType gamma_type;
 

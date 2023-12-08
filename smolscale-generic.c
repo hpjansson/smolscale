@@ -62,38 +62,38 @@ precalc_linear_range (uint16_t *array_out,
 
 static void
 precalc_bilinear_array (uint16_t *array,
-                        uint64_t dim_in_spx,
-                        uint64_t ofs_out_spx,
-                        uint64_t dim_out_spx,
-                        uint32_t dim_out_prehalving_px,
+                        uint64_t src_dim_spx,
+                        uint64_t dest_ofs_spx,
+                        uint64_t dest_dim_spx,
+                        uint32_t dest_dim_prehalving_px,
                         unsigned int n_halvings)
 {
-    uint32_t dim_in_px = SMOL_SPX_TO_PX (dim_in_spx);
+    uint32_t src_dim_px = SMOL_SPX_TO_PX (src_dim_spx);
     uint64_t first_sample_ofs [3];
     uint64_t sample_step;
 
-    assert (dim_in_px > 1);
+    assert (src_dim_px > 1);
 
-    ofs_out_spx %= SMOL_SUBPIXEL_MUL;
+    dest_ofs_spx %= SMOL_SUBPIXEL_MUL;
 
-    if (dim_in_spx > dim_out_spx)
+    if (src_dim_spx > dest_dim_spx)
     {
         /* Minification */
-        sample_step = ((uint64_t) dim_in_spx * SMOL_BILIN_MULTIPLIER) / dim_out_spx;
+        sample_step = ((uint64_t) src_dim_spx * SMOL_BILIN_MULTIPLIER) / dest_dim_spx;
         first_sample_ofs [0] = (sample_step - SMOL_BILIN_MULTIPLIER) / 2;
         first_sample_ofs [1] = ((sample_step - SMOL_BILIN_MULTIPLIER) / 2)
-            + ((sample_step * (SMOL_SUBPIXEL_MUL - ofs_out_spx) * (1 << n_halvings)) / SMOL_SUBPIXEL_MUL);
+            + ((sample_step * (SMOL_SUBPIXEL_MUL - dest_ofs_spx) * (1 << n_halvings)) / SMOL_SUBPIXEL_MUL);
     }
     else
     {
         /* Magnification */
-        sample_step = ((dim_in_spx - SMOL_SUBPIXEL_MUL) * SMOL_BILIN_MULTIPLIER)
-            / (dim_out_spx > SMOL_SUBPIXEL_MUL ? (dim_out_spx - SMOL_SUBPIXEL_MUL) : 1);
+        sample_step = ((src_dim_spx - SMOL_SUBPIXEL_MUL) * SMOL_BILIN_MULTIPLIER)
+            / (dest_dim_spx > SMOL_SUBPIXEL_MUL ? (dest_dim_spx - SMOL_SUBPIXEL_MUL) : 1);
         first_sample_ofs [0] = 0;
-        first_sample_ofs [1] = (sample_step * (SMOL_SUBPIXEL_MUL - ofs_out_spx)) / SMOL_SUBPIXEL_MUL;
+        first_sample_ofs [1] = (sample_step * (SMOL_SUBPIXEL_MUL - dest_ofs_spx)) / SMOL_SUBPIXEL_MUL;
     }
 
-    first_sample_ofs [2] = (((uint64_t) dim_in_spx * SMOL_BILIN_MULTIPLIER) / SMOL_SUBPIXEL_MUL)
+    first_sample_ofs [2] = (((uint64_t) src_dim_spx * SMOL_BILIN_MULTIPLIER) / SMOL_SUBPIXEL_MUL)
         + ((sample_step - SMOL_BILIN_MULTIPLIER) / 2)
         - sample_step * (1U << n_halvings);
 
@@ -103,33 +103,33 @@ precalc_bilinear_array (uint16_t *array,
                           1 << n_halvings,
                           first_sample_ofs [0],
                           sample_step,
-                          dim_in_px);
+                          src_dim_px);
 
     /* Main range */
     precalc_linear_range (array,
                           1 << n_halvings,
-                          dim_out_prehalving_px - (1 << n_halvings),
+                          dest_dim_prehalving_px - (1 << n_halvings),
                           first_sample_ofs [1],
                           sample_step,
-                          dim_in_px);
+                          src_dim_px);
 
     /* Right fringe */
     precalc_linear_range (array,
-                          dim_out_prehalving_px - (1 << n_halvings),
-                          dim_out_prehalving_px,
+                          dest_dim_prehalving_px - (1 << n_halvings),
+                          dest_dim_prehalving_px,
                           first_sample_ofs [2],
                           sample_step,
-                          dim_in_px);
+                          src_dim_px);
 }
 
 static void
 precalc_boxes_array (uint32_t *array,
                      uint32_t *span_step,
                      uint32_t *span_mul,
-                     uint32_t dim_in_spx,
-                     int32_t dim_out,
-                     uint32_t ofs_out_spx,
-                     uint32_t dim_out_spx)
+                     uint32_t src_dim_spx,
+                     int32_t dest_dim,
+                     uint32_t dest_ofs_spx,
+                     uint32_t dest_dim_spx)
 {
     uint64_t fracF, frac_stepF;
     uint64_t f;
@@ -137,14 +137,14 @@ precalc_boxes_array (uint32_t *array,
     uint64_t a, b;
     int i;
 
-    ofs_out_spx %= SMOL_SUBPIXEL_MUL;
+    dest_ofs_spx %= SMOL_SUBPIXEL_MUL;
 
     /* Output sample can't be less than a pixel. Fringe opacity is applied in
      * a separate step. FIXME: May cause wrong subpixel distribution -- revisit. */
-    if (dim_out_spx < 256)
-        dim_out_spx = 256;
+    if (dest_dim_spx < 256)
+        dest_dim_spx = 256;
 
-    frac_stepF = ((uint64_t) dim_in_spx * SMOL_BIG_MUL) / (uint64_t) dim_out_spx;
+    frac_stepF = ((uint64_t) src_dim_spx * SMOL_BIG_MUL) / (uint64_t) dest_dim_spx;
     fracF = 0;
 
     stride = frac_stepF / (uint64_t) SMOL_BIG_MUL;
@@ -166,16 +166,16 @@ precalc_boxes_array (uint32_t *array,
     array [0] = 0;
 
     /* Main range */
-    fracF = ((frac_stepF * (SMOL_SUBPIXEL_MUL - ofs_out_spx)) / SMOL_SUBPIXEL_MUL);
-    for (i = 1; i < dim_out - 1; i++)
+    fracF = ((frac_stepF * (SMOL_SUBPIXEL_MUL - dest_ofs_spx)) / SMOL_SUBPIXEL_MUL);
+    for (i = 1; i < dest_dim - 1; i++)
     {
         array [i] = fracF / SMOL_SMALL_MUL;
         fracF += frac_stepF;
     }
 
     /* Right fringe */
-    if (dim_out > 1)
-        array [dim_out - 1] = (((uint64_t) dim_in_spx * SMOL_SMALL_MUL - frac_stepF) / SMOL_SMALL_MUL);
+    if (dest_dim > 1)
+        array [dest_dim - 1] = (((uint64_t) src_dim_spx * SMOL_SMALL_MUL - frac_stepF) / SMOL_SMALL_MUL);
 }
 
 static void
@@ -189,18 +189,18 @@ init_dim (SmolDim *dim)
         precalc_boxes_array (dim->precalc,
                              &dim->span_step,
                              &dim->span_mul,
-                             dim->in_size_spx,
-                             dim->out_size_px,
+                             dim->src_size_spx,
+                             dim->dest_size_px,
                              dim->placement_ofs_spx,
-                             dim->out_size_spx);
+                             dim->dest_size_spx);
     }
     else /* SMOL_FILTER_BILINEAR_?H */
     {
         precalc_bilinear_array (dim->precalc,
-                                dim->in_size_spx,
+                                dim->src_size_spx,
                                 dim->placement_ofs_spx,
-                                dim->out_size_prehalving_spx,
-                                dim->out_size_prehalving_px,
+                                dim->dest_size_prehalving_spx,
+                                dim->dest_size_prehalving_px,
                                 dim->n_halvings);
     }
 }
@@ -293,14 +293,14 @@ unpremul_p8_to_u_64bpp (const uint64_t in,
                         uint8_t alpha)
 {
     uint64_t in_128bpp [2];
-    uint64_t out_128bpp [2];
+    uint64_t dest_128bpp [2];
 
     in_128bpp [0] = (in & 0x000000ff000000ff);
     in_128bpp [1] = (in & 0x00ff000000ff0000) >> 16;
 
-    unpremul_p8_to_u_128bpp (in_128bpp, out_128bpp, alpha);
+    unpremul_p8_to_u_128bpp (in_128bpp, dest_128bpp, alpha);
 
-    return out_128bpp [0] | (out_128bpp [1] << 16);
+    return dest_128bpp [0] | (dest_128bpp [1] << 16);
 }
 
 static SMOL_INLINE void
@@ -403,10 +403,10 @@ unpack_pixel_123_p8_to_132a_p8_64bpp (const uint8_t *p)
 
 SMOL_REPACK_ROW_DEF (123,  24,  8, PREMUL8, COMPRESSED,
                      1324, 64, 64, PREMUL8, COMPRESSED) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
-        *(row_out++) = unpack_pixel_123_p8_to_132a_p8_64bpp (row_in);
-        row_in += 3;
+        *(dest_row++) = unpack_pixel_123_p8_to_132a_p8_64bpp (src_row);
+        src_row += 3;
     }
 } SMOL_REPACK_ROW_DEF_END
 
@@ -418,9 +418,9 @@ unpack_pixel_1234_p8_to_1324_p8_64bpp (uint32_t p)
 
 SMOL_REPACK_ROW_DEF (1234, 32, 32, PREMUL8, COMPRESSED,
                      1324, 64, 64, PREMUL8, COMPRESSED) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
-        *(row_out++) = unpack_pixel_1234_p8_to_1324_p8_64bpp (*(row_in++));
+        *(dest_row++) = unpack_pixel_1234_p8_to_1324_p8_64bpp (*(src_row++));
     }
 } SMOL_REPACK_ROW_DEF_END
 
@@ -433,9 +433,9 @@ unpack_pixel_1234_p8_to_3241_p8_64bpp (uint32_t p)
 
 SMOL_REPACK_ROW_DEF (1234, 32, 32, PREMUL8, COMPRESSED,
                      3241, 64, 64, PREMUL8, COMPRESSED) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
-        *(row_out++) = unpack_pixel_1234_p8_to_3241_p8_64bpp (*(row_in++));
+        *(dest_row++) = unpack_pixel_1234_p8_to_3241_p8_64bpp (*(src_row++));
     }
 } SMOL_REPACK_ROW_DEF_END
 
@@ -450,9 +450,9 @@ unpack_pixel_1234_p8_to_2431_p8_64bpp (uint32_t p)
 
 SMOL_REPACK_ROW_DEF (1234, 32, 32, PREMUL8, COMPRESSED,
                      2431, 64, 64, PREMUL8, COMPRESSED) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
-        *(row_out++) = unpack_pixel_1234_p8_to_2431_p8_64bpp (*(row_in++));
+        *(dest_row++) = unpack_pixel_1234_p8_to_2431_p8_64bpp (*(src_row++));
     }
 } SMOL_REPACK_ROW_DEF_END
 
@@ -467,9 +467,9 @@ unpack_pixel_a234_u_to_324a_p8_64bpp (uint32_t p)
 
 SMOL_REPACK_ROW_DEF (1234, 32, 32, UNASSOCIATED, COMPRESSED,
                      3241, 64, 64, PREMUL8,      COMPRESSED) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
-        *(row_out++) = unpack_pixel_a234_u_to_324a_p8_64bpp (*(row_in++));
+        *(dest_row++) = unpack_pixel_a234_u_to_324a_p8_64bpp (*(src_row++));
     }
 } SMOL_REPACK_ROW_DEF_END
 
@@ -484,9 +484,9 @@ unpack_pixel_1234_u_to_2431_p8_64bpp (uint32_t p)
 
 SMOL_REPACK_ROW_DEF (1234, 32, 32, UNASSOCIATED, COMPRESSED,
                      2431, 64, 64, PREMUL8,      COMPRESSED) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
-        *(row_out++) = unpack_pixel_1234_u_to_2431_p8_64bpp (*(row_in++));
+        *(dest_row++) = unpack_pixel_1234_u_to_2431_p8_64bpp (*(src_row++));
     }
 } SMOL_REPACK_ROW_DEF_END
 
@@ -501,9 +501,9 @@ unpack_pixel_123a_u_to_132a_p8_64bpp (uint32_t p)
 
 SMOL_REPACK_ROW_DEF (1234, 32, 32, UNASSOCIATED, COMPRESSED,
                      1324, 64, 64, PREMUL8,      COMPRESSED) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
-        *(row_out++) = unpack_pixel_123a_u_to_132a_p8_64bpp (*(row_in++));
+        *(dest_row++) = unpack_pixel_123a_u_to_132a_p8_64bpp (*(src_row++));
     }
 } SMOL_REPACK_ROW_DEF_END
 
@@ -521,26 +521,26 @@ unpack_pixel_123_p8_to_123a_p8_128bpp (const uint8_t *in,
 
 SMOL_REPACK_ROW_DEF (123,   24,  8, PREMUL8, COMPRESSED,
                      1234, 128, 64, PREMUL8, COMPRESSED) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
-        unpack_pixel_123_p8_to_123a_p8_128bpp (row_in, row_out);
-        row_in += 3;
-        row_out += 2;
+        unpack_pixel_123_p8_to_123a_p8_128bpp (src_row, dest_row);
+        src_row += 3;
+        dest_row += 2;
     }
 } SMOL_REPACK_ROW_DEF_END
 
 SMOL_REPACK_ROW_DEF (123,   24,  8, PREMUL8, COMPRESSED,
                      1234, 128, 64, PREMUL8, LINEAR) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
         uint8_t alpha;
-        unpack_pixel_123_p8_to_123a_p8_128bpp (row_in, row_out);
-        alpha = row_out [1];
-        unpremul_p8_to_u_128bpp (row_out, row_out, alpha);
-        from_srgb_pixel_xxxa_128bpp (row_out);
-        premul_ul_to_p8l_128bpp (row_out, alpha);
-        row_in += 3;
-        row_out += 2;
+        unpack_pixel_123_p8_to_123a_p8_128bpp (src_row, dest_row);
+        alpha = dest_row [1];
+        unpremul_p8_to_u_128bpp (dest_row, dest_row, alpha);
+        from_srgb_pixel_xxxa_128bpp (dest_row);
+        premul_ul_to_p8l_128bpp (dest_row, alpha);
+        src_row += 3;
+        dest_row += 2;
     }
 } SMOL_REPACK_ROW_DEF_END
 
@@ -555,24 +555,24 @@ unpack_pixel_123a_p8_to_123a_p8_128bpp (uint32_t p,
 
 SMOL_REPACK_ROW_DEF (1234,  32, 32, PREMUL8, COMPRESSED,
                      1234, 128, 64, PREMUL8, COMPRESSED) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
-        unpack_pixel_123a_p8_to_123a_p8_128bpp (*(row_in++), row_out);
-        row_out += 2;
+        unpack_pixel_123a_p8_to_123a_p8_128bpp (*(src_row++), dest_row);
+        dest_row += 2;
     }
 } SMOL_REPACK_ROW_DEF_END
 
 SMOL_REPACK_ROW_DEF (1234,  32, 32, PREMUL8, COMPRESSED,
                      1234, 128, 64, PREMUL8, LINEAR) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
         uint8_t alpha;
-        unpack_pixel_123a_p8_to_123a_p8_128bpp (*(row_in++), row_out);
-        alpha = row_out [1];
-        unpremul_p8_to_u_128bpp (row_out, row_out, alpha);
-        from_srgb_pixel_xxxa_128bpp (row_out);
-        premul_ul_to_p8l_128bpp (row_out, alpha);
-        row_out += 2;
+        unpack_pixel_123a_p8_to_123a_p8_128bpp (*(src_row++), dest_row);
+        alpha = dest_row [1];
+        unpremul_p8_to_u_128bpp (dest_row, dest_row, alpha);
+        from_srgb_pixel_xxxa_128bpp (dest_row);
+        premul_ul_to_p8l_128bpp (dest_row, alpha);
+        dest_row += 2;
     }
 } SMOL_REPACK_ROW_DEF_END
 
@@ -587,24 +587,24 @@ unpack_pixel_a234_p8_to_234a_p8_128bpp (uint32_t p,
 
 SMOL_REPACK_ROW_DEF (1234,  32, 32, PREMUL8, COMPRESSED,
                      2341, 128, 64, PREMUL8, COMPRESSED) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
-        unpack_pixel_a234_p8_to_234a_p8_128bpp (*(row_in++), row_out);
-        row_out += 2;
+        unpack_pixel_a234_p8_to_234a_p8_128bpp (*(src_row++), dest_row);
+        dest_row += 2;
     }
 } SMOL_REPACK_ROW_DEF_END
 
 SMOL_REPACK_ROW_DEF (1234,  32, 32, PREMUL8, COMPRESSED,
                      2341, 128, 64, PREMUL8, LINEAR) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
         uint8_t alpha;
-        unpack_pixel_a234_p8_to_234a_p8_128bpp (*(row_in++), row_out);
-        alpha = row_out [1];
-        unpremul_p8_to_u_128bpp (row_out, row_out, alpha);
-        from_srgb_pixel_xxxa_128bpp (row_out);
-        premul_ul_to_p8l_128bpp (row_out, alpha);
-        row_out += 2;
+        unpack_pixel_a234_p8_to_234a_p8_128bpp (*(src_row++), dest_row);
+        alpha = dest_row [1];
+        unpremul_p8_to_u_128bpp (dest_row, dest_row, alpha);
+        from_srgb_pixel_xxxa_128bpp (dest_row);
+        premul_ul_to_p8l_128bpp (dest_row, alpha);
+        dest_row += 2;
     }
 } SMOL_REPACK_ROW_DEF_END
 
@@ -622,10 +622,10 @@ unpack_pixel_a234_u_to_234a_p8_128bpp (uint32_t p,
 
 SMOL_REPACK_ROW_DEF (1234,  32, 32, UNASSOCIATED, COMPRESSED,
                      2341, 128, 64, PREMUL8,      COMPRESSED) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
-        unpack_pixel_a234_u_to_234a_p8_128bpp (*(row_in++), row_out);
-        row_out += 2;
+        unpack_pixel_a234_u_to_234a_p8_128bpp (*(src_row++), dest_row);
+        dest_row += 2;
     }
 } SMOL_REPACK_ROW_DEF_END
 
@@ -645,10 +645,10 @@ unpack_pixel_a234_u_to_234a_pl_128bpp (uint32_t p,
 
 SMOL_REPACK_ROW_DEF (1234,  32, 32, UNASSOCIATED, COMPRESSED,
                      2341, 128, 64, PREMUL8,      LINEAR) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
-        unpack_pixel_a234_u_to_234a_pl_128bpp (*(row_in++), row_out);
-        row_out += 2;
+        unpack_pixel_a234_u_to_234a_pl_128bpp (*(src_row++), dest_row);
+        dest_row += 2;
     }
 } SMOL_REPACK_ROW_DEF_END
 
@@ -668,10 +668,10 @@ unpack_pixel_a234_u_to_234a_p16_128bpp (uint32_t p,
 
 SMOL_REPACK_ROW_DEF (1234,  32, 32, UNASSOCIATED, COMPRESSED,
                      2341, 128, 64, PREMUL16,     COMPRESSED) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
-        unpack_pixel_a234_u_to_234a_p16_128bpp (*(row_in++), row_out);
-        row_out += 2;
+        unpack_pixel_a234_u_to_234a_p16_128bpp (*(src_row++), dest_row);
+        dest_row += 2;
     }
 } SMOL_REPACK_ROW_DEF_END
 
@@ -694,10 +694,10 @@ unpack_pixel_a234_u_to_234a_p16l_128bpp (uint32_t p,
 
 SMOL_REPACK_ROW_DEF (1234,  32, 32, UNASSOCIATED, COMPRESSED,
                      2341, 128, 64, PREMUL16,     LINEAR) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
-        unpack_pixel_a234_u_to_234a_p16l_128bpp (*(row_in++), row_out);
-        row_out += 2;
+        unpack_pixel_a234_u_to_234a_p16l_128bpp (*(src_row++), dest_row);
+        dest_row += 2;
     }
 } SMOL_REPACK_ROW_DEF_END
 
@@ -715,10 +715,10 @@ unpack_pixel_123a_u_to_123a_p8_128bpp (uint32_t p,
 
 SMOL_REPACK_ROW_DEF (1234,  32, 32, UNASSOCIATED, COMPRESSED,
                      1234, 128, 64, PREMUL8,      COMPRESSED) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
-        unpack_pixel_123a_u_to_123a_p8_128bpp (*(row_in++), row_out);
-        row_out += 2;
+        unpack_pixel_123a_u_to_123a_p8_128bpp (*(src_row++), dest_row);
+        dest_row += 2;
     }
 } SMOL_REPACK_ROW_DEF_END
 
@@ -738,10 +738,10 @@ unpack_pixel_123a_u_to_123a_pl_128bpp (uint32_t p,
 
 SMOL_REPACK_ROW_DEF (1234,  32, 32, UNASSOCIATED, COMPRESSED,
                      1234, 128, 64, PREMUL8,      LINEAR) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
-        unpack_pixel_123a_u_to_123a_pl_128bpp (*(row_in++), row_out);
-        row_out += 2;
+        unpack_pixel_123a_u_to_123a_pl_128bpp (*(src_row++), dest_row);
+        dest_row += 2;
     }
 } SMOL_REPACK_ROW_DEF_END
 
@@ -761,10 +761,10 @@ unpack_pixel_123a_u_to_123a_p16_128bpp (uint32_t p,
 
 SMOL_REPACK_ROW_DEF (1234,  32, 32, UNASSOCIATED, COMPRESSED,
                      1234, 128, 64, PREMUL16,     COMPRESSED) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
-        unpack_pixel_123a_u_to_123a_p16_128bpp (*(row_in++), row_out);
-        row_out += 2;
+        unpack_pixel_123a_u_to_123a_p16_128bpp (*(src_row++), dest_row);
+        dest_row += 2;
     }
 } SMOL_REPACK_ROW_DEF_END
 
@@ -786,10 +786,10 @@ unpack_pixel_123a_u_to_123a_p16l_128bpp (uint32_t p,
 
 SMOL_REPACK_ROW_DEF (1234,  32, 32, UNASSOCIATED, COMPRESSED,
                      1234, 128, 64, PREMUL16,     LINEAR) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
-        unpack_pixel_123a_u_to_123a_p16l_128bpp (*(row_in++), row_out);
-        row_out += 2;
+        unpack_pixel_123a_u_to_123a_p16l_128bpp (*(src_row++), dest_row);
+        dest_row += 2;
     }
 } SMOL_REPACK_ROW_DEF_END
 
@@ -805,140 +805,140 @@ pack_pixel_1234_p8_to_1324_p8_64bpp (uint64_t in)
 
 SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
                      132,  24,  8, PREMUL8,       COMPRESSED) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
-        uint32_t p = pack_pixel_1234_p8_to_1324_p8_64bpp (*(row_in++));
-        *(row_out++) = p >> 24;
-        *(row_out++) = p >> 16;
-        *(row_out++) = p >> 8;
+        uint32_t p = pack_pixel_1234_p8_to_1324_p8_64bpp (*(src_row++));
+        *(dest_row++) = p >> 24;
+        *(dest_row++) = p >> 16;
+        *(dest_row++) = p >> 8;
     }
 } SMOL_REPACK_ROW_DEF_END
 
 SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
                      132,  24,  8, UNASSOCIATED,  COMPRESSED) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
-        uint8_t alpha = *row_in;
-        uint64_t t = (unpremul_p8_to_u_64bpp (*row_in, alpha) & 0xffffffffffffff00ULL) | alpha;
+        uint8_t alpha = *src_row;
+        uint64_t t = (unpremul_p8_to_u_64bpp (*src_row, alpha) & 0xffffffffffffff00ULL) | alpha;
         uint32_t p = pack_pixel_1234_p8_to_1324_p8_64bpp (t);
-        *(row_out++) = p >> 24;
-        *(row_out++) = p >> 16;
-        *(row_out++) = p >> 8;
-        row_in++;
+        *(dest_row++) = p >> 24;
+        *(dest_row++) = p >> 16;
+        *(dest_row++) = p >> 8;
+        src_row++;
     }
 } SMOL_REPACK_ROW_DEF_END
 
 SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
                      231,  24,  8, PREMUL8,       COMPRESSED) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
-        uint32_t p = pack_pixel_1234_p8_to_1324_p8_64bpp (*(row_in++));
-        *(row_out++) = p >> 8;
-        *(row_out++) = p >> 16;
-        *(row_out++) = p >> 24;
+        uint32_t p = pack_pixel_1234_p8_to_1324_p8_64bpp (*(src_row++));
+        *(dest_row++) = p >> 8;
+        *(dest_row++) = p >> 16;
+        *(dest_row++) = p >> 24;
     }
 } SMOL_REPACK_ROW_DEF_END
 
 SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
                      231,  24,  8, UNASSOCIATED,  COMPRESSED) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
-        uint8_t alpha = *row_in;
-        uint64_t t = (unpremul_p8_to_u_64bpp (*row_in, alpha) & 0xffffffffffffff00ULL) | alpha;
+        uint8_t alpha = *src_row;
+        uint64_t t = (unpremul_p8_to_u_64bpp (*src_row, alpha) & 0xffffffffffffff00ULL) | alpha;
         uint32_t p = pack_pixel_1234_p8_to_1324_p8_64bpp (t);
-        *(row_out++) = p >> 8;
-        *(row_out++) = p >> 16;
-        *(row_out++) = p >> 24;
-        row_in++;
+        *(dest_row++) = p >> 8;
+        *(dest_row++) = p >> 16;
+        *(dest_row++) = p >> 24;
+        src_row++;
     }
 } SMOL_REPACK_ROW_DEF_END
 
 SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
                      324,  24,  8, PREMUL8,       COMPRESSED) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
-        uint32_t p = pack_pixel_1234_p8_to_1324_p8_64bpp (*(row_in++));
-        *(row_out++) = p >> 16;
-        *(row_out++) = p >> 8;
-        *(row_out++) = p;
+        uint32_t p = pack_pixel_1234_p8_to_1324_p8_64bpp (*(src_row++));
+        *(dest_row++) = p >> 16;
+        *(dest_row++) = p >> 8;
+        *(dest_row++) = p;
     }
 } SMOL_REPACK_ROW_DEF_END
 
 SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
                      324,  24,  8, UNASSOCIATED,  COMPRESSED) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
-        uint8_t alpha = *row_in >> 24;
-        uint64_t t = (unpremul_p8_to_u_64bpp (*row_in, alpha) & 0xffffffffffffff00ULL) | alpha;
+        uint8_t alpha = *src_row >> 24;
+        uint64_t t = (unpremul_p8_to_u_64bpp (*src_row, alpha) & 0xffffffffffffff00ULL) | alpha;
         uint32_t p = pack_pixel_1234_p8_to_1324_p8_64bpp (t);
-        *(row_out++) = p >> 16;
-        *(row_out++) = p >> 8;
-        *(row_out++) = p;
-        row_in++;
+        *(dest_row++) = p >> 16;
+        *(dest_row++) = p >> 8;
+        *(dest_row++) = p;
+        src_row++;
     }
 } SMOL_REPACK_ROW_DEF_END
 
 SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
                      423,  24,  8, PREMUL8,       COMPRESSED) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
-        uint32_t p = pack_pixel_1234_p8_to_1324_p8_64bpp (*(row_in++));
-        *(row_out++) = p;
-        *(row_out++) = p >> 8;
-        *(row_out++) = p >> 16;
+        uint32_t p = pack_pixel_1234_p8_to_1324_p8_64bpp (*(src_row++));
+        *(dest_row++) = p;
+        *(dest_row++) = p >> 8;
+        *(dest_row++) = p >> 16;
     }
 } SMOL_REPACK_ROW_DEF_END
 
 SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
                      423,  24,  8, UNASSOCIATED,  COMPRESSED) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
-        uint8_t alpha = *row_in >> 24;
-        uint64_t t = (unpremul_p8_to_u_64bpp (*row_in, alpha) & 0xffffffffffffff00ULL) | alpha;
+        uint8_t alpha = *src_row >> 24;
+        uint64_t t = (unpremul_p8_to_u_64bpp (*src_row, alpha) & 0xffffffffffffff00ULL) | alpha;
         uint32_t p = pack_pixel_1234_p8_to_1324_p8_64bpp (t);
-        *(row_out++) = p;
-        *(row_out++) = p >> 8;
-        *(row_out++) = p >> 16;
-        row_in++;
+        *(dest_row++) = p;
+        *(dest_row++) = p >> 8;
+        *(dest_row++) = p >> 16;
+        src_row++;
     }
 } SMOL_REPACK_ROW_DEF_END
 
 SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
                      1324, 32, 32, PREMUL8,       COMPRESSED) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
-        *(row_out++) = pack_pixel_1234_p8_to_1324_p8_64bpp (*(row_in++));
+        *(dest_row++) = pack_pixel_1234_p8_to_1324_p8_64bpp (*(src_row++));
     }
 } SMOL_REPACK_ROW_DEF_END
 
 SMOL_REPACK_ROW_DEF (1234, 64, 64, PREMUL8,       COMPRESSED,
                      1324, 32, 32, UNASSOCIATED,  COMPRESSED) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
-        uint8_t alpha = *row_in;
-        uint64_t t = (unpremul_p8_to_u_64bpp (*row_in, alpha) & 0xffffffffffffff00ULL) | alpha;
-        *(row_out++) = pack_pixel_1234_p8_to_1324_p8_64bpp (t);
-        row_in++;
+        uint8_t alpha = *src_row;
+        uint64_t t = (unpremul_p8_to_u_64bpp (*src_row, alpha) & 0xffffffffffffff00ULL) | alpha;
+        *(dest_row++) = pack_pixel_1234_p8_to_1324_p8_64bpp (t);
+        src_row++;
     }
 } SMOL_REPACK_ROW_DEF_END
 
 #define DEF_REPACK_FROM_1234_64BPP_TO_32BPP(a, b, c, d) \
     SMOL_REPACK_ROW_DEF (1234,       64, 64, PREMUL8,       COMPRESSED, \
                          a##b##c##d, 32, 32, PREMUL8,       COMPRESSED) { \
-        while (row_out != row_out_max) \
+        while (dest_row != dest_row_max) \
         { \
-            *(row_out++) = PACK_FROM_1234_64BPP (*row_in, a, b, c, d); \
-            row_in++; \
+            *(dest_row++) = PACK_FROM_1234_64BPP (*src_row, a, b, c, d); \
+            src_row++; \
         } \
     } SMOL_REPACK_ROW_DEF_END \
     SMOL_REPACK_ROW_DEF (1234,       64, 64, PREMUL8,       COMPRESSED, \
                          a##b##c##d, 32, 32, UNASSOCIATED,  COMPRESSED) { \
-        while (row_out != row_out_max) \
+        while (dest_row != dest_row_max) \
         { \
-            uint8_t alpha = *row_in; \
-            uint64_t t = (unpremul_p8_to_u_64bpp (*row_in, alpha) & 0xffffffffffffff00ULL) | alpha; \
-            *(row_out++) = PACK_FROM_1234_64BPP (t, a, b, c, d); \
-            row_in++; \
+            uint8_t alpha = *src_row; \
+            uint64_t t = (unpremul_p8_to_u_64bpp (*src_row, alpha) & 0xffffffffffffff00ULL) | alpha; \
+            *(dest_row++) = PACK_FROM_1234_64BPP (t, a, b, c, d); \
+            src_row++; \
         } \
     } SMOL_REPACK_ROW_DEF_END
 
@@ -953,250 +953,250 @@ DEF_REPACK_FROM_1234_64BPP_TO_32BPP (4, 2, 3, 1)
 
 SMOL_REPACK_ROW_DEF (1234, 128, 64, PREMUL8,       COMPRESSED,
                      123,   24,  8, PREMUL8,       COMPRESSED) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
-        *(row_out++) = *row_in >> 32;
-        *(row_out++) = *(row_in++);
-        *(row_out++) = *(row_in++) >> 32;
+        *(dest_row++) = *src_row >> 32;
+        *(dest_row++) = *(src_row++);
+        *(dest_row++) = *(src_row++) >> 32;
     }
 } SMOL_REPACK_ROW_DEF_END
 
 SMOL_REPACK_ROW_DEF (1234, 128, 64, PREMUL8,       LINEAR,
                      123,   24,  8, PREMUL8,       COMPRESSED) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
         uint64_t t [2];
-        uint8_t alpha = get_alpha_from_linear_xxxa_128bpp (row_in);
-        unpremul_p8l_to_ul_128bpp (row_in, t, alpha);
-        to_srgb_pixel_xxxa_128bpp (row_in, t);
-        *(row_out++) = t [0] >> 32;
-        *(row_out++) = t [0];
-        *(row_out++) = t [1] >> 32;
-        row_in += 2;
+        uint8_t alpha = get_alpha_from_linear_xxxa_128bpp (src_row);
+        unpremul_p8l_to_ul_128bpp (src_row, t, alpha);
+        to_srgb_pixel_xxxa_128bpp (src_row, t);
+        *(dest_row++) = t [0] >> 32;
+        *(dest_row++) = t [0];
+        *(dest_row++) = t [1] >> 32;
+        src_row += 2;
     }
 } SMOL_REPACK_ROW_DEF_END
 
 SMOL_REPACK_ROW_DEF (1234, 128, 64, PREMUL8,       COMPRESSED,
                      123,   24,  8, UNASSOCIATED,  COMPRESSED) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
         uint64_t t [2];
-        uint8_t alpha = row_in [1];
-        unpremul_p8_to_u_128bpp (row_in, t, alpha);
+        uint8_t alpha = src_row [1];
+        unpremul_p8_to_u_128bpp (src_row, t, alpha);
         t [1] = (t [1] & 0xffffffff00000000ULL) | alpha;
-        *(row_out++) = t [0] >> 32;
-        *(row_out++) = t [0];
-        *(row_out++) = t [1] >> 32;
-        row_in += 2;
+        *(dest_row++) = t [0] >> 32;
+        *(dest_row++) = t [0];
+        *(dest_row++) = t [1] >> 32;
+        src_row += 2;
     }
 } SMOL_REPACK_ROW_DEF_END
 
 SMOL_REPACK_ROW_DEF (1234, 128, 64, PREMUL8,       LINEAR,
                      123,   24,  8, UNASSOCIATED,  COMPRESSED) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
         uint64_t t [2];
-        uint8_t alpha = get_alpha_from_linear_xxxa_128bpp (row_in);
-        unpremul_p8l_to_ul_128bpp (row_in, t, alpha);
+        uint8_t alpha = get_alpha_from_linear_xxxa_128bpp (src_row);
+        unpremul_p8l_to_ul_128bpp (src_row, t, alpha);
         to_srgb_pixel_xxxa_128bpp (t, t);
         t [1] = (t [1] & 0xffffffff00000000ULL) | alpha;
-        *(row_out++) = t [0] >> 32;
-        *(row_out++) = t [0];
-        *(row_out++) = t [1] >> 32;
-        row_in += 2;
+        *(dest_row++) = t [0] >> 32;
+        *(dest_row++) = t [0];
+        *(dest_row++) = t [1] >> 32;
+        src_row += 2;
     }
 } SMOL_REPACK_ROW_DEF_END
 
 SMOL_REPACK_ROW_DEF (1234, 128, 64, PREMUL16,      COMPRESSED,
                      123,   24,  8, UNASSOCIATED,  COMPRESSED) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
         uint64_t t [2];
-        uint8_t alpha = row_in [1] >> 8;
-        unpremul_p16_to_u_128bpp (row_in, t, alpha);
+        uint8_t alpha = src_row [1] >> 8;
+        unpremul_p16_to_u_128bpp (src_row, t, alpha);
         t [1] = (t [1] & 0xffffffff00000000ULL) | alpha;
-        *(row_out++) = t [0] >> 32;
-        *(row_out++) = t [0];
-        *(row_out++) = t [1] >> 32;
-        row_in += 2;
+        *(dest_row++) = t [0] >> 32;
+        *(dest_row++) = t [0];
+        *(dest_row++) = t [1] >> 32;
+        src_row += 2;
     } \
 } SMOL_REPACK_ROW_DEF_END
 
 SMOL_REPACK_ROW_DEF (1234, 128, 64, PREMUL16,      LINEAR,
                      123,   24,  8, UNASSOCIATED,  COMPRESSED) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
         uint64_t t [2];
-        uint8_t alpha = row_in [1] >> 8;
-        unpremul_p16_to_u_128bpp (row_in, t, alpha);
+        uint8_t alpha = src_row [1] >> 8;
+        unpremul_p16_to_u_128bpp (src_row, t, alpha);
         to_srgb_pixel_xxxa_128bpp (t, t);
         t [1] = (t [1] & 0xffffffff00000000ULL) | alpha;
-        *(row_out++) = t [0] >> 32;
-        *(row_out++) = t [0];
-        *(row_out++) = t [1] >> 32;
-        row_in += 2;
+        *(dest_row++) = t [0] >> 32;
+        *(dest_row++) = t [0];
+        *(dest_row++) = t [1] >> 32;
+        src_row += 2;
     } \
 } SMOL_REPACK_ROW_DEF_END
 
 SMOL_REPACK_ROW_DEF (1234, 128, 64, PREMUL8,       COMPRESSED,
                      321,   24,  8, PREMUL8,       COMPRESSED) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
-        *(row_out++) = row_in [1] >> 32;
-        *(row_out++) = row_in [0];
-        *(row_out++) = row_in [0] >> 32;
-        row_in += 2;
+        *(dest_row++) = src_row [1] >> 32;
+        *(dest_row++) = src_row [0];
+        *(dest_row++) = src_row [0] >> 32;
+        src_row += 2;
     }
 } SMOL_REPACK_ROW_DEF_END
 
 SMOL_REPACK_ROW_DEF (1234, 128, 64, PREMUL8,       LINEAR,
                      321,   24,  8, PREMUL8,       COMPRESSED) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
         uint64_t t [2];
-        uint8_t alpha = get_alpha_from_linear_xxxa_128bpp (row_in);
-        unpremul_p8l_to_ul_128bpp (row_in, t, alpha);
+        uint8_t alpha = get_alpha_from_linear_xxxa_128bpp (src_row);
+        unpremul_p8l_to_ul_128bpp (src_row, t, alpha);
         to_srgb_pixel_xxxa_128bpp (t, t);
-        *(row_out++) = t [1] >> 32;
-        *(row_out++) = t [0];
-        *(row_out++) = t [0] >> 32;
-        row_in += 2;
+        *(dest_row++) = t [1] >> 32;
+        *(dest_row++) = t [0];
+        *(dest_row++) = t [0] >> 32;
+        src_row += 2;
     }
 } SMOL_REPACK_ROW_DEF_END
 
 SMOL_REPACK_ROW_DEF (1234, 128, 64, PREMUL8,       COMPRESSED,
                      321,   24,  8, UNASSOCIATED,  COMPRESSED) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
         uint64_t t [2];
-        uint8_t alpha = row_in [1];
-        unpremul_p8_to_u_128bpp (row_in, t, alpha);
+        uint8_t alpha = src_row [1];
+        unpremul_p8_to_u_128bpp (src_row, t, alpha);
         t [1] = (t [1] & 0xffffffff00000000ULL) | alpha;
-        *(row_out++) = t [1] >> 32;
-        *(row_out++) = t [0];
-        *(row_out++) = t [0] >> 32;
-        row_in += 2;
+        *(dest_row++) = t [1] >> 32;
+        *(dest_row++) = t [0];
+        *(dest_row++) = t [0] >> 32;
+        src_row += 2;
     }
 } SMOL_REPACK_ROW_DEF_END
 
 SMOL_REPACK_ROW_DEF (1234, 128, 64, PREMUL8,       LINEAR,
                      321,   24,  8, UNASSOCIATED,  COMPRESSED) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
         uint64_t t [2];
-        uint8_t alpha = get_alpha_from_linear_xxxa_128bpp (row_in);
-        unpremul_p8l_to_ul_128bpp (row_in, t, alpha);
+        uint8_t alpha = get_alpha_from_linear_xxxa_128bpp (src_row);
+        unpremul_p8l_to_ul_128bpp (src_row, t, alpha);
         to_srgb_pixel_xxxa_128bpp (t, t);
         t [1] = (t [1] & 0xffffffff00000000ULL) | alpha;
-        *(row_out++) = t [1] >> 32;
-        *(row_out++) = t [0];
-        *(row_out++) = t [0] >> 32;
-        row_in += 2;
+        *(dest_row++) = t [1] >> 32;
+        *(dest_row++) = t [0];
+        *(dest_row++) = t [0] >> 32;
+        src_row += 2;
     }
 } SMOL_REPACK_ROW_DEF_END
 
 SMOL_REPACK_ROW_DEF (1234, 128, 64, PREMUL16,      COMPRESSED,
                      321,   24,  8, UNASSOCIATED,  COMPRESSED) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
         uint64_t t [2];
-        uint8_t alpha = row_in [1] >> 8;
-        unpremul_p16_to_u_128bpp (row_in, t, alpha);
+        uint8_t alpha = src_row [1] >> 8;
+        unpremul_p16_to_u_128bpp (src_row, t, alpha);
         t [1] = (t [1] & 0xffffffff00000000ULL) | alpha;
-        *(row_out++) = t [1] >> 32;
-        *(row_out++) = t [0];
-        *(row_out++) = t [0] >> 32;
-        row_in += 2;
+        *(dest_row++) = t [1] >> 32;
+        *(dest_row++) = t [0];
+        *(dest_row++) = t [0] >> 32;
+        src_row += 2;
     }
 } SMOL_REPACK_ROW_DEF_END
 
 SMOL_REPACK_ROW_DEF (1234, 128, 64, PREMUL16,      LINEAR,
                      321,   24,  8, UNASSOCIATED,  COMPRESSED) {
-    while (row_out != row_out_max)
+    while (dest_row != dest_row_max)
     {
         uint64_t t [2];
-        uint8_t alpha = row_in [1] >> 8;
-        unpremul_p16_to_u_128bpp (row_in, t, alpha);
+        uint8_t alpha = src_row [1] >> 8;
+        unpremul_p16_to_u_128bpp (src_row, t, alpha);
         to_srgb_pixel_xxxa_128bpp (t, t);
         t [1] = (t [1] & 0xffffffff00000000ULL) | alpha;
-        *(row_out++) = t [1] >> 32;
-        *(row_out++) = t [0];
-        *(row_out++) = t [0] >> 32;
-        row_in += 2;
+        *(dest_row++) = t [1] >> 32;
+        *(dest_row++) = t [0];
+        *(dest_row++) = t [0] >> 32;
+        src_row += 2;
     }
 } SMOL_REPACK_ROW_DEF_END
 
 #define DEF_REPACK_FROM_1234_128BPP_TO_32BPP(a, b, c, d) \
     SMOL_REPACK_ROW_DEF (1234,       128, 64, PREMUL8,       COMPRESSED, \
                          a##b##c##d,  32, 32, PREMUL8,       COMPRESSED) { \
-        while (row_out != row_out_max) \
+        while (dest_row != dest_row_max) \
         { \
-            *(row_out++) = PACK_FROM_1234_128BPP (row_in, a, b, c, d); \
-            row_in += 2; \
+            *(dest_row++) = PACK_FROM_1234_128BPP (src_row, a, b, c, d); \
+            src_row += 2; \
         } \
     } SMOL_REPACK_ROW_DEF_END \
     SMOL_REPACK_ROW_DEF (1234,       128, 64, PREMUL8,       LINEAR, \
                          a##b##c##d,  32, 32, PREMUL8,       COMPRESSED) { \
-        while (row_out != row_out_max) \
+        while (dest_row != dest_row_max) \
         { \
             uint64_t t [2]; \
-            uint8_t alpha = get_alpha_from_linear_xxxa_128bpp (row_in); \
-            unpremul_p8l_to_ul_128bpp (row_in, t, alpha); \
+            uint8_t alpha = get_alpha_from_linear_xxxa_128bpp (src_row); \
+            unpremul_p8l_to_ul_128bpp (src_row, t, alpha); \
             to_srgb_pixel_xxxa_128bpp (t, t); \
             premul_u_to_p8_128bpp (t, alpha); \
             t [1] = (t [1] & 0xffffffff00000000ULL) | alpha; \
-            *(row_out++) = PACK_FROM_1234_128BPP (t, a, b, c, d); \
-            row_in += 2; \
+            *(dest_row++) = PACK_FROM_1234_128BPP (t, a, b, c, d); \
+            src_row += 2; \
         } \
     } SMOL_REPACK_ROW_DEF_END \
     SMOL_REPACK_ROW_DEF (1234,       128, 64, PREMUL8,       COMPRESSED, \
                          a##b##c##d,  32, 32, UNASSOCIATED,  COMPRESSED) { \
-        while (row_out != row_out_max) \
+        while (dest_row != dest_row_max) \
         { \
             uint64_t t [2]; \
-            uint8_t alpha = row_in [1]; \
-            unpremul_p8_to_u_128bpp (row_in, t, alpha); \
+            uint8_t alpha = src_row [1]; \
+            unpremul_p8_to_u_128bpp (src_row, t, alpha); \
             t [1] = (t [1] & 0xffffffff00000000ULL) | alpha; \
-            *(row_out++) = PACK_FROM_1234_128BPP (t, a, b, c, d); \
-            row_in += 2; \
+            *(dest_row++) = PACK_FROM_1234_128BPP (t, a, b, c, d); \
+            src_row += 2; \
         } \
     } SMOL_REPACK_ROW_DEF_END \
     SMOL_REPACK_ROW_DEF (1234,       128, 64, PREMUL8,       LINEAR, \
                          a##b##c##d,  32, 32, UNASSOCIATED,  COMPRESSED) { \
-        while (row_out != row_out_max) \
+        while (dest_row != dest_row_max) \
         { \
             uint64_t t [2]; \
-            uint8_t alpha = get_alpha_from_linear_xxxa_128bpp (row_in); \
-            unpremul_p8l_to_ul_128bpp (row_in, t, alpha); \
+            uint8_t alpha = get_alpha_from_linear_xxxa_128bpp (src_row); \
+            unpremul_p8l_to_ul_128bpp (src_row, t, alpha); \
             to_srgb_pixel_xxxa_128bpp (t, t); \
             t [1] = (t [1] & 0xffffffff00000000ULL) | alpha; \
-            *(row_out++) = PACK_FROM_1234_128BPP (t, a, b, c, d); \
-            row_in += 2; \
+            *(dest_row++) = PACK_FROM_1234_128BPP (t, a, b, c, d); \
+            src_row += 2; \
         } \
     } SMOL_REPACK_ROW_DEF_END \
     SMOL_REPACK_ROW_DEF (1234,       128, 64, PREMUL16,      COMPRESSED, \
                          a##b##c##d,  32, 32, UNASSOCIATED,  COMPRESSED) { \
-        while (row_out != row_out_max) \
+        while (dest_row != dest_row_max) \
         { \
             uint64_t t [2]; \
-            uint8_t alpha = row_in [1] >> 8; \
-            unpremul_p16_to_u_128bpp (row_in, t, alpha); \
+            uint8_t alpha = src_row [1] >> 8; \
+            unpremul_p16_to_u_128bpp (src_row, t, alpha); \
             t [1] = (t [1] & 0xffffffff00000000ULL) | alpha; \
-            *(row_out++) = PACK_FROM_1234_128BPP (t, a, b, c, d); \
-            row_in += 2; \
+            *(dest_row++) = PACK_FROM_1234_128BPP (t, a, b, c, d); \
+            src_row += 2; \
         } \
     } SMOL_REPACK_ROW_DEF_END \
     SMOL_REPACK_ROW_DEF (1234,       128, 64, PREMUL16,      LINEAR, \
                          a##b##c##d,  32, 32, UNASSOCIATED,  COMPRESSED) { \
-        while (row_out != row_out_max) \
+        while (dest_row != dest_row_max) \
         { \
             uint64_t t [2]; \
-            uint8_t alpha = row_in [1] >> 8; \
-            unpremul_p16l_to_ul_128bpp (row_in, t, alpha); \
+            uint8_t alpha = src_row [1] >> 8; \
+            unpremul_p16l_to_ul_128bpp (src_row, t, alpha); \
             to_srgb_pixel_xxxa_128bpp (t, t); \
             t [1] = (t [1] & 0xffffffff00000000ULL) | alpha; \
-            *(row_out++) = PACK_FROM_1234_128BPP (t, a, b, c, d); \
-            row_in += 2; \
+            *(dest_row++) = PACK_FROM_1234_128BPP (t, a, b, c, d); \
+            src_row += 2; \
         } \
     } SMOL_REPACK_ROW_DEF_END
 
@@ -1210,10 +1210,10 @@ DEF_REPACK_FROM_1234_128BPP_TO_32BPP (4, 3, 2, 1)
  * -------------- */
 
 static SMOL_INLINE const char *
-inrow_ofs_to_pointer (const SmolScaleCtx *scale_ctx,
-                      uint32_t inrow_ofs)
+src_row_ofs_to_pointer (const SmolScaleCtx *scale_ctx,
+                        uint32_t src_row_ofs)
 {
-    return scale_ctx->pixels_in + scale_ctx->in_rowstride * inrow_ofs;
+    return scale_ctx->src_pixels + scale_ctx->src_rowstride * src_row_ofs;
 }
 
 static SMOL_INLINE uint64_t
@@ -1308,10 +1308,10 @@ scale_128bpp_half (uint64_t accum,
 static SMOL_INLINE void
 scale_and_store_128bpp (const uint64_t * SMOL_RESTRICT accum,
                         uint64_t multiplier,
-                        uint64_t ** SMOL_RESTRICT row_parts_out)
+                        uint64_t ** SMOL_RESTRICT dest_row_parts)
 {
-    *(*row_parts_out)++ = scale_128bpp_half (accum [0], multiplier);
-    *(*row_parts_out)++ = scale_128bpp_half (accum [1], multiplier);
+    *(*dest_row_parts)++ = scale_128bpp_half (accum [0], multiplier);
+    *(*dest_row_parts)++ = scale_128bpp_half (accum [1], multiplier);
 }
 
 static void
@@ -1478,12 +1478,12 @@ apply_horiz_edge_opacity (const SmolScaleCtx *scale_ctx,
     if (scale_ctx->storage_type == SMOL_STORAGE_64BPP)
     {
         apply_subpixel_opacity_64bpp (&row_parts [0], scale_ctx->hdim.first_opacity);
-        apply_subpixel_opacity_64bpp (&row_parts [scale_ctx->hdim.out_size_px - 1], scale_ctx->hdim.last_opacity);
+        apply_subpixel_opacity_64bpp (&row_parts [scale_ctx->hdim.dest_size_px - 1], scale_ctx->hdim.last_opacity);
     }
     else
     {
         apply_subpixel_opacity_128bpp (&row_parts [0], scale_ctx->hdim.first_opacity);
-        apply_subpixel_opacity_128bpp (&row_parts [(scale_ctx->hdim.out_size_px - 1) * 2], scale_ctx->hdim.last_opacity);
+        apply_subpixel_opacity_128bpp (&row_parts [(scale_ctx->hdim.dest_size_px - 1) * 2], scale_ctx->hdim.last_opacity);
     }
 }
 
@@ -1494,17 +1494,17 @@ apply_horiz_edge_opacity (const SmolScaleCtx *scale_ctx,
 #define DEF_INTERP_HORIZONTAL_BILINEAR(n_halvings) \
 static void \
 interp_horizontal_bilinear_##n_halvings##h_64bpp (const SmolScaleCtx *scale_ctx, \
-                                                  const uint64_t * SMOL_RESTRICT row_parts_in, \
-                                                  uint64_t * SMOL_RESTRICT row_parts_out) \
+                                                  const uint64_t * SMOL_RESTRICT src_row_parts, \
+                                                  uint64_t * SMOL_RESTRICT dest_row_parts) \
 { \
     const uint16_t * SMOL_RESTRICT precalc_x = scale_ctx->hdim.precalc; \
-    uint64_t *row_parts_out_max = row_parts_out + scale_ctx->hdim.out_size_px; \
+    uint64_t *dest_row_parts_max = dest_row_parts + scale_ctx->hdim.dest_size_px; \
     uint64_t p, q; \
     uint64_t F; \
     int i; \
 \
-    SMOL_ASSUME_ALIGNED (row_parts_in, const uint64_t *); \
-    SMOL_ASSUME_ALIGNED (row_parts_out, uint64_t *); \
+    SMOL_ASSUME_ALIGNED (src_row_parts, const uint64_t *); \
+    SMOL_ASSUME_ALIGNED (dest_row_parts, uint64_t *); \
 \
     do \
     { \
@@ -1515,29 +1515,29 @@ interp_horizontal_bilinear_##n_halvings##h_64bpp (const SmolScaleCtx *scale_ctx,
             uint64_t pixel_ofs = *(precalc_x++); \
             F = *(precalc_x++); \
 \
-            p = row_parts_in [pixel_ofs]; \
-            q = row_parts_in [pixel_ofs + 1]; \
+            p = src_row_parts [pixel_ofs]; \
+            q = src_row_parts [pixel_ofs + 1]; \
 \
             accum += ((((p - q) * F) >> 8) + q) & 0x00ff00ff00ff00ffULL; \
             } \
-        *(row_parts_out++) = ((accum) >> (n_halvings)) & 0x00ff00ff00ff00ffULL; \
+        *(dest_row_parts++) = ((accum) >> (n_halvings)) & 0x00ff00ff00ff00ffULL; \
     } \
-    while (row_parts_out != row_parts_out_max); \
+    while (dest_row_parts != dest_row_parts_max); \
 } \
 \
 static void \
 interp_horizontal_bilinear_##n_halvings##h_128bpp (const SmolScaleCtx *scale_ctx, \
-                                                   const uint64_t * SMOL_RESTRICT row_parts_in, \
-                                                   uint64_t * SMOL_RESTRICT row_parts_out) \
+                                                   const uint64_t * SMOL_RESTRICT src_row_parts, \
+                                                   uint64_t * SMOL_RESTRICT dest_row_parts) \
 { \
     const uint16_t * SMOL_RESTRICT precalc_x = scale_ctx->hdim.precalc; \
-    uint64_t *row_parts_out_max = row_parts_out + scale_ctx->hdim.out_size_px * 2; \
+    uint64_t *dest_row_parts_max = dest_row_parts + scale_ctx->hdim.dest_size_px * 2; \
     uint64_t p, q; \
     uint64_t F; \
     int i; \
 \
-    SMOL_ASSUME_ALIGNED (row_parts_in, const uint64_t *); \
-    SMOL_ASSUME_ALIGNED (row_parts_out, uint64_t *); \
+    SMOL_ASSUME_ALIGNED (src_row_parts, const uint64_t *); \
+    SMOL_ASSUME_ALIGNED (dest_row_parts, uint64_t *); \
 \
     do \
     { \
@@ -1548,77 +1548,77 @@ interp_horizontal_bilinear_##n_halvings##h_128bpp (const SmolScaleCtx *scale_ctx
             uint32_t pixel_ofs = *(precalc_x++) * 2; \
             F = *(precalc_x++); \
 \
-            p = row_parts_in [pixel_ofs]; \
-            q = row_parts_in [pixel_ofs + 2]; \
+            p = src_row_parts [pixel_ofs]; \
+            q = src_row_parts [pixel_ofs + 2]; \
 \
             accum [0] += ((((p - q) * F) >> 8) + q) & 0x00ffffff00ffffffULL; \
 \
-            p = row_parts_in [pixel_ofs + 1]; \
-            q = row_parts_in [pixel_ofs + 3]; \
+            p = src_row_parts [pixel_ofs + 1]; \
+            q = src_row_parts [pixel_ofs + 3]; \
 \
             accum [1] += ((((p - q) * F) >> 8) + q) & 0x00ffffff00ffffffULL; \
         } \
-        *(row_parts_out++) = ((accum [0]) >> (n_halvings)) & 0x00ffffff00ffffffULL; \
-        *(row_parts_out++) = ((accum [1]) >> (n_halvings)) & 0x00ffffff00ffffffULL; \
+        *(dest_row_parts++) = ((accum [0]) >> (n_halvings)) & 0x00ffffff00ffffffULL; \
+        *(dest_row_parts++) = ((accum [1]) >> (n_halvings)) & 0x00ffffff00ffffffULL; \
     } \
-    while (row_parts_out != row_parts_out_max); \
+    while (dest_row_parts != dest_row_parts_max); \
 }
 
 static void
 interp_horizontal_bilinear_0h_64bpp (const SmolScaleCtx *scale_ctx,
-                                     const uint64_t * SMOL_RESTRICT row_parts_in,
-                                     uint64_t * SMOL_RESTRICT row_parts_out)
+                                     const uint64_t * SMOL_RESTRICT src_row_parts,
+                                     uint64_t * SMOL_RESTRICT dest_row_parts)
 {
     const uint16_t * SMOL_RESTRICT precalc_x = scale_ctx->hdim.precalc;
-    uint64_t * SMOL_RESTRICT row_parts_out_max = row_parts_out + scale_ctx->hdim.out_size_px;
+    uint64_t * SMOL_RESTRICT dest_row_parts_max = dest_row_parts + scale_ctx->hdim.dest_size_px;
     uint64_t p, q;
     uint64_t F;
 
-    SMOL_ASSUME_ALIGNED (row_parts_in, const uint64_t *);
-    SMOL_ASSUME_ALIGNED (row_parts_out, uint64_t *);
+    SMOL_ASSUME_ALIGNED (src_row_parts, const uint64_t *);
+    SMOL_ASSUME_ALIGNED (dest_row_parts, uint64_t *);
 
     do
     {
         uint32_t pixel_ofs = *(precalc_x++);
         F = *(precalc_x++);
 
-        p = row_parts_in [pixel_ofs];
-        q = row_parts_in [pixel_ofs + 1];
+        p = src_row_parts [pixel_ofs];
+        q = src_row_parts [pixel_ofs + 1];
 
-        *(row_parts_out++) = ((((p - q) * F) >> 8) + q) & 0x00ff00ff00ff00ffULL;
+        *(dest_row_parts++) = ((((p - q) * F) >> 8) + q) & 0x00ff00ff00ff00ffULL;
     }
-    while (row_parts_out != row_parts_out_max);
+    while (dest_row_parts != dest_row_parts_max);
 }
 
 static void
 interp_horizontal_bilinear_0h_128bpp (const SmolScaleCtx *scale_ctx,
-                                      const uint64_t * SMOL_RESTRICT row_parts_in,
-                                      uint64_t * SMOL_RESTRICT row_parts_out)
+                                      const uint64_t * SMOL_RESTRICT src_row_parts,
+                                      uint64_t * SMOL_RESTRICT dest_row_parts)
 {
     const uint16_t * SMOL_RESTRICT precalc_x = scale_ctx->hdim.precalc;
-    uint64_t * SMOL_RESTRICT row_parts_out_max = row_parts_out + scale_ctx->hdim.out_size_px * 2;
+    uint64_t * SMOL_RESTRICT dest_row_parts_max = dest_row_parts + scale_ctx->hdim.dest_size_px * 2;
     uint64_t p, q;
     uint64_t F;
 
-    SMOL_ASSUME_ALIGNED (row_parts_in, const uint64_t *);
-    SMOL_ASSUME_ALIGNED (row_parts_out, uint64_t *);
+    SMOL_ASSUME_ALIGNED (src_row_parts, const uint64_t *);
+    SMOL_ASSUME_ALIGNED (dest_row_parts, uint64_t *);
 
     do
     {
         uint32_t pixel_ofs = *(precalc_x++) * 2;
         F = *(precalc_x++);
 
-        p = row_parts_in [pixel_ofs];
-        q = row_parts_in [pixel_ofs + 2];
+        p = src_row_parts [pixel_ofs];
+        q = src_row_parts [pixel_ofs + 2];
 
-        *(row_parts_out++) = ((((p - q) * F) >> 8) + q) & 0x00ffffff00ffffffULL;
+        *(dest_row_parts++) = ((((p - q) * F) >> 8) + q) & 0x00ffffff00ffffffULL;
 
-        p = row_parts_in [pixel_ofs + 1];
-        q = row_parts_in [pixel_ofs + 3];
+        p = src_row_parts [pixel_ofs + 1];
+        q = src_row_parts [pixel_ofs + 3];
 
-        *(row_parts_out++) = ((((p - q) * F) >> 8) + q) & 0x00ffffff00ffffffULL;
+        *(dest_row_parts++) = ((((p - q) * F) >> 8) + q) & 0x00ffffff00ffffffULL;
     }
-    while (row_parts_out != row_parts_out_max);
+    while (dest_row_parts != dest_row_parts_max);
 }
 
 DEF_INTERP_HORIZONTAL_BILINEAR(1)
@@ -1648,18 +1648,18 @@ unpack_box_precalc (const uint32_t precalc,
 
 static void
 interp_horizontal_boxes_64bpp (const SmolScaleCtx *scale_ctx,
-                               const uint64_t *row_parts_in,
-                               uint64_t * SMOL_RESTRICT row_parts_out)
+                               const uint64_t *src_row_parts,
+                               uint64_t * SMOL_RESTRICT dest_row_parts)
 {
     const uint64_t * SMOL_RESTRICT pp;
     const uint32_t *precalc_x = scale_ctx->hdim.precalc;
-    uint64_t *row_parts_out_max = row_parts_out + scale_ctx->hdim.out_size_px;
+    uint64_t *dest_row_parts_max = dest_row_parts + scale_ctx->hdim.dest_size_px;
     uint64_t accum;
 
-    SMOL_ASSUME_ALIGNED (row_parts_in, const uint64_t *);
-    SMOL_ASSUME_ALIGNED (row_parts_out, uint64_t *);
+    SMOL_ASSUME_ALIGNED (src_row_parts, const uint64_t *);
+    SMOL_ASSUME_ALIGNED (dest_row_parts, uint64_t *);
 
-    while (row_parts_out < row_parts_out_max)
+    while (dest_row_parts < dest_row_parts_max)
     {
         uint32_t ofs0, ofs1;
         uint32_t f0, f1;
@@ -1673,30 +1673,30 @@ interp_horizontal_boxes_64bpp (const SmolScaleCtx *scale_ctx,
                             &f1,
                             &n);
 
-        pp = row_parts_in + ofs0;
+        pp = src_row_parts + ofs0;
 
         accum = weight_pixel_64bpp (*(pp++), f0);
         sum_parts_64bpp ((const uint64_t ** SMOL_RESTRICT) &pp, &accum, n);
         accum += weight_pixel_64bpp (*pp, f1);
 
-        *(row_parts_out++) = scale_64bpp (accum, scale_ctx->hdim.span_mul);
+        *(dest_row_parts++) = scale_64bpp (accum, scale_ctx->hdim.span_mul);
     }
 }
 
 static void
 interp_horizontal_boxes_128bpp (const SmolScaleCtx *scale_ctx,
-                                const uint64_t *row_parts_in,
-                                uint64_t * SMOL_RESTRICT row_parts_out)
+                                const uint64_t *src_row_parts,
+                                uint64_t * SMOL_RESTRICT dest_row_parts)
 {
     const uint64_t * SMOL_RESTRICT pp;
     const uint32_t *precalc_x = scale_ctx->hdim.precalc;
-    uint64_t *row_parts_out_max = row_parts_out + scale_ctx->hdim.out_size_px * 2;
+    uint64_t *dest_row_parts_max = dest_row_parts + scale_ctx->hdim.dest_size_px * 2;
     uint64_t accum [2];
 
-    SMOL_ASSUME_ALIGNED (row_parts_in, const uint64_t *);
-    SMOL_ASSUME_ALIGNED (row_parts_out, uint64_t *);
+    SMOL_ASSUME_ALIGNED (src_row_parts, const uint64_t *);
+    SMOL_ASSUME_ALIGNED (dest_row_parts, uint64_t *);
 
-    while (row_parts_out < row_parts_out_max)
+    while (dest_row_parts < dest_row_parts_max)
     {
         uint32_t ofs0, ofs1;
         uint32_t f0, f1;
@@ -1711,7 +1711,7 @@ interp_horizontal_boxes_128bpp (const SmolScaleCtx *scale_ctx,
                             &f1,
                             &n);
 
-        pp = row_parts_in + (ofs0 * 2);
+        pp = src_row_parts + (ofs0 * 2);
 
         weight_pixel_128bpp (pp, accum, f0);
         pp += 2;
@@ -1724,96 +1724,96 @@ interp_horizontal_boxes_128bpp (const SmolScaleCtx *scale_ctx,
 
         scale_and_store_128bpp (accum,
                                 scale_ctx->hdim.span_mul,
-                                (uint64_t ** SMOL_RESTRICT) &row_parts_out);
+                                (uint64_t ** SMOL_RESTRICT) &dest_row_parts);
     }
 }
 
 static void
 interp_horizontal_one_64bpp (const SmolScaleCtx *scale_ctx,
-                             const uint64_t * SMOL_RESTRICT row_parts_in,
-                             uint64_t * SMOL_RESTRICT row_parts_out)
+                             const uint64_t * SMOL_RESTRICT src_row_parts,
+                             uint64_t * SMOL_RESTRICT dest_row_parts)
 {
-    uint64_t *row_parts_out_max = row_parts_out + scale_ctx->hdim.out_size_px;
+    uint64_t *dest_row_parts_max = dest_row_parts + scale_ctx->hdim.dest_size_px;
     uint64_t part;
 
-    SMOL_ASSUME_ALIGNED (row_parts_in, const uint64_t *);
-    SMOL_ASSUME_ALIGNED (row_parts_out, uint64_t *);
+    SMOL_ASSUME_ALIGNED (src_row_parts, const uint64_t *);
+    SMOL_ASSUME_ALIGNED (dest_row_parts, uint64_t *);
 
-    part = *row_parts_in;
-    while (row_parts_out != row_parts_out_max)
-        *(row_parts_out++) = part;
+    part = *src_row_parts;
+    while (dest_row_parts != dest_row_parts_max)
+        *(dest_row_parts++) = part;
 }
 
 static void
 interp_horizontal_one_128bpp (const SmolScaleCtx *scale_ctx,
-                              const uint64_t * SMOL_RESTRICT row_parts_in,
-                              uint64_t * SMOL_RESTRICT row_parts_out)
+                              const uint64_t * SMOL_RESTRICT src_row_parts,
+                              uint64_t * SMOL_RESTRICT dest_row_parts)
 {
-    uint64_t *row_parts_out_max = row_parts_out + scale_ctx->hdim.out_size_px * 2;
+    uint64_t *dest_row_parts_max = dest_row_parts + scale_ctx->hdim.dest_size_px * 2;
 
-    SMOL_ASSUME_ALIGNED (row_parts_in, const uint64_t *);
-    SMOL_ASSUME_ALIGNED (row_parts_out, uint64_t *);
+    SMOL_ASSUME_ALIGNED (src_row_parts, const uint64_t *);
+    SMOL_ASSUME_ALIGNED (dest_row_parts, uint64_t *);
 
-    while (row_parts_out != row_parts_out_max)
+    while (dest_row_parts != dest_row_parts_max)
     {
-        *(row_parts_out++) = row_parts_in [0];
-        *(row_parts_out++) = row_parts_in [1];
+        *(dest_row_parts++) = src_row_parts [0];
+        *(dest_row_parts++) = src_row_parts [1];
     }
 }
 
 static void
 interp_horizontal_copy_64bpp (const SmolScaleCtx *scale_ctx,
-                              const uint64_t * SMOL_RESTRICT row_parts_in,
-                              uint64_t * SMOL_RESTRICT row_parts_out)
+                              const uint64_t * SMOL_RESTRICT src_row_parts,
+                              uint64_t * SMOL_RESTRICT dest_row_parts)
 {
-    SMOL_ASSUME_ALIGNED (row_parts_in, const uint64_t *);
-    SMOL_ASSUME_ALIGNED (row_parts_out, uint64_t *);
+    SMOL_ASSUME_ALIGNED (src_row_parts, const uint64_t *);
+    SMOL_ASSUME_ALIGNED (dest_row_parts, uint64_t *);
 
-    memcpy (row_parts_out, row_parts_in, scale_ctx->hdim.out_size_px * sizeof (uint64_t));
+    memcpy (dest_row_parts, src_row_parts, scale_ctx->hdim.dest_size_px * sizeof (uint64_t));
 }
 
 static void
 interp_horizontal_copy_128bpp (const SmolScaleCtx *scale_ctx,
-                               const uint64_t * SMOL_RESTRICT row_parts_in,
-                               uint64_t * SMOL_RESTRICT row_parts_out)
+                               const uint64_t * SMOL_RESTRICT src_row_parts,
+                               uint64_t * SMOL_RESTRICT dest_row_parts)
 {
-    SMOL_ASSUME_ALIGNED (row_parts_in, const uint64_t *);
-    SMOL_ASSUME_ALIGNED (row_parts_out, uint64_t *);
+    SMOL_ASSUME_ALIGNED (src_row_parts, const uint64_t *);
+    SMOL_ASSUME_ALIGNED (dest_row_parts, uint64_t *);
 
-    memcpy (row_parts_out, row_parts_in, scale_ctx->hdim.out_size_px * 2 * sizeof (uint64_t));
+    memcpy (dest_row_parts, src_row_parts, scale_ctx->hdim.dest_size_px * 2 * sizeof (uint64_t));
 }
 
 static void
 scale_horizontal (const SmolScaleCtx *scale_ctx,
                   SmolLocalCtx *local_ctx,
-                  const char *row_in,
-                  uint64_t *row_parts_out)
+                  const char *src_row,
+                  uint64_t *dest_row_parts)
 {
-    uint64_t * SMOL_RESTRICT unpacked_in;
+    uint64_t * SMOL_RESTRICT src_row_unpacked;
 
-    unpacked_in = local_ctx->parts_row [3];
+    src_row_unpacked = local_ctx->parts_row [3];
 
     /* 32-bit unpackers need 32-bit alignment */
-    if ((((uintptr_t) row_in) & 3)
-        && scale_ctx->pixel_type_in != SMOL_PIXEL_RGB8
-        && scale_ctx->pixel_type_in != SMOL_PIXEL_BGR8)
+    if ((((uintptr_t) src_row) & 3)
+        && scale_ctx->src_pixel_type != SMOL_PIXEL_RGB8
+        && scale_ctx->src_pixel_type != SMOL_PIXEL_BGR8)
     {
-        if (!local_ctx->in_aligned)
-            local_ctx->in_aligned =
-                smol_alloc_aligned (scale_ctx->hdim.in_size_px * sizeof (uint32_t),
-                                    &local_ctx->in_aligned_storage);
-        memcpy (local_ctx->in_aligned, row_in, scale_ctx->hdim.in_size_px * sizeof (uint32_t));
-        row_in = (const char *) local_ctx->in_aligned;
+        if (!local_ctx->src_aligned)
+            local_ctx->src_aligned =
+                smol_alloc_aligned (scale_ctx->hdim.src_size_px * sizeof (uint32_t),
+                                    &local_ctx->src_aligned_storage);
+        memcpy (local_ctx->src_aligned, src_row, scale_ctx->hdim.src_size_px * sizeof (uint32_t));
+        src_row = (const char *) local_ctx->src_aligned;
     }
 
-    scale_ctx->unpack_row_func (row_in,
-                                unpacked_in,
-                                scale_ctx->hdim.in_size_px);
+    scale_ctx->unpack_row_func (src_row,
+                                src_row_unpacked,
+                                scale_ctx->hdim.src_size_px);
     scale_ctx->hfilter_func (scale_ctx,
-                             unpacked_in,
-                             row_parts_out);
+                             src_row_unpacked,
+                             dest_row_parts);
 
-    apply_horiz_edge_opacity (scale_ctx, row_parts_out);
+    apply_horiz_edge_opacity (scale_ctx, dest_row_parts);
 }
 
 /* ---------------- *
@@ -1823,15 +1823,15 @@ scale_horizontal (const SmolScaleCtx *scale_ctx,
 static void
 update_local_ctx_bilinear (const SmolScaleCtx *scale_ctx,
                            SmolLocalCtx *local_ctx,
-                           uint32_t outrow_index)
+                           uint32_t dest_row_index)
 {
     uint16_t *precalc_y = scale_ctx->vdim.precalc;
-    uint32_t new_in_ofs = precalc_y [outrow_index * 2];
+    uint32_t new_src_ofs = precalc_y [dest_row_index * 2];
 
-    if (new_in_ofs == local_ctx->in_ofs)
+    if (new_src_ofs == local_ctx->src_ofs)
         return;
 
-    if (new_in_ofs == local_ctx->in_ofs + 1)
+    if (new_src_ofs == local_ctx->src_ofs + 1)
     {
         uint64_t *t = local_ctx->parts_row [0];
         local_ctx->parts_row [0] = local_ctx->parts_row [1];
@@ -1839,200 +1839,200 @@ update_local_ctx_bilinear (const SmolScaleCtx *scale_ctx,
 
         scale_horizontal (scale_ctx,
                           local_ctx,
-                          inrow_ofs_to_pointer (scale_ctx, new_in_ofs + 1),
+                          src_row_ofs_to_pointer (scale_ctx, new_src_ofs + 1),
                           local_ctx->parts_row [1]);
     }
     else
     {
         scale_horizontal (scale_ctx,
                           local_ctx,
-                          inrow_ofs_to_pointer (scale_ctx, new_in_ofs),
+                          src_row_ofs_to_pointer (scale_ctx, new_src_ofs),
                           local_ctx->parts_row [0]);
         scale_horizontal (scale_ctx,
                           local_ctx,
-                          inrow_ofs_to_pointer (scale_ctx, new_in_ofs + 1),
+                          src_row_ofs_to_pointer (scale_ctx, new_src_ofs + 1),
                           local_ctx->parts_row [1]);
     }
 
-    local_ctx->in_ofs = new_in_ofs;
+    local_ctx->src_ofs = new_src_ofs;
 }
 
 static void
 interp_vertical_bilinear_store_64bpp (uint64_t F,
-                                      const uint64_t * SMOL_RESTRICT top_row_parts_in,
-                                      const uint64_t * SMOL_RESTRICT bottom_row_parts_in,
-                                      uint64_t * SMOL_RESTRICT parts_out,
+                                      const uint64_t * SMOL_RESTRICT top_src_row_parts,
+                                      const uint64_t * SMOL_RESTRICT bottom_src_row_parts,
+                                      uint64_t * SMOL_RESTRICT dest_parts,
                                       uint32_t width)
 {
-    uint64_t *parts_out_last = parts_out + width;
+    uint64_t *parts_dest_last = dest_parts + width;
 
-    SMOL_ASSUME_ALIGNED (top_row_parts_in, const uint64_t *);
-    SMOL_ASSUME_ALIGNED (bottom_row_parts_in, const uint64_t *);
-    SMOL_ASSUME_ALIGNED (parts_out, uint64_t *);
+    SMOL_ASSUME_ALIGNED (top_src_row_parts, const uint64_t *);
+    SMOL_ASSUME_ALIGNED (bottom_src_row_parts, const uint64_t *);
+    SMOL_ASSUME_ALIGNED (dest_parts, uint64_t *);
 
     do
     {
         uint64_t p, q;
 
-        p = *(top_row_parts_in++);
-        q = *(bottom_row_parts_in++);
+        p = *(top_src_row_parts++);
+        q = *(bottom_src_row_parts++);
 
-        *(parts_out++) = ((((p - q) * F) >> 8) + q) & 0x00ff00ff00ff00ffULL;
+        *(dest_parts++) = ((((p - q) * F) >> 8) + q) & 0x00ff00ff00ff00ffULL;
     }
-    while (parts_out != parts_out_last);
+    while (dest_parts != parts_dest_last);
 }
 
 static void
 interp_vertical_bilinear_store_with_opacity_64bpp (uint64_t F,
-                                                   const uint64_t * SMOL_RESTRICT top_row_parts_in,
-                                                   const uint64_t * SMOL_RESTRICT bottom_row_parts_in,
-                                                   uint64_t * SMOL_RESTRICT parts_out,
+                                                   const uint64_t * SMOL_RESTRICT top_src_row_parts,
+                                                   const uint64_t * SMOL_RESTRICT bottom_src_row_parts,
+                                                   uint64_t * SMOL_RESTRICT dest_parts,
                                                    uint32_t width,
                                                    uint16_t opacity)
 {
-    uint64_t *parts_out_last = parts_out + width;
+    uint64_t *parts_dest_last = dest_parts + width;
 
-    SMOL_ASSUME_ALIGNED (top_row_parts_in, const uint64_t *);
-    SMOL_ASSUME_ALIGNED (bottom_row_parts_in, const uint64_t *);
-    SMOL_ASSUME_ALIGNED (parts_out, uint64_t *);
+    SMOL_ASSUME_ALIGNED (top_src_row_parts, const uint64_t *);
+    SMOL_ASSUME_ALIGNED (bottom_src_row_parts, const uint64_t *);
+    SMOL_ASSUME_ALIGNED (dest_parts, uint64_t *);
 
     do
     {
         uint64_t p, q;
 
-        p = *(top_row_parts_in++);
-        q = *(bottom_row_parts_in++);
+        p = *(top_src_row_parts++);
+        q = *(bottom_src_row_parts++);
 
-        *parts_out = ((((p - q) * F) >> 8) + q) & 0x00ff00ff00ff00ffULL;
-        apply_subpixel_opacity_64bpp (parts_out, opacity);
-        parts_out++;
+        *dest_parts = ((((p - q) * F) >> 8) + q) & 0x00ff00ff00ff00ffULL;
+        apply_subpixel_opacity_64bpp (dest_parts, opacity);
+        dest_parts++;
     }
-    while (parts_out != parts_out_last);
+    while (dest_parts != parts_dest_last);
 }
 
 static void
 interp_vertical_bilinear_add_64bpp (uint64_t F,
-                                    const uint64_t * SMOL_RESTRICT top_row_parts_in,
-                                    const uint64_t * SMOL_RESTRICT bottom_row_parts_in,
+                                    const uint64_t * SMOL_RESTRICT top_src_row_parts,
+                                    const uint64_t * SMOL_RESTRICT bottom_src_row_parts,
                                     uint64_t * SMOL_RESTRICT accum_out,
                                     uint32_t width)
 {
-    uint64_t *accum_out_last = accum_out + width;
+    uint64_t *accum_dest_last = accum_out + width;
 
-    SMOL_ASSUME_ALIGNED (top_row_parts_in, const uint64_t *);
-    SMOL_ASSUME_ALIGNED (bottom_row_parts_in, const uint64_t *);
+    SMOL_ASSUME_ALIGNED (top_src_row_parts, const uint64_t *);
+    SMOL_ASSUME_ALIGNED (bottom_src_row_parts, const uint64_t *);
     SMOL_ASSUME_ALIGNED (accum_out, uint64_t *);
 
     do
     {
         uint64_t p, q;
 
-        p = *(top_row_parts_in++);
-        q = *(bottom_row_parts_in++);
+        p = *(top_src_row_parts++);
+        q = *(bottom_src_row_parts++);
 
         *(accum_out++) += ((((p - q) * F) >> 8) + q) & 0x00ff00ff00ff00ffULL;
     }
-    while (accum_out != accum_out_last);
+    while (accum_out != accum_dest_last);
 }
 
 static void
 interp_vertical_bilinear_store_128bpp (uint64_t F,
-                                       const uint64_t * SMOL_RESTRICT top_row_parts_in,
-                                       const uint64_t * SMOL_RESTRICT bottom_row_parts_in,
-                                       uint64_t * SMOL_RESTRICT parts_out,
+                                       const uint64_t * SMOL_RESTRICT top_src_row_parts,
+                                       const uint64_t * SMOL_RESTRICT bottom_src_row_parts,
+                                       uint64_t * SMOL_RESTRICT dest_parts,
                                        uint32_t width)
 {
-    uint64_t *parts_out_last = parts_out + width;
+    uint64_t *parts_dest_last = dest_parts + width;
 
-    SMOL_ASSUME_ALIGNED (top_row_parts_in, const uint64_t *);
-    SMOL_ASSUME_ALIGNED (bottom_row_parts_in, const uint64_t *);
-    SMOL_ASSUME_ALIGNED (parts_out, uint64_t *);
+    SMOL_ASSUME_ALIGNED (top_src_row_parts, const uint64_t *);
+    SMOL_ASSUME_ALIGNED (bottom_src_row_parts, const uint64_t *);
+    SMOL_ASSUME_ALIGNED (dest_parts, uint64_t *);
 
     do
     {
         uint64_t p, q;
 
-        p = *(top_row_parts_in++);
-        q = *(bottom_row_parts_in++);
+        p = *(top_src_row_parts++);
+        q = *(bottom_src_row_parts++);
 
-        *(parts_out++) = ((((p - q) * F) >> 8) + q) & 0x00ffffff00ffffffULL;
+        *(dest_parts++) = ((((p - q) * F) >> 8) + q) & 0x00ffffff00ffffffULL;
     }
-    while (parts_out != parts_out_last);
+    while (dest_parts != parts_dest_last);
 }
 
 static void
 interp_vertical_bilinear_store_with_opacity_128bpp (uint64_t F,
-                                                    const uint64_t * SMOL_RESTRICT top_row_parts_in,
-                                                    const uint64_t * SMOL_RESTRICT bottom_row_parts_in,
-                                                    uint64_t * SMOL_RESTRICT parts_out,
+                                                    const uint64_t * SMOL_RESTRICT top_src_row_parts,
+                                                    const uint64_t * SMOL_RESTRICT bottom_src_row_parts,
+                                                    uint64_t * SMOL_RESTRICT dest_parts,
                                                     uint32_t width,
                                                     uint16_t opacity)
 {
-    uint64_t *parts_out_last = parts_out + width;
+    uint64_t *parts_dest_last = dest_parts + width;
 
-    SMOL_ASSUME_ALIGNED (top_row_parts_in, const uint64_t *);
-    SMOL_ASSUME_ALIGNED (bottom_row_parts_in, const uint64_t *);
-    SMOL_ASSUME_ALIGNED (parts_out, uint64_t *);
+    SMOL_ASSUME_ALIGNED (top_src_row_parts, const uint64_t *);
+    SMOL_ASSUME_ALIGNED (bottom_src_row_parts, const uint64_t *);
+    SMOL_ASSUME_ALIGNED (dest_parts, uint64_t *);
 
     do
     {
         uint64_t p, q;
 
-        p = *(top_row_parts_in++);
-        q = *(bottom_row_parts_in++);
+        p = *(top_src_row_parts++);
+        q = *(bottom_src_row_parts++);
 
-        *parts_out = ((((p - q) * F) >> 8) + q) & 0x00ffffff00ffffffULL;
-        apply_subpixel_opacity_128bpp_half (parts_out, opacity);
-        parts_out++;
+        *dest_parts = ((((p - q) * F) >> 8) + q) & 0x00ffffff00ffffffULL;
+        apply_subpixel_opacity_128bpp_half (dest_parts, opacity);
+        dest_parts++;
     }
-    while (parts_out != parts_out_last);
+    while (dest_parts != parts_dest_last);
 }
 
 static void
 interp_vertical_bilinear_add_128bpp (uint64_t F,
-                                     const uint64_t * SMOL_RESTRICT top_row_parts_in,
-                                     const uint64_t * SMOL_RESTRICT bottom_row_parts_in,
+                                     const uint64_t * SMOL_RESTRICT top_src_row_parts,
+                                     const uint64_t * SMOL_RESTRICT bottom_src_row_parts,
                                      uint64_t * SMOL_RESTRICT accum_out,
                                      uint32_t width)
 {
-    uint64_t *accum_out_last = accum_out + width;
+    uint64_t *accum_dest_last = accum_out + width;
 
-    SMOL_ASSUME_ALIGNED (top_row_parts_in, const uint64_t *);
-    SMOL_ASSUME_ALIGNED (bottom_row_parts_in, const uint64_t *);
+    SMOL_ASSUME_ALIGNED (top_src_row_parts, const uint64_t *);
+    SMOL_ASSUME_ALIGNED (bottom_src_row_parts, const uint64_t *);
     SMOL_ASSUME_ALIGNED (accum_out, uint64_t *);
 
     do
     {
         uint64_t p, q;
 
-        p = *(top_row_parts_in++);
-        q = *(bottom_row_parts_in++);
+        p = *(top_src_row_parts++);
+        q = *(bottom_src_row_parts++);
 
         *(accum_out++) += ((((p - q) * F) >> 8) + q) & 0x00ffffff00ffffffULL;
     }
-    while (accum_out != accum_out_last);
+    while (accum_out != accum_dest_last);
 }
 
 #define DEF_INTERP_VERTICAL_BILINEAR_FINAL(n_halvings) \
 static void \
 interp_vertical_bilinear_final_##n_halvings##h_64bpp (uint64_t F, \
-                                                      const uint64_t * SMOL_RESTRICT top_row_parts_in, \
-                                                      const uint64_t * SMOL_RESTRICT bottom_row_parts_in, \
+                                                      const uint64_t * SMOL_RESTRICT top_src_row_parts, \
+                                                      const uint64_t * SMOL_RESTRICT bottom_src_row_parts, \
                                                       uint64_t * SMOL_RESTRICT accum_inout, \
                                                       uint32_t width) \
 { \
     uint64_t *accum_inout_last = accum_inout + width; \
 \
-    SMOL_ASSUME_ALIGNED (top_row_parts_in, const uint64_t *); \
-    SMOL_ASSUME_ALIGNED (bottom_row_parts_in, const uint64_t *); \
+    SMOL_ASSUME_ALIGNED (top_src_row_parts, const uint64_t *); \
+    SMOL_ASSUME_ALIGNED (bottom_src_row_parts, const uint64_t *); \
     SMOL_ASSUME_ALIGNED (accum_inout, uint64_t *); \
 \
     do \
     { \
         uint64_t p, q; \
 \
-        p = *(top_row_parts_in++); \
-        q = *(bottom_row_parts_in++); \
+        p = *(top_src_row_parts++); \
+        q = *(bottom_src_row_parts++); \
 \
         p = ((((p - q) * F) >> 8) + q) & 0x00ff00ff00ff00ffULL; \
         p = ((p + *accum_inout) >> n_halvings) & 0x00ff00ff00ff00ffULL; \
@@ -2044,24 +2044,24 @@ interp_vertical_bilinear_final_##n_halvings##h_64bpp (uint64_t F, \
 \
 static void \
 interp_vertical_bilinear_final_##n_halvings##h_with_opacity_64bpp (uint64_t F, \
-                                                                   const uint64_t * SMOL_RESTRICT top_row_parts_in, \
-                                                                   const uint64_t * SMOL_RESTRICT bottom_row_parts_in, \
+                                                                   const uint64_t * SMOL_RESTRICT top_src_row_parts, \
+                                                                   const uint64_t * SMOL_RESTRICT bottom_src_row_parts, \
                                                                    uint64_t * SMOL_RESTRICT accum_inout, \
                                                                    uint32_t width, \
                                                                    uint16_t opacity) \
 { \
     uint64_t *accum_inout_last = accum_inout + width; \
 \
-    SMOL_ASSUME_ALIGNED (top_row_parts_in, const uint64_t *); \
-    SMOL_ASSUME_ALIGNED (bottom_row_parts_in, const uint64_t *); \
+    SMOL_ASSUME_ALIGNED (top_src_row_parts, const uint64_t *); \
+    SMOL_ASSUME_ALIGNED (bottom_src_row_parts, const uint64_t *); \
     SMOL_ASSUME_ALIGNED (accum_inout, uint64_t *); \
 \
     do \
     { \
         uint64_t p, q; \
 \
-        p = *(top_row_parts_in++); \
-        q = *(bottom_row_parts_in++); \
+        p = *(top_src_row_parts++); \
+        q = *(bottom_src_row_parts++); \
 \
         p = ((((p - q) * F) >> 8) + q) & 0x00ff00ff00ff00ffULL; \
         p = ((p + *accum_inout) >> n_halvings) & 0x00ff00ff00ff00ffULL; \
@@ -2074,23 +2074,23 @@ interp_vertical_bilinear_final_##n_halvings##h_with_opacity_64bpp (uint64_t F, \
 \
 static void \
 interp_vertical_bilinear_final_##n_halvings##h_128bpp (uint64_t F, \
-                                                       const uint64_t * SMOL_RESTRICT top_row_parts_in, \
-                                                       const uint64_t * SMOL_RESTRICT bottom_row_parts_in, \
+                                                       const uint64_t * SMOL_RESTRICT top_src_row_parts, \
+                                                       const uint64_t * SMOL_RESTRICT bottom_src_row_parts, \
                                                        uint64_t * SMOL_RESTRICT accum_inout, \
                                                        uint32_t width) \
 { \
     uint64_t *accum_inout_last = accum_inout + width; \
 \
-    SMOL_ASSUME_ALIGNED (top_row_parts_in, const uint64_t *); \
-    SMOL_ASSUME_ALIGNED (bottom_row_parts_in, const uint64_t *); \
+    SMOL_ASSUME_ALIGNED (top_src_row_parts, const uint64_t *); \
+    SMOL_ASSUME_ALIGNED (bottom_src_row_parts, const uint64_t *); \
     SMOL_ASSUME_ALIGNED (accum_inout, uint64_t *); \
 \
     do \
     { \
         uint64_t p, q; \
 \
-        p = *(top_row_parts_in++); \
-        q = *(bottom_row_parts_in++); \
+        p = *(top_src_row_parts++); \
+        q = *(bottom_src_row_parts++); \
 \
         p = ((((p - q) * F) >> 8) + q) & 0x00ffffff00ffffffULL; \
         p = ((p + *accum_inout) >> n_halvings) & 0x00ffffff00ffffffULL; \
@@ -2102,24 +2102,24 @@ interp_vertical_bilinear_final_##n_halvings##h_128bpp (uint64_t F, \
 \
 static void \
 interp_vertical_bilinear_final_##n_halvings##h_with_opacity_128bpp (uint64_t F, \
-                                                                    const uint64_t * SMOL_RESTRICT top_row_parts_in, \
-                                                                    const uint64_t * SMOL_RESTRICT bottom_row_parts_in, \
+                                                                    const uint64_t * SMOL_RESTRICT top_src_row_parts, \
+                                                                    const uint64_t * SMOL_RESTRICT bottom_src_row_parts, \
                                                                     uint64_t * SMOL_RESTRICT accum_inout, \
                                                                     uint32_t width, \
                                                                     uint16_t opacity) \
 { \
     uint64_t *accum_inout_last = accum_inout + width; \
 \
-    SMOL_ASSUME_ALIGNED (top_row_parts_in, const uint64_t *); \
-    SMOL_ASSUME_ALIGNED (bottom_row_parts_in, const uint64_t *); \
+    SMOL_ASSUME_ALIGNED (top_src_row_parts, const uint64_t *); \
+    SMOL_ASSUME_ALIGNED (bottom_src_row_parts, const uint64_t *); \
     SMOL_ASSUME_ALIGNED (accum_inout, uint64_t *); \
 \
     do \
     { \
         uint64_t p, q; \
 \
-        p = *(top_row_parts_in++); \
-        q = *(bottom_row_parts_in++); \
+        p = *(top_src_row_parts++); \
+        q = *(bottom_src_row_parts++); \
 \
         p = ((((p - q) * F) >> 8) + q) & 0x00ffffff00ffffffULL; \
         p = ((p + *accum_inout) >> n_halvings) & 0x00ffffff00ffffffULL; \
@@ -2130,14 +2130,14 @@ interp_vertical_bilinear_final_##n_halvings##h_with_opacity_128bpp (uint64_t F, 
     while (accum_inout != accum_inout_last); \
 }
 
-#define DEF_SCALE_OUTROW_BILINEAR(n_halvings) \
+#define DEF_SCALE_DEST_ROW_BILINEAR(n_halvings) \
 static int \
-scale_outrow_bilinear_##n_halvings##h_64bpp (const SmolScaleCtx *scale_ctx, \
-                                             SmolLocalCtx *local_ctx, \
-                                             uint32_t outrow_index) \
+scale_dest_row_bilinear_##n_halvings##h_64bpp (const SmolScaleCtx *scale_ctx, \
+                                               SmolLocalCtx *local_ctx, \
+                                               uint32_t dest_row_index) \
 { \
     uint16_t *precalc_y = scale_ctx->vdim.precalc; \
-    uint32_t bilin_index = outrow_index << (n_halvings); \
+    uint32_t bilin_index = dest_row_index << (n_halvings); \
     unsigned int i; \
 \
     update_local_ctx_bilinear (scale_ctx, local_ctx, bilin_index); \
@@ -2145,7 +2145,7 @@ scale_outrow_bilinear_##n_halvings##h_64bpp (const SmolScaleCtx *scale_ctx, \
                                           local_ctx->parts_row [0], \
                                           local_ctx->parts_row [1], \
                                           local_ctx->parts_row [2], \
-                                          scale_ctx->hdim.out_size_px); \
+                                          scale_ctx->hdim.dest_size_px); \
     bilin_index++; \
 \
     for (i = 0; i < (1 << (n_halvings)) - 2; i++) \
@@ -2155,43 +2155,43 @@ scale_outrow_bilinear_##n_halvings##h_64bpp (const SmolScaleCtx *scale_ctx, \
                                             local_ctx->parts_row [0], \
                                             local_ctx->parts_row [1], \
                                             local_ctx->parts_row [2], \
-                                            scale_ctx->hdim.out_size_px); \
+                                            scale_ctx->hdim.dest_size_px); \
         bilin_index++; \
     } \
 \
     update_local_ctx_bilinear (scale_ctx, local_ctx, bilin_index); \
 \
-    if (outrow_index == 0 && scale_ctx->vdim.first_opacity < 256) \
+    if (dest_row_index == 0 && scale_ctx->vdim.first_opacity < 256) \
         interp_vertical_bilinear_final_##n_halvings##h_with_opacity_64bpp (precalc_y [bilin_index * 2 + 1], \
                                                                            local_ctx->parts_row [0], \
                                                                            local_ctx->parts_row [1], \
                                                                            local_ctx->parts_row [2], \
-                                                                           scale_ctx->hdim.out_size_px, \
+                                                                           scale_ctx->hdim.dest_size_px, \
                                                                            scale_ctx->vdim.first_opacity); \
-    else if (outrow_index == (scale_ctx->vdim.out_size_px - 1) && scale_ctx->vdim.last_opacity < 256) \
+    else if (dest_row_index == (scale_ctx->vdim.dest_size_px - 1) && scale_ctx->vdim.last_opacity < 256) \
         interp_vertical_bilinear_final_##n_halvings##h_with_opacity_64bpp (precalc_y [bilin_index * 2 + 1], \
                                                                            local_ctx->parts_row [0], \
                                                                            local_ctx->parts_row [1], \
                                                                            local_ctx->parts_row [2], \
-                                                                           scale_ctx->hdim.out_size_px, \
+                                                                           scale_ctx->hdim.dest_size_px, \
                                                                            scale_ctx->vdim.last_opacity); \
     else \
         interp_vertical_bilinear_final_##n_halvings##h_64bpp (precalc_y [bilin_index * 2 + 1], \
                                                               local_ctx->parts_row [0], \
                                                               local_ctx->parts_row [1], \
                                                               local_ctx->parts_row [2], \
-                                                              scale_ctx->hdim.out_size_px); \
+                                                              scale_ctx->hdim.dest_size_px); \
 \
     return 2; \
 } \
 \
 static int \
-scale_outrow_bilinear_##n_halvings##h_128bpp (const SmolScaleCtx *scale_ctx, \
-                                              SmolLocalCtx *local_ctx, \
-                                              uint32_t outrow_index) \
+scale_dest_row_bilinear_##n_halvings##h_128bpp (const SmolScaleCtx *scale_ctx, \
+                                                SmolLocalCtx *local_ctx, \
+                                                uint32_t dest_row_index) \
 { \
     uint16_t *precalc_y = scale_ctx->vdim.precalc; \
-    uint32_t bilin_index = outrow_index << (n_halvings); \
+    uint32_t bilin_index = dest_row_index << (n_halvings); \
     unsigned int i; \
 \
     update_local_ctx_bilinear (scale_ctx, local_ctx, bilin_index); \
@@ -2199,7 +2199,7 @@ scale_outrow_bilinear_##n_halvings##h_128bpp (const SmolScaleCtx *scale_ctx, \
                                            local_ctx->parts_row [0], \
                                            local_ctx->parts_row [1], \
                                            local_ctx->parts_row [2], \
-                                           scale_ctx->hdim.out_size_px * 2); \
+                                           scale_ctx->hdim.dest_size_px * 2); \
     bilin_index++; \
 \
     for (i = 0; i < (1 << (n_halvings)) - 2; i++) \
@@ -2209,98 +2209,98 @@ scale_outrow_bilinear_##n_halvings##h_128bpp (const SmolScaleCtx *scale_ctx, \
                                              local_ctx->parts_row [0], \
                                              local_ctx->parts_row [1], \
                                              local_ctx->parts_row [2], \
-                                             scale_ctx->hdim.out_size_px * 2); \
+                                             scale_ctx->hdim.dest_size_px * 2); \
         bilin_index++; \
     } \
 \
     update_local_ctx_bilinear (scale_ctx, local_ctx, bilin_index); \
 \
-    if (outrow_index == 0 && scale_ctx->vdim.first_opacity < 256) \
+    if (dest_row_index == 0 && scale_ctx->vdim.first_opacity < 256) \
         interp_vertical_bilinear_final_##n_halvings##h_with_opacity_128bpp (precalc_y [bilin_index * 2 + 1], \
                                                                             local_ctx->parts_row [0], \
                                                                             local_ctx->parts_row [1], \
                                                                             local_ctx->parts_row [2], \
-                                                                            scale_ctx->hdim.out_size_px * 2, \
+                                                                            scale_ctx->hdim.dest_size_px * 2, \
                                                                             scale_ctx->vdim.first_opacity); \
-    else if (outrow_index == (scale_ctx->vdim.out_size_px - 1) && scale_ctx->vdim.last_opacity < 256) \
+    else if (dest_row_index == (scale_ctx->vdim.dest_size_px - 1) && scale_ctx->vdim.last_opacity < 256) \
         interp_vertical_bilinear_final_##n_halvings##h_with_opacity_128bpp (precalc_y [bilin_index * 2 + 1], \
                                                                             local_ctx->parts_row [0], \
                                                                             local_ctx->parts_row [1], \
                                                                             local_ctx->parts_row [2], \
-                                                                            scale_ctx->hdim.out_size_px * 2, \
+                                                                            scale_ctx->hdim.dest_size_px * 2, \
                                                                             scale_ctx->vdim.last_opacity); \
     else \
         interp_vertical_bilinear_final_##n_halvings##h_128bpp (precalc_y [bilin_index * 2 + 1], \
                                                                local_ctx->parts_row [0], \
                                                                local_ctx->parts_row [1], \
                                                                local_ctx->parts_row [2], \
-                                                               scale_ctx->hdim.out_size_px * 2); \
+                                                               scale_ctx->hdim.dest_size_px * 2); \
 \
     return 2; \
 }
 
 static int
-scale_outrow_bilinear_0h_64bpp (const SmolScaleCtx *scale_ctx,
-                                SmolLocalCtx *local_ctx,
-                                uint32_t outrow_index)
+scale_dest_row_bilinear_0h_64bpp (const SmolScaleCtx *scale_ctx,
+                                  SmolLocalCtx *local_ctx,
+                                  uint32_t dest_row_index)
 {
     uint16_t *precalc_y = scale_ctx->vdim.precalc;
 
-    update_local_ctx_bilinear (scale_ctx, local_ctx, outrow_index);
+    update_local_ctx_bilinear (scale_ctx, local_ctx, dest_row_index);
 
-    if (outrow_index == 0 && scale_ctx->vdim.first_opacity < 256)
-        interp_vertical_bilinear_store_with_opacity_64bpp (precalc_y [outrow_index * 2 + 1],
+    if (dest_row_index == 0 && scale_ctx->vdim.first_opacity < 256)
+        interp_vertical_bilinear_store_with_opacity_64bpp (precalc_y [dest_row_index * 2 + 1],
                                                            local_ctx->parts_row [0],
                                                            local_ctx->parts_row [1],
                                                            local_ctx->parts_row [2],
-                                                           scale_ctx->hdim.out_size_px,
+                                                           scale_ctx->hdim.dest_size_px,
                                                            scale_ctx->vdim.first_opacity);
-    else if (outrow_index == (scale_ctx->vdim.out_size_px - 1) && scale_ctx->vdim.last_opacity < 256)
-        interp_vertical_bilinear_store_with_opacity_64bpp (precalc_y [outrow_index * 2 + 1],
+    else if (dest_row_index == (scale_ctx->vdim.dest_size_px - 1) && scale_ctx->vdim.last_opacity < 256)
+        interp_vertical_bilinear_store_with_opacity_64bpp (precalc_y [dest_row_index * 2 + 1],
                                                            local_ctx->parts_row [0],
                                                            local_ctx->parts_row [1],
                                                            local_ctx->parts_row [2],
-                                                           scale_ctx->hdim.out_size_px,
+                                                           scale_ctx->hdim.dest_size_px,
                                                            scale_ctx->vdim.last_opacity);
     else
-        interp_vertical_bilinear_store_64bpp (precalc_y [outrow_index * 2 + 1],
+        interp_vertical_bilinear_store_64bpp (precalc_y [dest_row_index * 2 + 1],
                                               local_ctx->parts_row [0],
                                               local_ctx->parts_row [1],
                                               local_ctx->parts_row [2],
-                                              scale_ctx->hdim.out_size_px);
+                                              scale_ctx->hdim.dest_size_px);
 
     return 2;
 }
 
 static int
-scale_outrow_bilinear_0h_128bpp (const SmolScaleCtx *scale_ctx,
-                                 SmolLocalCtx *local_ctx,
-                                 uint32_t outrow_index)
+scale_dest_row_bilinear_0h_128bpp (const SmolScaleCtx *scale_ctx,
+                                   SmolLocalCtx *local_ctx,
+                                   uint32_t dest_row_index)
 {
     uint16_t *precalc_y = scale_ctx->vdim.precalc;
 
-    update_local_ctx_bilinear (scale_ctx, local_ctx, outrow_index);
+    update_local_ctx_bilinear (scale_ctx, local_ctx, dest_row_index);
 
-    if (outrow_index == 0 && scale_ctx->vdim.first_opacity < 256)
-        interp_vertical_bilinear_store_with_opacity_128bpp (precalc_y [outrow_index * 2 + 1],
+    if (dest_row_index == 0 && scale_ctx->vdim.first_opacity < 256)
+        interp_vertical_bilinear_store_with_opacity_128bpp (precalc_y [dest_row_index * 2 + 1],
                                                             local_ctx->parts_row [0],
                                                             local_ctx->parts_row [1],
                                                             local_ctx->parts_row [2],
-                                                            scale_ctx->hdim.out_size_px * 2,
+                                                            scale_ctx->hdim.dest_size_px * 2,
                                                             scale_ctx->vdim.first_opacity);
-    else if (outrow_index == (scale_ctx->vdim.out_size_px - 1) && scale_ctx->vdim.last_opacity < 256)
-        interp_vertical_bilinear_store_with_opacity_128bpp (precalc_y [outrow_index * 2 + 1],
+    else if (dest_row_index == (scale_ctx->vdim.dest_size_px - 1) && scale_ctx->vdim.last_opacity < 256)
+        interp_vertical_bilinear_store_with_opacity_128bpp (precalc_y [dest_row_index * 2 + 1],
                                                             local_ctx->parts_row [0],
                                                             local_ctx->parts_row [1],
                                                             local_ctx->parts_row [2],
-                                                            scale_ctx->hdim.out_size_px * 2,
+                                                            scale_ctx->hdim.dest_size_px * 2,
                                                             scale_ctx->vdim.last_opacity);
     else
-        interp_vertical_bilinear_store_128bpp (precalc_y [outrow_index * 2 + 1],
+        interp_vertical_bilinear_store_128bpp (precalc_y [dest_row_index * 2 + 1],
                                                local_ctx->parts_row [0],
                                                local_ctx->parts_row [1],
                                                local_ctx->parts_row [2],
-                                               scale_ctx->hdim.out_size_px * 2);
+                                               scale_ctx->hdim.dest_size_px * 2);
 
     return 2;
 }
@@ -2308,132 +2308,132 @@ scale_outrow_bilinear_0h_128bpp (const SmolScaleCtx *scale_ctx,
 DEF_INTERP_VERTICAL_BILINEAR_FINAL(1)
 
 static int
-scale_outrow_bilinear_1h_64bpp (const SmolScaleCtx *scale_ctx,
-                                SmolLocalCtx *local_ctx,
-                                uint32_t outrow_index)
+scale_dest_row_bilinear_1h_64bpp (const SmolScaleCtx *scale_ctx,
+                                  SmolLocalCtx *local_ctx,
+                                  uint32_t dest_row_index)
 {
     uint16_t *precalc_y = scale_ctx->vdim.precalc;
-    uint32_t bilin_index = outrow_index << 1;
+    uint32_t bilin_index = dest_row_index << 1;
 
     update_local_ctx_bilinear (scale_ctx, local_ctx, bilin_index);
     interp_vertical_bilinear_store_64bpp (precalc_y [bilin_index * 2 + 1],
                                           local_ctx->parts_row [0],
                                           local_ctx->parts_row [1],
                                           local_ctx->parts_row [2],
-                                          scale_ctx->hdim.out_size_px);
+                                          scale_ctx->hdim.dest_size_px);
     bilin_index++;
     update_local_ctx_bilinear (scale_ctx, local_ctx, bilin_index);
 
-    if (outrow_index == 0 && scale_ctx->vdim.first_opacity < 256)
+    if (dest_row_index == 0 && scale_ctx->vdim.first_opacity < 256)
         interp_vertical_bilinear_final_1h_with_opacity_64bpp (precalc_y [bilin_index * 2 + 1],
                                                               local_ctx->parts_row [0],
                                                               local_ctx->parts_row [1],
                                                               local_ctx->parts_row [2],
-                                                              scale_ctx->hdim.out_size_px,
+                                                              scale_ctx->hdim.dest_size_px,
                                                               scale_ctx->vdim.first_opacity);
-    else if (outrow_index == (scale_ctx->vdim.out_size_px - 1) && scale_ctx->vdim.last_opacity < 256)
+    else if (dest_row_index == (scale_ctx->vdim.dest_size_px - 1) && scale_ctx->vdim.last_opacity < 256)
         interp_vertical_bilinear_final_1h_with_opacity_64bpp (precalc_y [bilin_index * 2 + 1],
                                                               local_ctx->parts_row [0],
                                                               local_ctx->parts_row [1],
                                                               local_ctx->parts_row [2],
-                                                              scale_ctx->hdim.out_size_px,
+                                                              scale_ctx->hdim.dest_size_px,
                                                               scale_ctx->vdim.last_opacity);
     else
         interp_vertical_bilinear_final_1h_64bpp (precalc_y [bilin_index * 2 + 1],
                                                  local_ctx->parts_row [0],
                                                  local_ctx->parts_row [1],
                                                  local_ctx->parts_row [2],
-                                                 scale_ctx->hdim.out_size_px);
+                                                 scale_ctx->hdim.dest_size_px);
 
     return 2;
 }
 
 static int
-scale_outrow_bilinear_1h_128bpp (const SmolScaleCtx *scale_ctx,
-                                 SmolLocalCtx *local_ctx,
-                                 uint32_t outrow_index)
+scale_dest_row_bilinear_1h_128bpp (const SmolScaleCtx *scale_ctx,
+                                   SmolLocalCtx *local_ctx,
+                                   uint32_t dest_row_index)
 {
     uint16_t *precalc_y = scale_ctx->vdim.precalc;
-    uint32_t bilin_index = outrow_index << 1;
+    uint32_t bilin_index = dest_row_index << 1;
 
     update_local_ctx_bilinear (scale_ctx, local_ctx, bilin_index);
     interp_vertical_bilinear_store_128bpp (precalc_y [bilin_index * 2 + 1],
                                            local_ctx->parts_row [0],
                                            local_ctx->parts_row [1],
                                            local_ctx->parts_row [2],
-                                           scale_ctx->hdim.out_size_px * 2);
+                                           scale_ctx->hdim.dest_size_px * 2);
     bilin_index++;
     update_local_ctx_bilinear (scale_ctx, local_ctx, bilin_index);
 
-    if (outrow_index == 0 && scale_ctx->vdim.first_opacity < 256)
+    if (dest_row_index == 0 && scale_ctx->vdim.first_opacity < 256)
         interp_vertical_bilinear_final_1h_with_opacity_128bpp (precalc_y [bilin_index * 2 + 1],
                                                                local_ctx->parts_row [0],
                                                                local_ctx->parts_row [1],
                                                                local_ctx->parts_row [2],
-                                                               scale_ctx->hdim.out_size_px * 2,
+                                                               scale_ctx->hdim.dest_size_px * 2,
                                                                scale_ctx->vdim.first_opacity);
-    else if (outrow_index == (scale_ctx->vdim.out_size_px - 1) && scale_ctx->vdim.last_opacity < 256)
+    else if (dest_row_index == (scale_ctx->vdim.dest_size_px - 1) && scale_ctx->vdim.last_opacity < 256)
         interp_vertical_bilinear_final_1h_with_opacity_128bpp (precalc_y [bilin_index * 2 + 1],
                                                                local_ctx->parts_row [0],
                                                                local_ctx->parts_row [1],
                                                                local_ctx->parts_row [2],
-                                                               scale_ctx->hdim.out_size_px * 2,
+                                                               scale_ctx->hdim.dest_size_px * 2,
                                                                scale_ctx->vdim.last_opacity);
     else
         interp_vertical_bilinear_final_1h_128bpp (precalc_y [bilin_index * 2 + 1],
                                                   local_ctx->parts_row [0],
                                                   local_ctx->parts_row [1],
                                                   local_ctx->parts_row [2],
-                                                  scale_ctx->hdim.out_size_px * 2);
+                                                  scale_ctx->hdim.dest_size_px * 2);
 
     return 2;
 }
 
 DEF_INTERP_VERTICAL_BILINEAR_FINAL(2)
-DEF_SCALE_OUTROW_BILINEAR(2)
+DEF_SCALE_DEST_ROW_BILINEAR(2)
 DEF_INTERP_VERTICAL_BILINEAR_FINAL(3)
-DEF_SCALE_OUTROW_BILINEAR(3)
+DEF_SCALE_DEST_ROW_BILINEAR(3)
 DEF_INTERP_VERTICAL_BILINEAR_FINAL(4)
-DEF_SCALE_OUTROW_BILINEAR(4)
+DEF_SCALE_DEST_ROW_BILINEAR(4)
 DEF_INTERP_VERTICAL_BILINEAR_FINAL(5)
-DEF_SCALE_OUTROW_BILINEAR(5)
+DEF_SCALE_DEST_ROW_BILINEAR(5)
 DEF_INTERP_VERTICAL_BILINEAR_FINAL(6)
-DEF_SCALE_OUTROW_BILINEAR(6)
+DEF_SCALE_DEST_ROW_BILINEAR(6)
 
 static void
 finalize_vertical_64bpp (const uint64_t * SMOL_RESTRICT accums,
                          uint64_t multiplier,
-                         uint64_t * SMOL_RESTRICT parts_out,
+                         uint64_t * SMOL_RESTRICT dest_parts,
                          uint32_t n)
 {
-    uint64_t *parts_out_max = parts_out + n;
+    uint64_t *parts_dest_max = dest_parts + n;
 
     SMOL_ASSUME_ALIGNED (accums, const uint64_t *);
-    SMOL_ASSUME_ALIGNED (parts_out, uint64_t *);
+    SMOL_ASSUME_ALIGNED (dest_parts, uint64_t *);
 
-    while (parts_out != parts_out_max)
+    while (dest_parts != parts_dest_max)
     {
-        *(parts_out++) = scale_64bpp (*(accums++), multiplier);
+        *(dest_parts++) = scale_64bpp (*(accums++), multiplier);
     }
 }
 
 static void
 finalize_vertical_with_opacity_64bpp (const uint64_t * SMOL_RESTRICT accums,
                                       uint64_t multiplier,
-                                      uint64_t * SMOL_RESTRICT parts_out,
+                                      uint64_t * SMOL_RESTRICT dest_parts,
                                       uint32_t n,
                                       uint16_t opacity)
 {
-    uint64_t *parts_out_max = parts_out + n;
+    uint64_t *parts_dest_max = dest_parts + n;
 
     SMOL_ASSUME_ALIGNED (accums, const uint64_t *);
-    SMOL_ASSUME_ALIGNED (parts_out, uint64_t *);
+    SMOL_ASSUME_ALIGNED (dest_parts, uint64_t *);
 
-    while (parts_out != parts_out_max)
+    while (dest_parts != parts_dest_max)
     {
-        *parts_out = scale_64bpp (*(accums++), multiplier);
-        apply_subpixel_opacity_64bpp (parts_out, opacity);
-        parts_out++;
+        *dest_parts = scale_64bpp (*(accums++), multiplier);
+        apply_subpixel_opacity_64bpp (dest_parts, opacity);
+        dest_parts++;
     }
 }
 
@@ -2490,8 +2490,8 @@ update_local_ctx_box_64bpp (const SmolScaleCtx *scale_ctx,
                             uint16_t w1,
                             uint16_t w2)
 {
-    /* Old in_ofs is the previous max */
-    if (ofs_y == local_ctx->in_ofs)
+    /* Old src_ofs is the previous max */
+    if (ofs_y == local_ctx->src_ofs)
     {
         uint64_t *t = local_ctx->parts_row [0];
         local_ctx->parts_row [0] = local_ctx->parts_row [1];
@@ -2501,39 +2501,39 @@ update_local_ctx_box_64bpp (const SmolScaleCtx *scale_ctx,
     {
         scale_horizontal (scale_ctx,
                           local_ctx,
-                          inrow_ofs_to_pointer (scale_ctx, ofs_y),
+                          src_row_ofs_to_pointer (scale_ctx, ofs_y),
                           local_ctx->parts_row [0]);
-        weight_edge_row_64bpp (local_ctx->parts_row [0], w1, scale_ctx->hdim.out_size_px);
+        weight_edge_row_64bpp (local_ctx->parts_row [0], w1, scale_ctx->hdim.dest_size_px);
     }
 
-    /* When w2 == 0, the final inrow may be out of bounds. Don't try to access it in
+    /* When w2 == 0, the final src_row may be out of bounds. Don't try to access it in
      * that case. */
-    if (w2 || ofs_y_max < scale_ctx->vdim.in_size_px)
+    if (w2 || ofs_y_max < scale_ctx->vdim.src_size_px)
     {
         scale_horizontal (scale_ctx,
                           local_ctx,
-                          inrow_ofs_to_pointer (scale_ctx, ofs_y_max),
+                          src_row_ofs_to_pointer (scale_ctx, ofs_y_max),
                           local_ctx->parts_row [1]);
     }
     else
     {
-        memset (local_ctx->parts_row [1], 0, scale_ctx->hdim.out_size_px * sizeof (uint64_t));
+        memset (local_ctx->parts_row [1], 0, scale_ctx->hdim.dest_size_px * sizeof (uint64_t));
     }
 
-    local_ctx->in_ofs = ofs_y_max;
+    local_ctx->src_ofs = ofs_y_max;
 }
 
 static int
-scale_outrow_box_64bpp (const SmolScaleCtx *scale_ctx,
+scale_dest_row_box_64bpp (const SmolScaleCtx *scale_ctx,
                         SmolLocalCtx *local_ctx,
-                        uint32_t outrow_index)
+                        uint32_t dest_row_index)
 {
     uint32_t *precalc_y = scale_ctx->vdim.precalc;
     uint32_t ofs_y, ofs_y_max;
     uint32_t w1, w2;
     uint32_t n, i;
 
-    unpack_box_precalc (precalc_y [outrow_index],
+    unpack_box_precalc (precalc_y [dest_row_index],
                         scale_ctx->vdim.span_step,
                         &ofs_y,
                         &ofs_y_max,
@@ -2545,11 +2545,11 @@ scale_outrow_box_64bpp (const SmolScaleCtx *scale_ctx,
 
     scale_horizontal (scale_ctx,
                       local_ctx,
-                      inrow_ofs_to_pointer (scale_ctx, ofs_y),
+                      src_row_ofs_to_pointer (scale_ctx, ofs_y),
                       local_ctx->parts_row [0]);
     copy_weighted_parts_64bpp (local_ctx->parts_row [0],
                                local_ctx->parts_row [1],
-                               scale_ctx->hdim.out_size_px,
+                               scale_ctx->hdim.dest_size_px,
                                w1);
     ofs_y++;
 
@@ -2559,45 +2559,45 @@ scale_outrow_box_64bpp (const SmolScaleCtx *scale_ctx,
     {
         scale_horizontal (scale_ctx,
                           local_ctx,
-                          inrow_ofs_to_pointer (scale_ctx, ofs_y),
+                          src_row_ofs_to_pointer (scale_ctx, ofs_y),
                           local_ctx->parts_row [0]);
         add_parts (local_ctx->parts_row [0],
                    local_ctx->parts_row [1],
-                   scale_ctx->hdim.out_size_px);
+                   scale_ctx->hdim.dest_size_px);
 
         ofs_y++;
     }
 
     /* Last input row */
 
-    if (ofs_y < scale_ctx->vdim.in_size_px)
+    if (ofs_y < scale_ctx->vdim.src_size_px)
     {
         scale_horizontal (scale_ctx,
                           local_ctx,
-                          inrow_ofs_to_pointer (scale_ctx, ofs_y),
+                          src_row_ofs_to_pointer (scale_ctx, ofs_y),
                           local_ctx->parts_row [0]);
         add_weighted_parts_64bpp (local_ctx->parts_row [0],
                                   local_ctx->parts_row [1],
-                                  scale_ctx->hdim.out_size_px,
+                                  scale_ctx->hdim.dest_size_px,
                                   w2);
     }
 
     /* Finalize */
 
-    if (outrow_index == 0 && scale_ctx->vdim.first_opacity < 256)
+    if (dest_row_index == 0 && scale_ctx->vdim.first_opacity < 256)
     {
         finalize_vertical_with_opacity_64bpp (local_ctx->parts_row [1],
                                               scale_ctx->vdim.span_mul,
                                               local_ctx->parts_row [0],
-                                              scale_ctx->hdim.out_size_px,
+                                              scale_ctx->hdim.dest_size_px,
                                               scale_ctx->vdim.first_opacity);
     }
-    else if (outrow_index == scale_ctx->vdim.out_size_px - 1 && scale_ctx->vdim.last_opacity < 256)
+    else if (dest_row_index == scale_ctx->vdim.dest_size_px - 1 && scale_ctx->vdim.last_opacity < 256)
     {
         finalize_vertical_with_opacity_64bpp (local_ctx->parts_row [1],
                                               scale_ctx->vdim.span_mul,
                                               local_ctx->parts_row [0],
-                                              scale_ctx->hdim.out_size_px,
+                                              scale_ctx->hdim.dest_size_px,
                                               scale_ctx->vdim.last_opacity);
     }
     else
@@ -2605,7 +2605,7 @@ scale_outrow_box_64bpp (const SmolScaleCtx *scale_ctx,
         finalize_vertical_64bpp (local_ctx->parts_row [1],
                                  scale_ctx->vdim.span_mul,
                                  local_ctx->parts_row [0],
-                                 scale_ctx->hdim.out_size_px);
+                                 scale_ctx->hdim.dest_size_px);
     }
 
     return 0;
@@ -2614,53 +2614,53 @@ scale_outrow_box_64bpp (const SmolScaleCtx *scale_ctx,
 static void
 finalize_vertical_128bpp (const uint64_t * SMOL_RESTRICT accums,
                           uint64_t multiplier,
-                          uint64_t * SMOL_RESTRICT parts_out,
+                          uint64_t * SMOL_RESTRICT dest_parts,
                           uint32_t n)
 {
-    uint64_t *parts_out_max = parts_out + n * 2;
+    uint64_t *parts_dest_max = dest_parts + n * 2;
 
     SMOL_ASSUME_ALIGNED (accums, const uint64_t *);
-    SMOL_ASSUME_ALIGNED (parts_out, uint64_t *);
+    SMOL_ASSUME_ALIGNED (dest_parts, uint64_t *);
 
-    while (parts_out != parts_out_max)
+    while (dest_parts != parts_dest_max)
     {
-        *(parts_out++) = scale_128bpp_half (*(accums++), multiplier);
-        *(parts_out++) = scale_128bpp_half (*(accums++), multiplier);
+        *(dest_parts++) = scale_128bpp_half (*(accums++), multiplier);
+        *(dest_parts++) = scale_128bpp_half (*(accums++), multiplier);
     }
 }
 
 static void
 finalize_vertical_with_opacity_128bpp (const uint64_t * SMOL_RESTRICT accums,
                                        uint64_t multiplier,
-                                       uint64_t * SMOL_RESTRICT parts_out,
+                                       uint64_t * SMOL_RESTRICT dest_parts,
                                        uint32_t n,
                                        uint16_t opacity)
 {
-    uint64_t *parts_out_max = parts_out + n * 2;
+    uint64_t *parts_dest_max = dest_parts + n * 2;
 
     SMOL_ASSUME_ALIGNED (accums, const uint64_t *);
-    SMOL_ASSUME_ALIGNED (parts_out, uint64_t *);
+    SMOL_ASSUME_ALIGNED (dest_parts, uint64_t *);
 
-    while (parts_out != parts_out_max)
+    while (dest_parts != parts_dest_max)
     {
-        parts_out [0] = scale_128bpp_half (*(accums++), multiplier);
-        parts_out [1] = scale_128bpp_half (*(accums++), multiplier);
-        apply_subpixel_opacity_128bpp (parts_out, opacity);
-        parts_out += 2;
+        dest_parts [0] = scale_128bpp_half (*(accums++), multiplier);
+        dest_parts [1] = scale_128bpp_half (*(accums++), multiplier);
+        apply_subpixel_opacity_128bpp (dest_parts, opacity);
+        dest_parts += 2;
     }
 }
 
 static int
-scale_outrow_box_128bpp (const SmolScaleCtx *scale_ctx,
-                         SmolLocalCtx *local_ctx,
-                         uint32_t outrow_index)
+scale_dest_row_box_128bpp (const SmolScaleCtx *scale_ctx,
+                           SmolLocalCtx *local_ctx,
+                           uint32_t dest_row_index)
 {
     uint32_t *precalc_y = scale_ctx->vdim.precalc;
     uint32_t ofs_y, ofs_y_max;
     uint32_t w1, w2;
     uint32_t n, i;
 
-    unpack_box_precalc (precalc_y [outrow_index],
+    unpack_box_precalc (precalc_y [dest_row_index],
                         scale_ctx->vdim.span_step,
                         &ofs_y,
                         &ofs_y_max,
@@ -2672,11 +2672,11 @@ scale_outrow_box_128bpp (const SmolScaleCtx *scale_ctx,
 
     scale_horizontal (scale_ctx,
                       local_ctx,
-                      inrow_ofs_to_pointer (scale_ctx, ofs_y),
+                      src_row_ofs_to_pointer (scale_ctx, ofs_y),
                       local_ctx->parts_row [0]);
     copy_weighted_parts_128bpp (local_ctx->parts_row [0],
                                 local_ctx->parts_row [1],
-                                scale_ctx->hdim.out_size_px,
+                                scale_ctx->hdim.dest_size_px,
                                 w1);
     ofs_y++;
 
@@ -2686,43 +2686,43 @@ scale_outrow_box_128bpp (const SmolScaleCtx *scale_ctx,
     {
         scale_horizontal (scale_ctx,
                           local_ctx,
-                          inrow_ofs_to_pointer (scale_ctx, ofs_y),
+                          src_row_ofs_to_pointer (scale_ctx, ofs_y),
                           local_ctx->parts_row [0]);
         add_parts (local_ctx->parts_row [0],
                    local_ctx->parts_row [1],
-                   scale_ctx->hdim.out_size_px * 2);
+                   scale_ctx->hdim.dest_size_px * 2);
 
         ofs_y++;
     }
 
     /* Last input row */
 
-    if (ofs_y < scale_ctx->vdim.in_size_px)
+    if (ofs_y < scale_ctx->vdim.src_size_px)
     {
         scale_horizontal (scale_ctx,
                           local_ctx,
-                          inrow_ofs_to_pointer (scale_ctx, ofs_y),
+                          src_row_ofs_to_pointer (scale_ctx, ofs_y),
                           local_ctx->parts_row [0]);
         add_weighted_parts_128bpp (local_ctx->parts_row [0],
                                    local_ctx->parts_row [1],
-                                   scale_ctx->hdim.out_size_px,
+                                   scale_ctx->hdim.dest_size_px,
                                    w2);
     }
 
-    if (outrow_index == 0 && scale_ctx->vdim.first_opacity < 256)
+    if (dest_row_index == 0 && scale_ctx->vdim.first_opacity < 256)
     {
         finalize_vertical_with_opacity_128bpp (local_ctx->parts_row [1],
                                                scale_ctx->vdim.span_mul,
                                                local_ctx->parts_row [0],
-                                               scale_ctx->hdim.out_size_px,
+                                               scale_ctx->hdim.dest_size_px,
                                                scale_ctx->vdim.first_opacity);
     }
-    else if (outrow_index == scale_ctx->vdim.out_size_px - 1 && scale_ctx->vdim.last_opacity < 256)
+    else if (dest_row_index == scale_ctx->vdim.dest_size_px - 1 && scale_ctx->vdim.last_opacity < 256)
     {
         finalize_vertical_with_opacity_128bpp (local_ctx->parts_row [1],
                                                scale_ctx->vdim.span_mul,
                                                local_ctx->parts_row [0],
-                                               scale_ctx->hdim.out_size_px,
+                                               scale_ctx->hdim.dest_size_px,
                                                scale_ctx->vdim.last_opacity);
     }
     else
@@ -2730,66 +2730,66 @@ scale_outrow_box_128bpp (const SmolScaleCtx *scale_ctx,
         finalize_vertical_128bpp (local_ctx->parts_row [1],
                                   scale_ctx->vdim.span_mul,
                                   local_ctx->parts_row [0],
-                                  scale_ctx->hdim.out_size_px);
+                                  scale_ctx->hdim.dest_size_px);
     }
 
     return 0;
 }
 
 static int
-scale_outrow_one_64bpp (const SmolScaleCtx *scale_ctx,
-                        SmolLocalCtx *local_ctx,
-                        uint32_t row_index)
+scale_dest_row_one_64bpp (const SmolScaleCtx *scale_ctx,
+                          SmolLocalCtx *local_ctx,
+                          uint32_t row_index)
 {
     /* Scale the row and store it */
 
-    if (local_ctx->in_ofs != 0)
+    if (local_ctx->src_ofs != 0)
     {
         scale_horizontal (scale_ctx,
                           local_ctx,
-                          inrow_ofs_to_pointer (scale_ctx, 0),
+                          src_row_ofs_to_pointer (scale_ctx, 0),
                           local_ctx->parts_row [0]);
-        local_ctx->in_ofs = 0;
+        local_ctx->src_ofs = 0;
     }
 
-    if (row_index == (scale_ctx->vdim.out_size_px - 1) && scale_ctx->vdim.last_opacity < 256)
-        apply_subpixel_opacity_row_64bpp (local_ctx->parts_row [0], scale_ctx->hdim.out_size_px,
+    if (row_index == (scale_ctx->vdim.dest_size_px - 1) && scale_ctx->vdim.last_opacity < 256)
+        apply_subpixel_opacity_row_64bpp (local_ctx->parts_row [0], scale_ctx->hdim.dest_size_px,
                                           scale_ctx->vdim.last_opacity);
 
     return 0;
 }
 
 static int
-scale_outrow_one_128bpp (const SmolScaleCtx *scale_ctx,
-                         SmolLocalCtx *local_ctx,
-                         uint32_t row_index)
+scale_dest_row_one_128bpp (const SmolScaleCtx *scale_ctx,
+                           SmolLocalCtx *local_ctx,
+                           uint32_t row_index)
 {
     /* Scale the row and store it */
 
-    if (local_ctx->in_ofs != 0)
+    if (local_ctx->src_ofs != 0)
     {
         scale_horizontal (scale_ctx,
                           local_ctx,
-                          inrow_ofs_to_pointer (scale_ctx, 0),
+                          src_row_ofs_to_pointer (scale_ctx, 0),
                           local_ctx->parts_row [0]);
-        local_ctx->in_ofs = 0;
+        local_ctx->src_ofs = 0;
     }
 
-    if (row_index == (scale_ctx->vdim.out_size_px - 1) && scale_ctx->vdim.last_opacity < 256)
-        apply_subpixel_opacity_row_128bpp (local_ctx->parts_row [0], scale_ctx->hdim.out_size_px,
+    if (row_index == (scale_ctx->vdim.dest_size_px - 1) && scale_ctx->vdim.last_opacity < 256)
+        apply_subpixel_opacity_row_128bpp (local_ctx->parts_row [0], scale_ctx->hdim.dest_size_px,
                                            scale_ctx->vdim.last_opacity);
 
     return 0;
 }
 
 static int
-scale_outrow_copy (const SmolScaleCtx *scale_ctx,
-                   SmolLocalCtx *local_ctx,
-                   uint32_t row_index)
+scale_dest_row_copy (const SmolScaleCtx *scale_ctx,
+                     SmolLocalCtx *local_ctx,
+                     uint32_t row_index)
 {
     scale_horizontal (scale_ctx,
                       local_ctx,
-                      inrow_ofs_to_pointer (scale_ctx, row_index),
+                      src_row_ofs_to_pointer (scale_ctx, row_index),
                       local_ctx->parts_row [0]);
 
     return 0;
@@ -2945,29 +2945,29 @@ static const SmolImplementation implementation =
         },
         {
             /* 64bpp */
-            scale_outrow_copy,
-            scale_outrow_one_64bpp,
-            scale_outrow_bilinear_0h_64bpp,
-            scale_outrow_bilinear_1h_64bpp,
-            scale_outrow_bilinear_2h_64bpp,
-            scale_outrow_bilinear_3h_64bpp,
-            scale_outrow_bilinear_4h_64bpp,
-            scale_outrow_bilinear_5h_64bpp,
-            scale_outrow_bilinear_6h_64bpp,
-            scale_outrow_box_64bpp
+            scale_dest_row_copy,
+            scale_dest_row_one_64bpp,
+            scale_dest_row_bilinear_0h_64bpp,
+            scale_dest_row_bilinear_1h_64bpp,
+            scale_dest_row_bilinear_2h_64bpp,
+            scale_dest_row_bilinear_3h_64bpp,
+            scale_dest_row_bilinear_4h_64bpp,
+            scale_dest_row_bilinear_5h_64bpp,
+            scale_dest_row_bilinear_6h_64bpp,
+            scale_dest_row_box_64bpp
         },
         {
             /* 128bpp */
-            scale_outrow_copy,
-            scale_outrow_one_128bpp,
-            scale_outrow_bilinear_0h_128bpp,
-            scale_outrow_bilinear_1h_128bpp,
-            scale_outrow_bilinear_2h_128bpp,
-            scale_outrow_bilinear_3h_128bpp,
-            scale_outrow_bilinear_4h_128bpp,
-            scale_outrow_bilinear_5h_128bpp,
-            scale_outrow_bilinear_6h_128bpp,
-            scale_outrow_box_128bpp
+            scale_dest_row_copy,
+            scale_dest_row_one_128bpp,
+            scale_dest_row_bilinear_0h_128bpp,
+            scale_dest_row_bilinear_1h_128bpp,
+            scale_dest_row_bilinear_2h_128bpp,
+            scale_dest_row_bilinear_3h_128bpp,
+            scale_dest_row_bilinear_4h_128bpp,
+            scale_dest_row_bilinear_5h_128bpp,
+            scale_dest_row_bilinear_6h_128bpp,
+            scale_dest_row_box_128bpp
         }
     },
     repack_meta
