@@ -353,6 +353,13 @@ struct SmolScaleCtx
     unsigned int is_noop : 1;
 };
 
+/* Number of pixels to convert per batch. For some conversions, we perform
+ * an alpha test per batch to avoid the expensive premul path when the image
+ * data is opaque.
+ *
+ * FIXME: Unimplemented. */
+#define PIXEL_BATCH_SIZE 32
+
 #define SRGB_LINEAR_BITS 11
 #define SRGB_LINEAR_MAX (1 << (SRGB_LINEAR_BITS))
 
