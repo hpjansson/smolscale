@@ -2169,16 +2169,17 @@ interp_horizontal_bilinear_0h_128bpp (const SmolScaleCtx *scale_ctx,
         __m256i factors;
         __m256i m0, m1;
         __m128i n0, n1, n2, n3, n4, n5;
+        const uint64_t * SMOL_RESTRICT p0;
 
-        row_parts_in += *(precalc_x++) * 2;
+        p0 = row_parts_in + *(precalc_x++) * 2;
         n4 = _mm_set1_epi16 (*(precalc_x++));
-        n0 = _mm_load_si128 ((__m128i *) row_parts_in);
-        n1 = _mm_load_si128 ((__m128i *) row_parts_in + 1);
+        n0 = _mm_load_si128 ((__m128i *) p0);
+        n1 = _mm_load_si128 ((__m128i *) p0 + 1);
 
-        row_parts_in += *(precalc_x++) * 2;
+        p0 = row_parts_in + *(precalc_x++) * 2;
         n5 = _mm_set1_epi16 (*(precalc_x++));
-        n2 = _mm_load_si128 ((__m128i *) row_parts_in);
-        n3 = _mm_load_si128 ((__m128i *) row_parts_in + 1);
+        n2 = _mm_load_si128 ((__m128i *) p0);
+        n3 = _mm_load_si128 ((__m128i *) p0 + 1);
 
         m0 = _mm256_set_m128i (n2, n0);
         m1 = _mm256_set_m128i (n3, n1);
@@ -2196,13 +2197,14 @@ interp_horizontal_bilinear_0h_128bpp (const SmolScaleCtx *scale_ctx,
         __m128i factors;
         __m128i m0, m1;
         uint32_t f;
+        const uint64_t * SMOL_RESTRICT p0;
 
-        row_parts_in += *(precalc_x++) * 2;
+        p0 = row_parts_in + *(precalc_x++) * 2;
         f = *(precalc_x++);
 
         factors = _mm_set1_epi32 ((uint32_t) f);
-        m0 = _mm_stream_load_si128 ((__m128i *) row_parts_in);
-        m1 = _mm_stream_load_si128 ((__m128i *) row_parts_in + 1);
+        m0 = _mm_stream_load_si128 ((__m128i *) p0);
+        m1 = _mm_stream_load_si128 ((__m128i *) p0 + 1);
 
         m0 = LERP_SIMD128_EPI32_AND_MASK (m0, m1, factors, mask128);
         _mm_store_si128 ((__m128i *) row_parts_out, m0);
@@ -2239,16 +2241,17 @@ interp_horizontal_bilinear_##n_halvings##h_128bpp (const SmolScaleCtx *scale_ctx
             __m256i m0, m1; \
             __m256i factors; \
             __m128i n0, n1, n2, n3, n4, n5; \
+            const uint64_t * SMOL_RESTRICT p0; \
 \
-            row_parts_in += *(precalc_x++) * 2; \
+            p0 = row_parts_in + *(precalc_x++) * 2; \
             n4 = _mm_set1_epi16 (*(precalc_x++)); \
-            n0 = _mm_load_si128 ((__m128i *) row_parts_in); \
-            n1 = _mm_load_si128 ((__m128i *) row_parts_in + 1); \
+            n0 = _mm_load_si128 ((__m128i *) p0); \
+            n1 = _mm_load_si128 ((__m128i *) p0 + 1); \
 \
-            row_parts_in += *(precalc_x++) * 2; \
+            p0 = row_parts_in + *(precalc_x++) * 2; \
             n5 = _mm_set1_epi16 (*(precalc_x++)); \
-            n2 = _mm_load_si128 ((__m128i *) row_parts_in); \
-            n3 = _mm_load_si128 ((__m128i *) row_parts_in + 1); \
+            n2 = _mm_load_si128 ((__m128i *) p0); \
+            n3 = _mm_load_si128 ((__m128i *) p0 + 1); \
 \
             m0 = _mm256_set_m128i (n2, n0); \
             m1 = _mm256_set_m128i (n3, n1); \
