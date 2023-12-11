@@ -31,19 +31,37 @@
  */
 
 static uint32_t
-array_offset_offset (uint32_t elem_i)
+array_offset_offset (uint32_t elem_i, int max_index, int do_batches)
 {
-    return (elem_i / (BILIN_HORIZ_BATCH_PIXELS)) * (BILIN_HORIZ_BATCH_PIXELS * 2)
-        + (elem_i % BILIN_HORIZ_BATCH_PIXELS);
+    if (do_batches
+        && (max_index - ((elem_i / BILIN_HORIZ_BATCH_PIXELS) * BILIN_HORIZ_BATCH_PIXELS)
+            >= BILIN_HORIZ_BATCH_PIXELS))
+    {
+        return (elem_i / (BILIN_HORIZ_BATCH_PIXELS)) * (BILIN_HORIZ_BATCH_PIXELS * 2)
+            + (elem_i % BILIN_HORIZ_BATCH_PIXELS);
+    }
+    else
+    {
+        return elem_i * 2;
+    }
 }
 
 static uint32_t
-array_offset_factor (uint32_t elem_i)
+array_offset_factor (uint32_t elem_i, int max_index, int do_batches)
 {
-    uint8_t o [BILIN_HORIZ_BATCH_PIXELS] = { 0, 8, 1, 9, 2, 10, 3, 11, 4, 12, 5, 13, 6, 14, 7, 15 };
+    const uint8_t o [BILIN_HORIZ_BATCH_PIXELS] = { 0, 8, 1, 9, 2, 10, 3, 11, 4, 12, 5, 13, 6, 14, 7, 15 };
 
-    return (elem_i / (BILIN_HORIZ_BATCH_PIXELS)) * (BILIN_HORIZ_BATCH_PIXELS * 2)
-        + BILIN_HORIZ_BATCH_PIXELS + o [elem_i % BILIN_HORIZ_BATCH_PIXELS];
+    if (do_batches
+        && (max_index - ((elem_i / BILIN_HORIZ_BATCH_PIXELS) * BILIN_HORIZ_BATCH_PIXELS)
+            >= BILIN_HORIZ_BATCH_PIXELS))
+    {
+        return (elem_i / (BILIN_HORIZ_BATCH_PIXELS)) * (BILIN_HORIZ_BATCH_PIXELS * 2)
+            + BILIN_HORIZ_BATCH_PIXELS + o [elem_i % BILIN_HORIZ_BATCH_PIXELS];
+    }
+    else
+    {
+        return elem_i * 2 + 1;
+    }
 }
 
 static void
@@ -67,15 +85,13 @@ precalc_linear_range (uint16_t *array_out,
 
         if (sample_ofs_px >= sample_ofs_px_max - 1)
         {
-            array_out [i * 2] = sample_ofs_px_max - 2;
-            array_out [i * 2 + 1] = 0;
+            array_out [array_offset_offset (i, max_index, do_batches)] = sample_ofs_px_max - 2;
+            array_out [array_offset_factor (i, max_index, do_batches)] = 0;
             continue;
         }
 
-        /* TODO: Respect do_batches */
-
-        array_out [i * 2] = sample_ofs_px;
-        array_out [i * 2 + 1] = SMOL_SMALL_MUL
+        array_out [array_offset_offset (i, max_index, do_batches)] = sample_ofs_px;
+        array_out [array_offset_factor (i, max_index, do_batches)] = SMOL_SMALL_MUL
             - ((sample_ofs / (SMOL_BILIN_MULTIPLIER / SMOL_SMALL_MUL)) % SMOL_SMALL_MUL);
         sample_ofs += sample_step;
     }
@@ -237,7 +253,8 @@ init_dim (SmolDim *dim, int do_batches)
 static void
 init_horizontal (SmolScaleCtx *scale_ctx)
 {
-    init_dim (&scale_ctx->hdim, TRUE);
+    init_dim (&scale_ctx->hdim,
+              scale_ctx->storage_type == SMOL_STORAGE_64BPP ? TRUE : FALSE);
 }
 
 static void
