@@ -1523,8 +1523,7 @@ scale_128bpp_half (uint64_t accum,
     b = (accum & 0xffffffff00000000ULL) >> 32;
     b = (b * multiplier + SMOL_BOXES_MULTIPLIER / 2) / SMOL_BOXES_MULTIPLIER;
 
-    return (a & 0x000000000000ffffULL)
-           | ((b & 0x000000000000ffffULL) << 32);
+    return a | (b << 32);
 }
 
 static SMOL_INLINE void
