@@ -22,9 +22,9 @@ extern "C" {
 
 typedef enum
 {
-    SMOL_NO_FLAGS               = 0,
-    SMOL_FORCE_GENERIC_IMPL     = (1 << 0),
-    SMOL_LINEARIZE_SRGB         = (1 << 1)
+    SMOL_NO_FLAGS                   = 0,
+    SMOL_DISABLE_ACCELERATION       = (1 << 0),
+    SMOL_DISABLE_SRGB_LINEARIZATION = (1 << 1)
 }
 SmolFlags;
 

@@ -254,7 +254,8 @@ verify_unassociated_alpha (void)
 
         smol_scale_simple ((const uint32_t *) input, SMOL_PIXEL_ARGB8_UNASSOCIATED, 2, 1, 8,
                            (uint32_t *) output, SMOL_PIXEL_ARGB8_UNASSOCIATED, 1, 1, 4,
-                           0);
+                           SMOL_DISABLE_ACCELERATION
+                           | SMOL_DISABLE_SRGB_LINEARIZATION);
 
         /* Version 2 produced better results in this test, but it had other
          * issues. Here are its tolerances:
@@ -324,11 +325,11 @@ verify_saturation_dir (const unsigned char *input, int n_in, const PixelInfo *pi
     if (dir)
         smol_scale_simple (input, pinfo_in->type, 1, n_in, pinfo_in->n_channels,
                            output, pinfo_out->type, 1, n_out, pinfo_out->n_channels,
-                           with_srgb ? SMOL_LINEARIZE_SRGB : SMOL_NO_FLAGS);
+                           with_srgb ? SMOL_NO_FLAGS : SMOL_DISABLE_SRGB_LINEARIZATION);
     else
         smol_scale_simple (input, pinfo_in->type, n_in, 1, n_in * pinfo_in->n_channels,
                            output, pinfo_out->type, n_out, 1, n_out * pinfo_out->n_channels,
-                           with_srgb ? SMOL_LINEARIZE_SRGB : SMOL_NO_FLAGS);
+                           with_srgb ? SMOL_NO_FLAGS : SMOL_DISABLE_SRGB_LINEARIZATION);
 
     for (i = 0; i < n_out * pinfo_out->n_channels; i++)
     {
@@ -419,11 +420,11 @@ verify_preunmul_dir (const unsigned char *input, int n_in,
     if (dir)
         smol_scale_simple (input, SMOL_PIXEL_ARGB8_PREMULTIPLIED, 1, n_in, 4,
                            output, SMOL_PIXEL_ARGB8_UNASSOCIATED, 1, n_out, 4,
-                           with_srgb ? SMOL_LINEARIZE_SRGB : SMOL_NO_FLAGS);
+                           with_srgb ? SMOL_NO_FLAGS : SMOL_DISABLE_SRGB_LINEARIZATION);
     else
         smol_scale_simple (input, SMOL_PIXEL_ARGB8_PREMULTIPLIED, n_in, 1, n_in * 4,
                            output, SMOL_PIXEL_ARGB8_UNASSOCIATED, n_out, 1, n_out * 4,
-                           with_srgb ? SMOL_LINEARIZE_SRGB : SMOL_NO_FLAGS);
+                           with_srgb ? SMOL_NO_FLAGS : SMOL_DISABLE_SRGB_LINEARIZATION);
 
     for (i = 0; i < n_out * 4; i += 4)
     {

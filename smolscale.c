@@ -613,7 +613,7 @@ pick_filter_params (uint32_t src_dim,
                     SmolFlags flags)
 {
     *dest_dim_prehalving = dest_dim;
-    *dest_storage = (flags & SMOL_LINEARIZE_SRGB) ? SMOL_STORAGE_128BPP : SMOL_STORAGE_64BPP;
+    *dest_storage = (flags & SMOL_DISABLE_SRGB_LINEARIZATION) ? SMOL_STORAGE_64BPP : SMOL_STORAGE_128BPP;
 
     *first_opacity = SMOL_SUBPIXEL_MOD (-dest_ofs_spx - 1) + 1;
     *last_opacity = SMOL_SUBPIXEL_MOD (dest_ofs_spx + dest_dim_spx - 1) + 1;
@@ -817,7 +817,7 @@ get_implementations (SmolScaleCtx *scale_ctx)
 
     /* Enumerate implementations, preferred first */
 
-    if (!(scale_ctx->flags & SMOL_FORCE_GENERIC_IMPL))
+    if (!(scale_ctx->flags & SMOL_DISABLE_ACCELERATION))
     {
 #ifdef SMOL_WITH_AVX2
         if (have_avx2 ())
@@ -952,7 +952,8 @@ smol_scale_init (SmolScaleCtx *scale_ctx,
     scale_ctx->dest_rowstride = dest_rowstride;
 
     scale_ctx->flags = flags;
-    scale_ctx->gamma_type = (flags & SMOL_LINEARIZE_SRGB) ? SMOL_GAMMA_SRGB_LINEAR : SMOL_GAMMA_SRGB_COMPRESSED;
+    scale_ctx->gamma_type = (flags & SMOL_DISABLE_SRGB_LINEARIZATION)
+        ? SMOL_GAMMA_SRGB_COMPRESSED : SMOL_GAMMA_SRGB_LINEAR;
 
     scale_ctx->post_row_func = post_row_func;
     scale_ctx->user_data = user_data;
