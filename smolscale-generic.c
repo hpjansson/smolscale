@@ -539,6 +539,7 @@ SMOL_REPACK_ROW_DEF (123,   24,  8, PREMUL8, COMPRESSED,
         unpremul_p8_to_u_128bpp (dest_row, dest_row, alpha);
         from_srgb_pixel_xxxa_128bpp (dest_row);
         premul_ul_to_p8l_128bpp (dest_row, alpha);
+        dest_row [1] = (dest_row [1] & 0xffffffff00000000) | (alpha << 3) | 7;
         src_row += 3;
         dest_row += 2;
     }
@@ -572,6 +573,7 @@ SMOL_REPACK_ROW_DEF (1234,  32, 32, PREMUL8, COMPRESSED,
         unpremul_p8_to_u_128bpp (dest_row, dest_row, alpha);
         from_srgb_pixel_xxxa_128bpp (dest_row);
         premul_ul_to_p8l_128bpp (dest_row, alpha);
+        dest_row [1] = (dest_row [1] & 0xffffffff00000000) | (alpha << 3) | 7;
         dest_row += 2;
     }
 } SMOL_REPACK_ROW_DEF_END
@@ -604,6 +606,7 @@ SMOL_REPACK_ROW_DEF (1234,  32, 32, PREMUL8, COMPRESSED,
         unpremul_p8_to_u_128bpp (dest_row, dest_row, alpha);
         from_srgb_pixel_xxxa_128bpp (dest_row);
         premul_ul_to_p8l_128bpp (dest_row, alpha);
+        dest_row [1] = (dest_row [1] & 0xffffffff00000000) | (alpha << 3) | 7;
         dest_row += 2;
     }
 } SMOL_REPACK_ROW_DEF_END
