@@ -51,6 +51,14 @@ typedef enum
 }
 SmolPixelType;
 
+typedef enum
+{
+    SMOL_COMPOSITE_SRC,
+    SMOL_COMPOSITE_SRC_CLEAR_DEST,
+    SMOL_COMPOSITE_SRC_OVER_DEST
+}
+SmolCompositeOp;
+
 typedef void (SmolPostRowFunc) (uint32_t *row_inout,
                                 int width,
                                 void *user_data);
@@ -115,43 +123,26 @@ SmolScaleCtx *smol_scale_new_full_subpixel (const void *src_pixels,
                                             SmolPostRowFunc post_row_func,
                                             void *user_data);
 
-SmolScaleCtx *smol_scale_new_over_color (const void *fg_pixels,
-                                         SmolPixelType fg_pixel_type,
-                                         uint32_t fg_width,
-                                         uint32_t fg_height,
-                                         uint32_t fg_rowstride,
-                                         const void *color_pixel,
-                                         SmolPixelType color_pixel_type,
-                                         void *dest_pixels,
-                                         SmolPixelType dest_pixel_type,
-                                         uint32_t dest_width,
-                                         uint32_t dest_height,
-                                         uint32_t dest_rowstride,
-                                         int32_t fg_placement_x,
-                                         int32_t fg_placement_y,
-                                         uint32_t fg_placement_width,
-                                         uint32_t fg_placement_height,
-                                         SmolFlags flags,
-                                         SmolPostRowFunc post_row_func,
-                                         void *user_data);
-
-SmolScaleCtx *smol_scale_new_over_bg (const void *fg_pixels,
-                                      SmolPixelType fg_pixel_type,
-                                      uint32_t fg_width,
-                                      uint32_t fg_height,
-                                      uint32_t fg_rowstride,
-                                      void *bg_pixels,
-                                      SmolPixelType bg_pixel_type,
-                                      uint32_t bg_width,
-                                      uint32_t bg_height,
-                                      uint32_t bg_rowstride,
-                                      int32_t fg_placement_x,
-                                      int32_t fg_placement_y,
-                                      uint32_t fg_placement_width,
-                                      uint32_t fg_placement_height,
-                                      SmolFlags flags,
-                                      SmolPostRowFunc post_row_func,
-                                      void *user_data);
+SmolScaleCtx *smol_scale_new_composite (const void *src_pixels,
+                                        SmolPixelType src_pixel_type,
+                                        uint32_t src_width,
+                                        uint32_t src_height,
+                                        uint32_t src_rowstride,
+                                        const void *color_pixel,
+                                        SmolPixelType color_pixel_type,
+                                        void *dest_pixels,
+                                        SmolPixelType dest_pixel_type,
+                                        uint32_t dest_width,
+                                        uint32_t dest_height,
+                                        uint32_t dest_rowstride,
+                                        int32_t placement_x,
+                                        int32_t placement_y,
+                                        uint32_t placement_width,
+                                        uint32_t placement_height,
+                                        SmolCompositeOp composite_op,
+                                        SmolFlags flags,
+                                        SmolPostRowFunc post_row_func,
+                                        void *user_data);
 
 void smol_scale_destroy (SmolScaleCtx *scale_ctx);
 
