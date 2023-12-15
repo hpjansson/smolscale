@@ -460,7 +460,7 @@ copy_row (const SmolScaleCtx *scale_ctx,
           uint32_t dest_row_index,
           uint32_t *row_out)
 {
-    memcpy (dest_row_ofs_to_pointer (scale_ctx, dest_row_index),
+    memcpy (row_out,
             src_row_ofs_to_pointer (scale_ctx, dest_row_index),
             scale_ctx->hdim.dest_size_px * bytes_per_pixel (scale_ctx->dest_pixel_type));
 }
