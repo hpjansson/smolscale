@@ -517,7 +517,12 @@ do_rows (const SmolScaleCtx *scale_ctx,
          * produce transparency when the output is smaller than its whole-pixel
          * count. This is especially noticeable with halving, which can
          * produce 2^n such samples (the extra pixel is sampled repeatedly in
-         * those cases). */
+         * those cases).
+         *
+         * FIXME: This is no longer true, and the extra storage is probably not
+         * needed. The edge transparency is now handled by applying a precalculated
+         * opacity directly. We should verify that the extra storage can be
+         * eliminated without overruns. */
 
         local_ctx.parts_row [i] =
             smol_alloc_aligned (MAX (scale_ctx->hdim.src_size_px + 1, scale_ctx->hdim.dest_size_px)
