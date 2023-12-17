@@ -1780,9 +1780,9 @@ scale_horizontal (const SmolScaleCtx *scale_ctx,
         src_row = (const char *) local_ctx->src_aligned;
     }
 
-    scale_ctx->unpack_row_func (src_row,
-                                src_row_unpacked,
-                                scale_ctx->hdim.src_size_px);
+    scale_ctx->src_unpack_row_func (src_row,
+                                    src_row_unpacked,
+                                    scale_ctx->hdim.src_size_px);
     scale_ctx->hfilter_func (scale_ctx,
                              src_row_unpacked,
                              dest_row_parts);
@@ -2683,6 +2683,76 @@ scale_dest_row_copy (const SmolScaleCtx *scale_ctx,
     return 0;
 }
 
+/* ----------- *
+ * Compositing *
+ * ----------- */
+
+static void
+composite_over_color_64bpp (uint64_t * SMOL_RESTRICT srcdest_row,
+                            const uint64_t * SMOL_RESTRICT color_pixel,
+                            uint32_t n_pixels)
+{
+    uint32_t i;
+
+    SMOL_ASSUME_ALIGNED_TO (srcdest_row, uint64_t *, sizeof (uint64_t));
+    SMOL_ASSUME_ALIGNED_TO (color_pixel, const uint64_t *, sizeof (uint64_t));
+
+    for (i = 0; i < n_pixels; i++)
+    {
+        srcdest_row [i] = ((srcdest_row [i] + color_pixel [0]) >> 1) & 0x7fff7fff7fff7fff;
+    }
+}
+
+static void
+composite_over_color_128bpp (uint64_t * SMOL_RESTRICT srcdest_row,
+                             const uint64_t * SMOL_RESTRICT color_pixel,
+                             uint32_t n_pixels)
+{
+    uint32_t i;
+
+    SMOL_ASSUME_ALIGNED_TO (srcdest_row, uint64_t *, sizeof (uint64_t) * 2);
+    SMOL_ASSUME_ALIGNED_TO (color_pixel, const uint64_t *, sizeof (uint64_t));
+
+    for (i = 0; i < n_pixels * 2; i += 2)
+    {
+        srcdest_row [i] = ((srcdest_row [i] + color_pixel [0]) >> 1) & 0x7fffffff7fffffff;
+        srcdest_row [i + 1] = ((srcdest_row [i + 1] + color_pixel [1]) >> 1) & 0x7fffffff7fffffff;
+    }
+}
+
+static void
+composite_over_dest_64bpp (const uint64_t * SMOL_RESTRICT src_row,
+                           uint64_t * SMOL_RESTRICT dest_row,
+                           uint32_t n_pixels)
+{
+    uint32_t i;
+
+    SMOL_ASSUME_ALIGNED_TO (src_row, const uint64_t *, sizeof (uint64_t));
+    SMOL_ASSUME_ALIGNED_TO (dest_row, uint64_t *, sizeof (uint64_t));
+
+    for (i = 0; i < n_pixels; i++)
+    {
+        dest_row [i] = ((src_row [i] + dest_row [i]) >> 1) & 0x7fff7fff7fff7fff;
+    }
+}
+
+static void
+composite_over_dest_128bpp (const uint64_t * SMOL_RESTRICT src_row,
+                            uint64_t * SMOL_RESTRICT dest_row,
+                            uint32_t n_pixels)
+{
+    uint32_t i;
+
+    SMOL_ASSUME_ALIGNED_TO (src_row, const uint64_t *, sizeof (uint64_t) * 2);
+    SMOL_ASSUME_ALIGNED_TO (dest_row, uint64_t *, sizeof (uint64_t) * 2);
+
+    for (i = 0; i < n_pixels * 2; i += 2)
+    {
+        dest_row [i] = ((src_row [i] + dest_row [i]) >> 1) & 0x7fffffff7fffffff;
+        dest_row [i + 1] = ((src_row [i + 1] + dest_row [i + 1]) >> 1) & 0x7fffffff7fffffff;
+    }
+}
+
 /* --------------- *
  * Function tables *
  * --------------- */
@@ -2856,6 +2926,36 @@ static const SmolImplementation implementation =
             scale_dest_row_bilinear_6h_128bpp,
             scale_dest_row_box_128bpp
         }
+    },
+    {
+        /* Composite over color */
+
+        /* 24bpp */
+        NULL,
+
+        /* 32bpp */
+        NULL,
+
+        /* 64bpp */
+        composite_over_color_64bpp,
+
+        /* 128bpp */
+        composite_over_color_128bpp
+    },
+    {
+        /* Composite over dest */
+
+        /* 24bpp */
+        NULL,
+
+        /* 32bpp */
+        NULL,
+
+        /* 64bpp */
+        composite_over_dest_64bpp,
+
+        /* 128bpp */
+        composite_over_dest_128bpp
     },
     repack_meta
 };

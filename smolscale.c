@@ -791,15 +791,17 @@ find_repacks (const SmolImplementation **implementations,
     }
 
 out:
-    *src_repack = src_meta;
-    *dest_repack = dest_meta;
+    if (src_repack)
+        *src_repack = src_meta;
+    if (dest_repack)
+        *dest_repack = dest_meta;
 }
 
 #define IMPLEMENTATION_MAX 8
 
 /* scale_ctx->storage_type must be initialized first by pick_filter_params() */
 static void
-get_implementations (SmolScaleCtx *scale_ctx)
+get_implementations (SmolScaleCtx *scale_ctx, const void *color_pixel, SmolPixelType color_pixel_type)
 {
     SmolPixelType src_ptype, dest_ptype;
     const SmolPixelTypeMeta *src_pmeta, *dest_pmeta;
@@ -833,7 +835,7 @@ get_implementations (SmolScaleCtx *scale_ctx)
     implementations [i++] = _smol_get_generic_implementation ();
     implementations [i] = NULL;
 
-    /* Install unpacker and packer */
+    /* Install repackers */
 
     src_ptype = get_host_pixel_type (scale_ctx->src_pixel_type);
     dest_ptype = get_host_pixel_type (scale_ctx->dest_pixel_type);
@@ -872,13 +874,63 @@ get_implementations (SmolScaleCtx *scale_ctx)
     SMOL_ASSERT (src_rmeta != NULL);
     SMOL_ASSERT (dest_rmeta != NULL);
 
-    scale_ctx->unpack_row_func = src_rmeta->repack_row_func;
+    scale_ctx->src_unpack_row_func = src_rmeta->repack_row_func;
     scale_ctx->pack_row_func = dest_rmeta->repack_row_func;
 
-    /* Install filters */
+    if (scale_ctx->composite_op == SMOL_COMPOSITE_SRC_OVER_DEST)
+    {
+        const SmolRepackMeta *dest_unpack_rmeta;
+
+        /* Need to unpack destination rows and composite on them */
+
+        find_repacks (implementations,
+                      dest_pmeta->storage, scale_ctx->storage_type, dest_pmeta->storage,
+                      dest_pmeta->alpha, internal_alpha, dest_pmeta->alpha,
+                      SMOL_GAMMA_SRGB_COMPRESSED, scale_ctx->gamma_type, SMOL_GAMMA_SRGB_COMPRESSED,
+                      dest_pmeta, dest_pmeta,
+                      &dest_unpack_rmeta, NULL);
+
+        SMOL_ASSERT (dest_unpack_rmeta != NULL);
+
+        scale_ctx->dest_unpack_row_func = dest_unpack_rmeta->repack_row_func;
+    }
+    else
+    {
+        /* Compositing on solid color */
+
+        if (color_pixel)
+        {
+            SmolPixelType color_ptype;
+            const SmolPixelTypeMeta *color_pmeta;
+            const SmolRepackMeta *color_rmeta;
+
+            color_ptype = get_host_pixel_type (color_pixel_type);
+            color_pmeta = &pixel_type_meta [color_ptype];
+
+            find_repacks (implementations,
+                          color_pmeta->storage, scale_ctx->storage_type, dest_pmeta->storage,
+                          color_pmeta->alpha, internal_alpha, dest_pmeta->alpha,
+                          SMOL_GAMMA_SRGB_COMPRESSED, scale_ctx->gamma_type, SMOL_GAMMA_SRGB_COMPRESSED,
+                          color_pmeta, dest_pmeta,
+                          &color_rmeta, NULL);
+
+            SMOL_ASSERT (color_rmeta != NULL);
+
+            color_rmeta->repack_row_func (color_pixel, scale_ctx->color_pixel, 1);
+        }
+        else
+        {
+            /* No color provided; use fully transparent black */
+            memset (scale_ctx->color_pixel, 0, sizeof (scale_ctx->color_pixel));
+        }
+    }
+
+    /* Install filters and compositors */
 
     scale_ctx->hfilter_func = NULL;
     scale_ctx->vfilter_func = NULL;
+    scale_ctx->composite_over_color_func = NULL;
+    scale_ctx->composite_over_dest_func = NULL;
 
     for (i = 0; implementations [i]; i++)
     {
@@ -886,6 +938,10 @@ get_implementations (SmolScaleCtx *scale_ctx)
             implementations [i]->hfilter_funcs [scale_ctx->storage_type] [scale_ctx->hdim.filter_type];
         SmolVFilterFunc *vfilter_func =
             implementations [i]->vfilter_funcs [scale_ctx->storage_type] [scale_ctx->vdim.filter_type];
+        SmolCompositeOverColorFunc *composite_over_color_func =
+            implementations [i]->composite_over_color_funcs [scale_ctx->storage_type];
+        SmolCompositeOverDestFunc *composite_over_dest_func =
+            implementations [i]->composite_over_dest_funcs [scale_ctx->storage_type];
 
         if (!scale_ctx->hfilter_func && hfilter_func)
         {
@@ -900,6 +956,11 @@ get_implementations (SmolScaleCtx *scale_ctx)
             if (implementations [i]->init_v_func)
                 implementations [i]->init_v_func (scale_ctx);
         }
+
+        if (!scale_ctx->composite_over_color_func && composite_over_color_func)
+            scale_ctx->composite_over_color_func = composite_over_color_func;
+        if (!scale_ctx->composite_over_dest_func && composite_over_dest_func)
+            scale_ctx->composite_over_dest_func = composite_over_dest_func;
     }
 
     SMOL_ASSERT (scale_ctx->hfilter_func != NULL);
@@ -959,6 +1020,7 @@ smol_scale_init (SmolScaleCtx *scale_ctx,
     scale_ctx->vdim.placement_size_spx = placement_height_spx;
     scale_ctx->dest_rowstride = dest_rowstride;
 
+    scale_ctx->composite_op = composite_op;
     scale_ctx->flags = flags;
     scale_ctx->gamma_type = (flags & SMOL_DISABLE_SRGB_LINEARIZATION)
         ? SMOL_GAMMA_SRGB_COMPRESSED : SMOL_GAMMA_SRGB_LINEAR;
@@ -1001,7 +1063,7 @@ smol_scale_init (SmolScaleCtx *scale_ctx,
                                                &scale_ctx->precalc_storage);
     scale_ctx->vdim.precalc = scale_ctx->hdim.precalc + (scale_ctx->hdim.dest_size_prehalving_px + 1) * 2;
 
-    get_implementations (scale_ctx);
+    get_implementations (scale_ctx, color_pixel, color_pixel_type);
 }
 
 static void

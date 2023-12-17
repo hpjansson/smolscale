@@ -2237,9 +2237,9 @@ scale_horizontal (const SmolScaleCtx *scale_ctx,
         src_row = (const char *) local_ctx->src_aligned;
     }
 
-    scale_ctx->unpack_row_func (src_row,
-                                src_row_unpacked,
-                                scale_ctx->hdim.src_size_px);
+    scale_ctx->src_unpack_row_func (src_row,
+                                    src_row_unpacked,
+                                    scale_ctx->hdim.src_size_px);
     scale_ctx->hfilter_func (scale_ctx,
                              src_row_unpacked,
                              dest_row_parts);
@@ -3436,6 +3436,36 @@ static const SmolImplementation implementation =
             scale_dest_row_bilinear_6h_128bpp,
             scale_dest_row_box_128bpp
         }
+    },
+    {
+        /* Composite over color */
+
+        /* 24bpp */
+        NULL,
+
+        /* 32bpp */
+        NULL,
+
+        /* 64bpp */
+        NULL,
+
+        /* 128bpp */
+        NULL
+    },
+    {
+        /* Composite over dest */
+
+        /* 24bpp */
+        NULL,
+
+        /* 32bpp */
+        NULL,
+
+        /* 64bpp */
+        NULL,
+
+        /* 128bpp */
+        NULL
     },
     repack_meta
 };

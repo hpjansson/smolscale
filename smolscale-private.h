@@ -214,6 +214,12 @@ typedef void (SmolHFilterFunc) (const SmolScaleCtx *scale_ctx,
 typedef int (SmolVFilterFunc) (const SmolScaleCtx *scale_ctx,
                                SmolLocalCtx *local_ctx,
                                uint32_t dest_row_index);
+typedef void (SmolCompositeOverColorFunc) (uint64_t *srcdest_row,
+                                           const uint64_t *color_pixel,
+                                           uint32_t n_pixels);
+typedef void (SmolCompositeOverDestFunc) (const uint64_t *src_row,
+                                          uint64_t *dest_row,
+                                          uint32_t n_pixels);
 
 #define SMOL_REPACK_SIGNATURE_GET_REORDER(sig) ((sig) >> (2 * (SMOL_GAMMA_BITS + SMOL_ALPHA_BITS + SMOL_STORAGE_BITS)))
 
@@ -279,6 +285,8 @@ typedef struct
     SmolInitFunc *init_v_func;
     SmolHFilterFunc *hfilter_funcs [SMOL_STORAGE_MAX] [SMOL_FILTER_MAX];
     SmolVFilterFunc *vfilter_funcs [SMOL_STORAGE_MAX] [SMOL_FILTER_MAX];
+    SmolCompositeOverColorFunc *composite_over_color_funcs [SMOL_STORAGE_MAX];
+    SmolCompositeOverDestFunc *composite_over_dest_funcs [SMOL_STORAGE_MAX];
     const SmolRepackMeta *repack_meta;
 }
 SmolImplementation;
@@ -323,23 +331,21 @@ struct SmolScaleCtx
     SmolPixelType src_pixel_type, dest_pixel_type;
     SmolStorageType storage_type;
     SmolGammaType gamma_type;
+    SmolCompositeOp composite_op;
 
     /* Raw flags passed in by user */
     SmolFlags flags;
 
-    /* Unpacked BG color to composite on */
-    uint64_t bg_color [2];
+    /* Unpacked color to composite on */
+    uint64_t color_pixel [2];
 
-    /* One row of bg_color pixels in internal storage format. Used for
-     * compositing on top of. Dynamically allocated.
-     *
-     * FIXME: Have separate compositing functions that deal with this? */
-    uint64_t *bg_pixels;
-
-    SmolRepackRowFunc *unpack_row_func;
+    SmolRepackRowFunc *src_unpack_row_func;
+    SmolRepackRowFunc *dest_unpack_row_func;
     SmolRepackRowFunc *pack_row_func;
     SmolHFilterFunc *hfilter_func;
     SmolVFilterFunc *vfilter_func;
+    SmolCompositeOverColorFunc *composite_over_color_func;
+    SmolCompositeOverDestFunc *composite_over_dest_func;
 
     /* User specified, can be NULL */
     SmolPostRowFunc *post_row_func;
