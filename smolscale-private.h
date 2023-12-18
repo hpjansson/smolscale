@@ -220,6 +220,9 @@ typedef void (SmolCompositeOverColorFunc) (uint64_t *srcdest_row,
 typedef void (SmolCompositeOverDestFunc) (const uint64_t *src_row,
                                           uint64_t *dest_row,
                                           uint32_t n_pixels);
+typedef void (SmolClearFunc) (const void *src_pixel_batch,
+                              void *dest_row,
+                              uint32_t n_pixels);
 
 #define SMOL_REPACK_SIGNATURE_GET_REORDER(sig) ((sig) >> (2 * (SMOL_GAMMA_BITS + SMOL_ALPHA_BITS + SMOL_STORAGE_BITS)))
 
@@ -287,6 +290,7 @@ typedef struct
     SmolVFilterFunc *vfilter_funcs [SMOL_STORAGE_MAX] [SMOL_FILTER_MAX];
     SmolCompositeOverColorFunc *composite_over_color_funcs [SMOL_STORAGE_MAX];
     SmolCompositeOverDestFunc *composite_over_dest_funcs [SMOL_STORAGE_MAX];
+    SmolClearFunc *clear_funcs [SMOL_STORAGE_MAX];
     const SmolRepackMeta *repack_meta;
 }
 SmolImplementation;
@@ -312,11 +316,13 @@ typedef struct
      * and applied after each scaling step. */
     uint16_t first_opacity, last_opacity;
 
-    /* Rows or cols to add consisting of unbroken bg_color. This is done
+    /* Rows or cols to add consisting of unbroken pixel_color. This is done
      * after scaling but before conversion to output pixel format. */
-    uint16_t before_splice_px, after_splice_px;
+    uint16_t clear_before_px, clear_after_px;
 }
 SmolDim;
+
+#define SMOL_CLEAR_BATCH_SIZE 96
 
 struct SmolScaleCtx
 {
@@ -336,9 +342,6 @@ struct SmolScaleCtx
     /* Raw flags passed in by user */
     SmolFlags flags;
 
-    /* Unpacked color to composite on */
-    uint64_t color_pixel [2];
-
     SmolRepackRowFunc *src_unpack_row_func;
     SmolRepackRowFunc *dest_unpack_row_func;
     SmolRepackRowFunc *pack_row_func;
@@ -346,6 +349,7 @@ struct SmolScaleCtx
     SmolVFilterFunc *vfilter_func;
     SmolCompositeOverColorFunc *composite_over_color_func;
     SmolCompositeOverDestFunc *composite_over_dest_func;
+    SmolClearFunc *clear_dest_func;
 
     /* User specified, can be NULL */
     SmolPostRowFunc *post_row_func;
@@ -359,6 +363,14 @@ struct SmolScaleCtx
 
     /* TRUE if input rows can be copied directly to output. */
     unsigned int is_noop : 1;
+
+    /* Unpacked color to composite on */
+    uint64_t color_pixel [2];
+
+    /* A batch of color pixels in dest storage format. The batch size
+     * is in bytes, and chosen as an even multiple of 3, allowing 32 bytes wide
+     * operations (e.g. AVX2) to be used to clear packed RGB pixels. */
+    unsigned char color_pixels_clear_batch [SMOL_CLEAR_BATCH_SIZE];
 };
 
 /* Number of pixels to convert per batch. For some conversions, we perform

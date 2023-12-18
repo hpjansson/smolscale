@@ -2753,6 +2753,53 @@ composite_over_dest_128bpp (const uint64_t * SMOL_RESTRICT src_row,
     }
 }
 
+/* -------- *
+ * Clearing *
+ * -------- */
+
+static void
+clear_24bpp (const void *src_pixel_batch,
+             void *dest_row,
+             uint32_t n_pixels)
+{
+    const uint8_t *src_pixel_batch_u8 = src_pixel_batch;
+    const uint32_t *src_pixel_batch_u32 = src_pixel_batch;
+    uint8_t *dest_row_u8 = dest_row;
+    uint32_t *dest_row_u32 = dest_row;
+    uint32_t i;
+
+    SMOL_ASSUME_ALIGNED_TO (src_pixel_batch_u32, const uint32_t *, sizeof (uint32_t));
+
+    for (i = 0; n_pixels - i >= 4; i += 4)
+    {
+        *(dest_row_u32++) = src_pixel_batch_u32 [0];
+        *(dest_row_u32++) = src_pixel_batch_u32 [1];
+        *(dest_row_u32++) = src_pixel_batch_u32 [2];
+    }
+
+    for ( ; i < n_pixels; i++)
+    {
+        dest_row_u8 [i * 3] = src_pixel_batch_u8 [0];
+        dest_row_u8 [i * 3 + 1] = src_pixel_batch_u8 [1];
+        dest_row_u8 [i * 3 + 2] = src_pixel_batch_u8 [2];
+    }
+}
+
+static void
+clear_32bpp (const void *src_pixel_batch,
+             void *dest_row,
+             uint32_t n_pixels)
+{
+    const uint32_t *src_pixel_batch_u32 = src_pixel_batch;
+    uint32_t *dest_row_u32 = dest_row;
+    uint32_t i;
+
+    SMOL_ASSUME_ALIGNED_TO (src_pixel_batch_u32, const uint32_t *, sizeof (uint32_t));
+
+    for (i = 0; i < n_pixels; i++)
+        dest_row_u32 [i] = src_pixel_batch_u32 [0];
+}
+
 /* --------------- *
  * Function tables *
  * --------------- */
@@ -2929,33 +2976,24 @@ static const SmolImplementation implementation =
     },
     {
         /* Composite over color */
-
-        /* 24bpp */
         NULL,
-
-        /* 32bpp */
         NULL,
-
-        /* 64bpp */
         composite_over_color_64bpp,
-
-        /* 128bpp */
         composite_over_color_128bpp
     },
     {
         /* Composite over dest */
-
-        /* 24bpp */
         NULL,
-
-        /* 32bpp */
         NULL,
-
-        /* 64bpp */
         composite_over_dest_64bpp,
-
-        /* 128bpp */
         composite_over_dest_128bpp
+    },
+    {
+        /* Clear dest */
+        clear_24bpp,
+        clear_32bpp,
+        NULL,
+        NULL
     },
     repack_meta
 };

@@ -797,6 +797,25 @@ out:
         *dest_repack = dest_meta;
 }
 
+static void
+populate_clear_batch (SmolScaleCtx *scale_ctx)
+{
+    uint8_t dest_color [16];
+    int pixel_stride;
+    int i;
+
+    scale_ctx->pack_row_func (scale_ctx->color_pixel, dest_color, 1);
+    pixel_stride = pixel_type_meta [scale_ctx->dest_pixel_type].pixel_stride;
+
+    for (i = 0; i != SMOL_CLEAR_BATCH_SIZE; i += pixel_stride)
+    {
+        /* Must be an exact fit */
+        SMOL_ASSERT (i + pixel_stride <= SMOL_CLEAR_BATCH_SIZE);
+
+        memcpy (scale_ctx->color_pixels_clear_batch + i, dest_color, pixel_stride);
+    }
+}
+
 #define IMPLEMENTATION_MAX 8
 
 /* scale_ctx->storage_type must be initialized first by pick_filter_params() */
@@ -814,12 +833,13 @@ get_implementations (SmolScaleCtx *scale_ctx, const void *color_pixel, SmolPixel
 
     if (scale_ctx->hdim.src_size_spx == scale_ctx->hdim.dest_size_spx
         && scale_ctx->vdim.src_size_spx == scale_ctx->vdim.dest_size_spx
-        && scale_ctx->src_pixel_type == scale_ctx->dest_pixel_type)
+        && scale_ctx->src_pixel_type == scale_ctx->dest_pixel_type
+        && scale_ctx->composite_op != SMOL_COMPOSITE_SRC_OVER_DEST)
     {
-        /* NOTE: When compositing is implemented, check that we're not
-         * compositing too. */
+        /* The scaling and packing is a no-op, but we may still need to
+         * clear dest, so allow the rest of the function to run so we get
+         * the clear functions etc. */
         scale_ctx->is_noop = TRUE;
-        return;
     }
 
     /* Enumerate implementations, preferred first */
@@ -923,6 +943,8 @@ get_implementations (SmolScaleCtx *scale_ctx, const void *color_pixel, SmolPixel
             /* No color provided; use fully transparent black */
             memset (scale_ctx->color_pixel, 0, sizeof (scale_ctx->color_pixel));
         }
+
+        populate_clear_batch (scale_ctx);
     }
 
     /* Install filters and compositors */
@@ -931,6 +953,7 @@ get_implementations (SmolScaleCtx *scale_ctx, const void *color_pixel, SmolPixel
     scale_ctx->vfilter_func = NULL;
     scale_ctx->composite_over_color_func = NULL;
     scale_ctx->composite_over_dest_func = NULL;
+    scale_ctx->clear_dest_func = NULL;
 
     for (i = 0; implementations [i]; i++)
     {
@@ -942,6 +965,8 @@ get_implementations (SmolScaleCtx *scale_ctx, const void *color_pixel, SmolPixel
             implementations [i]->composite_over_color_funcs [scale_ctx->storage_type];
         SmolCompositeOverDestFunc *composite_over_dest_func =
             implementations [i]->composite_over_dest_funcs [scale_ctx->storage_type];
+        SmolClearFunc *clear_dest_func =
+            implementations [i]->clear_funcs [scale_ctx->storage_type];
 
         if (!scale_ctx->hfilter_func && hfilter_func)
         {
@@ -961,6 +986,8 @@ get_implementations (SmolScaleCtx *scale_ctx, const void *color_pixel, SmolPixel
             scale_ctx->composite_over_color_func = composite_over_color_func;
         if (!scale_ctx->composite_over_dest_func && composite_over_dest_func)
             scale_ctx->composite_over_dest_func = composite_over_dest_func;
+        if (!scale_ctx->clear_dest_func && clear_dest_func)
+            scale_ctx->clear_dest_func = clear_dest_func;
     }
 
     SMOL_ASSERT (scale_ctx->hfilter_func != NULL);

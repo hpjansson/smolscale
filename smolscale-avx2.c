@@ -3439,32 +3439,23 @@ static const SmolImplementation implementation =
     },
     {
         /* Composite over color */
-
-        /* 24bpp */
         NULL,
-
-        /* 32bpp */
         NULL,
-
-        /* 64bpp */
         NULL,
-
-        /* 128bpp */
         NULL
     },
     {
         /* Composite over dest */
-
-        /* 24bpp */
         NULL,
-
-        /* 32bpp */
         NULL,
-
-        /* 64bpp */
         NULL,
-
-        /* 128bpp */
+        NULL
+    },
+    {
+        /* Clear dest */
+        NULL,
+        NULL,
+        NULL,
         NULL
     },
     repack_meta
