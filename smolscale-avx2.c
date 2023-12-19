@@ -234,17 +234,17 @@ init_dim (SmolDim *dim, int do_batches)
                              &dim->span_step,
                              &dim->span_mul,
                              dim->src_size_spx,
-                             dim->dest_size_px,
+                             dim->placement_size_px,
                              dim->placement_ofs_spx,
-                             dim->dest_size_spx);
+                             dim->placement_size_spx);
     }
     else /* SMOL_FILTER_BILINEAR_?H */
     {
         precalc_bilinear_array (dim->precalc,
                                 dim->src_size_spx,
                                 dim->placement_ofs_spx,
-                                dim->dest_size_prehalving_spx,
-                                dim->dest_size_prehalving_px,
+                                dim->placement_size_prehalving_spx,
+                                dim->placement_size_prehalving_px,
                                 dim->n_halvings,
                                 do_batches);
     }

@@ -301,13 +301,13 @@ typedef struct
     SmolFilterType filter_type;
 
     uint32_t src_size_px, src_size_spx;
-    uint32_t dest_size_prehalving_px, dest_size_prehalving_spx;
     uint32_t dest_size_px, dest_size_spx;
 
     unsigned int n_halvings;
 
-    uint32_t placement_ofs_spx;
-    uint32_t placement_size_spx;
+    int32_t placement_ofs_px, placement_ofs_spx;
+    uint32_t placement_size_px, placement_size_spx;
+    uint32_t placement_size_prehalving_px, placement_size_prehalving_spx;
 
     uint32_t span_step;  /* For box filter, in spx */
     uint32_t span_mul;  /* For box filter */
@@ -319,6 +319,8 @@ typedef struct
     /* Rows or cols to add consisting of unbroken pixel_color. This is done
      * after scaling but before conversion to output pixel format. */
     uint16_t clear_before_px, clear_after_px;
+
+    uint16_t clip_before_px, clip_after_px;
 }
 SmolDim;
 

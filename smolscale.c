@@ -469,7 +469,7 @@ static void
 scale_dest_row (const SmolScaleCtx *scale_ctx,
                 SmolLocalCtx *local_ctx,
                 uint32_t dest_row_index,
-                uint32_t *row_out)
+                void *row_out)
 {
     if (scale_ctx->is_noop)
     {
@@ -995,6 +995,61 @@ get_implementations (SmolScaleCtx *scale_ctx, const void *color_pixel, SmolPixel
 }
 
 static void
+init_dim (SmolDim *dim,
+          uint32_t src_size_spx,
+          uint32_t dest_size_spx,
+          int32_t placement_ofs_spx,
+          int32_t placement_size_spx,
+          SmolFlags flags,
+          SmolStorageType *storage_type_out)
+{
+    dim->src_size_spx = src_size_spx;
+    dim->src_size_px = SMOL_SPX_TO_PX (src_size_spx);
+    dim->dest_size_spx = dest_size_spx;
+    dim->dest_size_px = SMOL_SPX_TO_PX (dest_size_spx);
+    dim->placement_ofs_spx = placement_ofs_spx;
+    dim->placement_ofs_px = SMOL_SPX_TO_PX (placement_ofs_spx);
+    dim->placement_size_spx = placement_size_spx;
+    dim->placement_size_px = SMOL_SPX_TO_PX (placement_size_spx + SMOL_SUBPIXEL_MOD (placement_ofs_spx));
+
+    pick_filter_params (dim->src_size_px,
+                        dim->src_size_spx,
+                        dim->placement_ofs_spx,
+                        dim->placement_size_px,
+                        dim->placement_size_spx,
+                        &dim->n_halvings,
+                        &dim->placement_size_prehalving_px,
+                        &dim->placement_size_prehalving_spx,
+                        &dim->filter_type,
+                        storage_type_out,
+                        &dim->first_opacity,
+                        &dim->last_opacity,
+                        flags);
+
+    if (dim->placement_ofs_px > 0)
+    {
+        dim->clear_before_px = dim->placement_ofs_px;
+    }
+    else if (dim->placement_ofs_px < 0)
+    {
+        dim->clear_before_px = 0;
+        dim->clip_before_px = -dim->placement_ofs_px;
+        dim->first_opacity = 256;
+    }
+
+    if (dim->placement_ofs_px + dim->placement_size_px < dim->dest_size_px)
+    {
+        dim->clear_after_px = dim->dest_size_px - dim->placement_ofs_px - dim->placement_size_px;
+    }
+    else if (dim->placement_ofs_px + dim->placement_size_px > dim->dest_size_px)
+    {
+        dim->clear_after_px = 0;
+        dim->clip_after_px = dim->placement_ofs_px + dim->placement_size_px - dim->dest_size_px;
+        dim->last_opacity = 256;
+    }
+}
+
+static void
 smol_scale_init (SmolScaleCtx *scale_ctx,
                  const void *src_pixels,
                  SmolPixelType src_pixel_type,
@@ -1029,22 +1084,10 @@ smol_scale_init (SmolScaleCtx *scale_ctx,
 
     scale_ctx->src_pixels = src_pixels;
     scale_ctx->src_pixel_type = src_pixel_type;
-    scale_ctx->hdim.src_size_spx = src_width_spx;
-    scale_ctx->hdim.src_size_px = SMOL_SPX_TO_PX (src_width_spx);
-    scale_ctx->hdim.dest_size_spx = placement_width_spx;
-    scale_ctx->hdim.dest_size_px = SMOL_SPX_TO_PX (placement_width_spx + SMOL_SUBPIXEL_MOD (placement_x_spx));
-    scale_ctx->hdim.placement_ofs_spx = placement_x_spx;
-    scale_ctx->hdim.placement_size_spx = placement_width_spx;
     scale_ctx->src_rowstride = src_rowstride;
 
     scale_ctx->dest_pixels = dest_pixels;
     scale_ctx->dest_pixel_type = dest_pixel_type;
-    scale_ctx->vdim.src_size_spx = src_height_spx;
-    scale_ctx->vdim.src_size_px = SMOL_SPX_TO_PX (src_height_spx);
-    scale_ctx->vdim.dest_size_spx = placement_height_spx;
-    scale_ctx->vdim.dest_size_px = SMOL_SPX_TO_PX (placement_height_spx + SMOL_SUBPIXEL_MOD (placement_y_spx));
-    scale_ctx->vdim.placement_ofs_spx = placement_y_spx;
-    scale_ctx->vdim.placement_size_spx = placement_height_spx;
     scale_ctx->dest_rowstride = dest_rowstride;
 
     scale_ctx->composite_op = composite_op;
@@ -1055,40 +1098,22 @@ smol_scale_init (SmolScaleCtx *scale_ctx,
     scale_ctx->post_row_func = post_row_func;
     scale_ctx->user_data = user_data;
 
-    pick_filter_params (scale_ctx->hdim.src_size_px,
-                        scale_ctx->hdim.src_size_spx,
-                        scale_ctx->hdim.placement_ofs_spx,
-                        scale_ctx->hdim.dest_size_px,
-                        scale_ctx->hdim.dest_size_spx,
-                        &scale_ctx->hdim.n_halvings,
-                        &scale_ctx->hdim.dest_size_prehalving_px,
-                        &scale_ctx->hdim.dest_size_prehalving_spx,
-                        &scale_ctx->hdim.filter_type,
-                        &storage_type [0],
-                        &scale_ctx->hdim.first_opacity,
-                        &scale_ctx->hdim.last_opacity,
-                        flags);
-    pick_filter_params (scale_ctx->vdim.src_size_px,
-                        scale_ctx->vdim.src_size_spx,
-                        scale_ctx->vdim.placement_ofs_spx,
-                        scale_ctx->vdim.dest_size_px,
-                        scale_ctx->vdim.dest_size_spx,
-                        &scale_ctx->vdim.n_halvings,
-                        &scale_ctx->vdim.dest_size_prehalving_px,
-                        &scale_ctx->vdim.dest_size_prehalving_spx,
-                        &scale_ctx->vdim.filter_type,
-                        &storage_type [1],
-                        &scale_ctx->vdim.first_opacity,
-                        &scale_ctx->vdim.last_opacity,
-                        flags);
+    init_dim (&scale_ctx->hdim,
+              src_width_spx, dest_width_spx,
+              placement_x_spx, placement_width_spx,
+              flags, &storage_type [0]);
+    init_dim (&scale_ctx->vdim,
+              src_height_spx, dest_height_spx,
+              placement_y_spx, placement_height_spx,
+              flags, &storage_type [1]);
 
     scale_ctx->storage_type = MAX (storage_type [0], storage_type [1]);
 
-    scale_ctx->hdim.precalc = smol_alloc_aligned (((scale_ctx->hdim.dest_size_prehalving_px + 1) * 2
-                                                + (scale_ctx->vdim.dest_size_prehalving_px + 1) * 2)
+    scale_ctx->hdim.precalc = smol_alloc_aligned (((scale_ctx->hdim.placement_size_prehalving_px + 1) * 2
+                                                + (scale_ctx->vdim.placement_size_prehalving_px + 1) * 2)
                                                * sizeof (uint16_t),
                                                &scale_ctx->precalc_storage);
-    scale_ctx->vdim.precalc = scale_ctx->hdim.precalc + (scale_ctx->hdim.dest_size_prehalving_px + 1) * 2;
+    scale_ctx->vdim.precalc = scale_ctx->hdim.precalc + (scale_ctx->hdim.placement_size_prehalving_px + 1) * 2;
 
     get_implementations (scale_ctx, color_pixel, color_pixel_type);
 }
