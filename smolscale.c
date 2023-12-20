@@ -685,7 +685,7 @@ pick_filter_params (uint32_t src_dim,
     else if (src_dim <= 1)
     {
         *dest_filter = SMOL_FILTER_ONE;
-        *last_opacity = ((dest_dim_spx - 1) % SMOL_SUBPIXEL_MUL) + 1;
+        *last_opacity = ((dest_ofs_spx + dest_dim_spx - 1) % SMOL_SUBPIXEL_MUL) + 1;
     }
     else if (dest_ofs_spx == 0 && src_dim_spx == dest_dim_spx)
     {
