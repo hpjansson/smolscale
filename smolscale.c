@@ -1046,7 +1046,10 @@ init_dim (SmolDim *dim,
     dim->dest_size_spx = dest_size_spx;
     dim->dest_size_px = SMOL_SPX_TO_PX (dest_size_spx);
     dim->placement_ofs_spx = placement_ofs_spx;
-    dim->placement_ofs_px = placement_ofs_spx / SMOL_SUBPIXEL_MUL;
+    if (placement_ofs_spx < 0)
+        dim->placement_ofs_px = (placement_ofs_spx - 255) / SMOL_SUBPIXEL_MUL;
+    else
+        dim->placement_ofs_px = placement_ofs_spx / SMOL_SUBPIXEL_MUL;
     dim->placement_size_spx = placement_size_spx;
     dim->placement_size_px = SMOL_SPX_TO_PX (placement_size_spx + SMOL_SUBPIXEL_MOD (placement_ofs_spx));
 
