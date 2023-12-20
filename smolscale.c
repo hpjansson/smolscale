@@ -1004,7 +1004,7 @@ get_implementations (SmolScaleCtx *scale_ctx, const void *color_pixel, SmolPixel
         SmolCompositeOverDestFunc *composite_over_dest_func =
             implementations [i]->composite_over_dest_funcs [scale_ctx->storage_type];
         SmolClearFunc *clear_dest_func =
-            implementations [i]->clear_funcs [scale_ctx->storage_type];
+            implementations [i]->clear_funcs [dest_pmeta->storage];
 
         if (!scale_ctx->hfilter_func && hfilter_func)
         {
