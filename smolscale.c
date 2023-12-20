@@ -1046,7 +1046,7 @@ init_dim (SmolDim *dim,
     dim->dest_size_spx = dest_size_spx;
     dim->dest_size_px = SMOL_SPX_TO_PX (dest_size_spx);
     dim->placement_ofs_spx = placement_ofs_spx;
-    dim->placement_ofs_px = SMOL_SPX_TO_PX (placement_ofs_spx);
+    dim->placement_ofs_px = placement_ofs_spx / SMOL_SUBPIXEL_MUL;
     dim->placement_size_spx = placement_size_spx;
     dim->placement_size_px = SMOL_SPX_TO_PX (placement_size_spx + SMOL_SUBPIXEL_MOD (placement_ofs_spx));
 
@@ -1420,15 +1420,15 @@ smol_scale_new_composite (const void *src_pixels,
     smol_scale_init (scale_ctx,
                      src_pixels,
                      src_pixel_type,
-                     src_width,
-                     src_height,
+                     SMOL_PX_TO_SPX (src_width),
+                     SMOL_PX_TO_SPX (src_height),
                      src_rowstride,
                      color_pixel,
                      color_pixel_type,
                      dest_pixels,
                      dest_pixel_type,
-                     dest_width,
-                     dest_height,
+                     SMOL_PX_TO_SPX (dest_width),
+                     SMOL_PX_TO_SPX (dest_height),
                      dest_rowstride,
                      placement_x,
                      placement_y,
