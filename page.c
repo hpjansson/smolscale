@@ -202,30 +202,31 @@ gen_horiz_wedge (Image *dest_img, Image *src_pixel_row, const Rect *rect, int al
                                align == 0 ? ((rect->height * SMOL_SUBPIXEL_MUL - height_spx) / 2) :
                                (rect->height * SMOL_SUBPIXEL_MUL - height_spx));
         int ofs_x = rect->x + i;
-        int ofs_y = rect->y + inner_ofs_y_spx / SMOL_SUBPIXEL_MUL;
+        int ofs_y = rect->y;
 
-        ctx = smol_scale_new_over_color (
+        ctx = smol_scale_new_composite (
             /* Input */
             src_pixel_row->data,
             src_pixel_row->pixel_type,
-            1 * SMOL_SUBPIXEL_MUL,
-            src_pixel_row->width * SMOL_SUBPIXEL_MUL,
+            1,
+            src_pixel_row->width,
             4,
             /* BG pixel */
             NULL,
             PIXEL_TYPE,
             /* Output */
-            dest_img->data + ofs_y * WIDTH * N_CH + ofs_x * N_CH,
+            dest_img->data,
             SMOL_PIXEL_RGBA8_UNASSOCIATED,
-            1 * SMOL_SUBPIXEL_MUL,
-            height_spx,
+            dest_img->width,
+            dest_img->height,
             WIDTH * N_CH,
             /* Placement */
-            0,
-            inner_ofs_y_spx,
+            ofs_x * SMOL_SUBPIXEL_MUL,
+            ofs_y * SMOL_SUBPIXEL_MUL + inner_ofs_y_spx,
             1 * SMOL_SUBPIXEL_MUL,
             height_spx,
             /* Extra parameters */
+            SMOL_COMPOSITE_SRC,
             flags,
             NULL,
             NULL);
@@ -262,36 +263,37 @@ gen_vert_wedge (Image *dest_img, Image *src_pixel_row, const Rect *rect, int ali
         int inner_ofs_x_spx = (align < 0 ? 0 :
                                align == 0 ? ((rect->width * SMOL_SUBPIXEL_MUL - width_spx) / 2) :
                                (rect->width * SMOL_SUBPIXEL_MUL - width_spx));
-        int ofs_x = rect->x + inner_ofs_x_spx / SMOL_SUBPIXEL_MUL;
+        int ofs_x = rect->x;
         int ofs_y = rect->y + i;
 
-        ctx = smol_scale_new_over_color (
+        ctx = smol_scale_new_composite (
             /* Input */
             src_pixel_row->data,
             src_pixel_row->pixel_type,
-            src_pixel_row->width * SMOL_SUBPIXEL_MUL,
-            1 * SMOL_SUBPIXEL_MUL,
+            src_pixel_row->width,
+            1,
             src_pixel_row->rowstride,
             /* BG pixel */
             NULL,
             PIXEL_TYPE,
             /* Output */
-            dest_img->data + ofs_y * WIDTH * N_CH + ofs_x * N_CH,
+            dest_img->data,
             SMOL_PIXEL_RGBA8_UNASSOCIATED,
-            width_spx,
-            1 * SMOL_SUBPIXEL_MUL,
+            dest_img->width,
+            dest_img->height,
             WIDTH * N_CH,
             /* Placement */
-            inner_ofs_x_spx,
-            0,
+            ofs_x * SMOL_SUBPIXEL_MUL + inner_ofs_x_spx,
+            ofs_y * SMOL_SUBPIXEL_MUL,
             width_spx,
             1 * SMOL_SUBPIXEL_MUL,
             /* Extra parameters */
+            SMOL_COMPOSITE_SRC,
             flags,
             NULL,
             NULL);
 
-        smol_scale_batch (ctx, 0, 1);
+        smol_scale_batch (ctx, 0, -1);
         smol_scale_destroy (ctx);
     }
 }
