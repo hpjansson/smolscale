@@ -435,12 +435,6 @@ const uint32_t _smol_inv_div_p16l_lut [256] =
  * Scaling: Outer loop *
  * ------------------- */
 
-static SMOL_INLINE int
-bytes_per_pixel (SmolPixelType ptype)
-{
-    return pixel_type_meta [ptype].storage == SMOL_STORAGE_24BPP ? 3 : 4;
-}
-
 static SMOL_INLINE const char *
 src_row_ofs_to_pointer (const SmolScaleCtx *scale_ctx,
                         uint32_t src_row_ofs)
@@ -455,6 +449,15 @@ dest_row_ofs_to_pointer (const SmolScaleCtx *scale_ctx,
     return scale_ctx->dest_pixels + scale_ctx->dest_rowstride * dest_row_ofs;
 }
 
+static SMOL_INLINE void *
+dest_hofs_to_pointer (const SmolScaleCtx *scale_ctx,
+                      void *dest_row_ptr,
+                      uint32_t dest_hofs)
+{
+    uint8_t *dest_row_ptr_u8 = dest_row_ptr;
+    return dest_row_ptr_u8 + dest_hofs * pixel_type_meta [scale_ctx->dest_pixel_type].pixel_stride;
+}
+
 static void
 copy_row (const SmolScaleCtx *scale_ctx,
           uint32_t dest_row_index,
@@ -462,7 +465,7 @@ copy_row (const SmolScaleCtx *scale_ctx,
 {
     memcpy (row_out,
             src_row_ofs_to_pointer (scale_ctx, dest_row_index),
-            scale_ctx->hdim.dest_size_px * bytes_per_pixel (scale_ctx->dest_pixel_type));
+            scale_ctx->hdim.dest_size_px * pixel_type_meta [scale_ctx->dest_pixel_type].pixel_stride);
 }
 
 static void
@@ -471,25 +474,60 @@ scale_dest_row (const SmolScaleCtx *scale_ctx,
                 uint32_t dest_row_index,
                 void *row_out)
 {
-    if (scale_ctx->is_noop)
+    if (dest_row_index < scale_ctx->vdim.clear_before_px
+        || dest_row_index >= scale_ctx->vdim.dest_size_px - scale_ctx->vdim.clear_after_px)
     {
-        copy_row (scale_ctx, dest_row_index, row_out);
+        /* Row doesn't intersect placement */
+
+        if (scale_ctx->composite_op == SMOL_COMPOSITE_SRC_CLEAR_DEST)
+        {
+            /* Clear entire row */
+            scale_ctx->clear_dest_func (scale_ctx->color_pixels_clear_batch,
+                                        row_out,
+                                        scale_ctx->hdim.dest_size_px);
+        }
     }
     else
     {
-        int scaled_row_index;
+        if (scale_ctx->composite_op == SMOL_COMPOSITE_SRC_CLEAR_DEST)
+        {
+            /* Clear left */
+            scale_ctx->clear_dest_func (scale_ctx->color_pixels_clear_batch,
+                                        row_out,
+                                        scale_ctx->hdim.clear_before_px);
+        }
 
-        scaled_row_index = scale_ctx->vfilter_func (scale_ctx,
-                                                    local_ctx,
-                                                    dest_row_index);
+        if (scale_ctx->is_noop)
+        {
+            copy_row (scale_ctx, dest_row_index, row_out);
+        }
+        else
+        {
+            int scaled_row_index;
 
-        scale_ctx->pack_row_func (local_ctx->parts_row [scaled_row_index],
-                                  row_out,
-                                  scale_ctx->hdim.dest_size_px);
+            scaled_row_index = scale_ctx->vfilter_func (scale_ctx,
+                                                        local_ctx,
+                                                        dest_row_index - scale_ctx->vdim.clear_before_px);
 
-        if (scale_ctx->post_row_func)
-            scale_ctx->post_row_func (row_out, scale_ctx->hdim.dest_size_px, scale_ctx->user_data);
+            scale_ctx->pack_row_func (local_ctx->parts_row [scaled_row_index],
+                                      dest_hofs_to_pointer (scale_ctx, row_out, scale_ctx->hdim.placement_ofs_px),
+                                      scale_ctx->hdim.placement_size_px);
+
+        }
+
+        if (scale_ctx->composite_op == SMOL_COMPOSITE_SRC_CLEAR_DEST)
+        {
+            /* Clear right */
+            scale_ctx->clear_dest_func (scale_ctx->color_pixels_clear_batch,
+                                        dest_hofs_to_pointer (scale_ctx, row_out,
+                                                              scale_ctx->hdim.placement_ofs_px
+                                                              + scale_ctx->hdim.placement_size_px),
+                                        scale_ctx->hdim.clear_after_px);
+        }
     }
+
+    if (scale_ctx->post_row_func)
+        scale_ctx->post_row_func (row_out, scale_ctx->hdim.dest_size_px, scale_ctx->user_data);
 }
 
 static void
@@ -1026,9 +1064,12 @@ init_dim (SmolDim *dim,
                         &dim->last_opacity,
                         flags);
 
+    /* Calculate clip and clear intervals */
+
     if (dim->placement_ofs_px > 0)
     {
         dim->clear_before_px = dim->placement_ofs_px;
+        dim->clip_before_px = 0;
     }
     else if (dim->placement_ofs_px < 0)
     {
@@ -1040,12 +1081,26 @@ init_dim (SmolDim *dim,
     if (dim->placement_ofs_px + dim->placement_size_px < dim->dest_size_px)
     {
         dim->clear_after_px = dim->dest_size_px - dim->placement_ofs_px - dim->placement_size_px;
+        dim->clip_after_px = 0;
     }
     else if (dim->placement_ofs_px + dim->placement_size_px > dim->dest_size_px)
     {
         dim->clear_after_px = 0;
         dim->clip_after_px = dim->placement_ofs_px + dim->placement_size_px - dim->dest_size_px;
         dim->last_opacity = 256;
+    }
+
+    /* Clamp placement */
+
+    if (dim->placement_ofs_px < 0)
+    {
+        dim->placement_size_px += dim->placement_ofs_px;
+        dim->placement_ofs_px = 0;
+    }
+
+    if (dim->placement_ofs_px + dim->placement_size_px > dim->dest_size_px)
+    {
+        dim->placement_size_px = dim->dest_size_px - dim->placement_ofs_px;
     }
 }
 

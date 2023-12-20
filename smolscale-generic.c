@@ -35,7 +35,9 @@ static void
 precalc_linear_range (uint16_t *array_out,
                       int first_index, int last_index,
                       uint64_t first_sample_ofs, uint64_t sample_step,
-                      int sample_ofs_px_max)
+                      int sample_ofs_px_max,
+                      int32_t dest_clip_before_px,
+                      int *array_i_inout)
 {
     uint64_t sample_ofs;
     int i;
@@ -48,14 +50,23 @@ precalc_linear_range (uint16_t *array_out,
 
         if (sample_ofs_px >= sample_ofs_px_max - 1)
         {
-            array_out [i * 2] = sample_ofs_px_max - 2;
-            array_out [i * 2 + 1] = 0;
+            if (i >= dest_clip_before_px)
+            {
+                array_out [(*array_i_inout) * 2] = sample_ofs_px_max - 2;
+                array_out [(*array_i_inout) * 2 + 1] = 0;
+                (*array_i_inout)++;
+            }
             continue;
         }
 
-        array_out [i * 2] = sample_ofs_px;
-        array_out [i * 2 + 1] = SMOL_SMALL_MUL
-            - ((sample_ofs / (SMOL_BILIN_MULTIPLIER / SMOL_SMALL_MUL)) % SMOL_SMALL_MUL);
+        if (i >= dest_clip_before_px)
+        {
+            array_out [(*array_i_inout) * 2] = sample_ofs_px;
+            array_out [(*array_i_inout) * 2 + 1] = SMOL_SMALL_MUL
+                - ((sample_ofs / (SMOL_BILIN_MULTIPLIER / SMOL_SMALL_MUL)) % SMOL_SMALL_MUL);
+            (*array_i_inout)++;
+        }
+
         sample_ofs += sample_step;
     }
 }
@@ -66,11 +77,13 @@ precalc_bilinear_array (uint16_t *array,
                         uint64_t dest_ofs_spx,
                         uint64_t dest_dim_spx,
                         uint32_t dest_dim_prehalving_px,
-                        unsigned int n_halvings)
+                        unsigned int n_halvings,
+                        int32_t dest_clip_before_px)
 {
     uint32_t src_dim_px = SMOL_SPX_TO_PX (src_dim_spx);
     uint64_t first_sample_ofs [3];
     uint64_t sample_step;
+    int i = 0;
 
     assert (src_dim_px > 1);
 
@@ -103,7 +116,9 @@ precalc_bilinear_array (uint16_t *array,
                           1 << n_halvings,
                           first_sample_ofs [0],
                           sample_step,
-                          src_dim_px);
+                          src_dim_px,
+                          dest_clip_before_px,
+                          &i);
 
     /* Main range */
     precalc_linear_range (array,
@@ -111,7 +126,9 @@ precalc_bilinear_array (uint16_t *array,
                           dest_dim_prehalving_px - (1 << n_halvings),
                           first_sample_ofs [1],
                           sample_step,
-                          src_dim_px);
+                          src_dim_px,
+                          dest_clip_before_px,
+                          &i);
 
     /* Right fringe */
     precalc_linear_range (array,
@@ -119,7 +136,9 @@ precalc_bilinear_array (uint16_t *array,
                           dest_dim_prehalving_px,
                           first_sample_ofs [2],
                           sample_step,
-                          src_dim_px);
+                          src_dim_px,
+                          dest_clip_before_px,
+                          &i);
 }
 
 static void
@@ -129,13 +148,14 @@ precalc_boxes_array (uint32_t *array,
                      uint32_t src_dim_spx,
                      int32_t dest_dim,
                      uint32_t dest_ofs_spx,
-                     uint32_t dest_dim_spx)
+                     uint32_t dest_dim_spx,
+                     int32_t dest_clip_before_px)
 {
     uint64_t fracF, frac_stepF;
     uint64_t f;
     uint64_t stride;
     uint64_t a, b;
-    int i;
+    int i, dest_i;
 
     dest_ofs_spx %= SMOL_SUBPIXEL_MUL;
 
@@ -163,19 +183,24 @@ precalc_boxes_array (uint32_t *array,
     *span_mul = (a + (b / 2)) / (b + 1);
 
     /* Left fringe */
-    array [0] = 0;
+    i = 0;
+    dest_i = 0;
+
+    if (dest_i >= dest_clip_before_px)
+        array [i++] = 0;
 
     /* Main range */
     fracF = ((frac_stepF * (SMOL_SUBPIXEL_MUL - dest_ofs_spx)) / SMOL_SUBPIXEL_MUL);
-    for (i = 1; i < dest_dim - 1; i++)
+    for (dest_i = 1; dest_i < dest_dim - 1; dest_i++)
     {
-        array [i] = fracF / SMOL_SMALL_MUL;
+        if (dest_i >= dest_clip_before_px)
+            array [i++] = fracF / SMOL_SMALL_MUL;
         fracF += frac_stepF;
     }
 
     /* Right fringe */
-    if (dest_dim > 1)
-        array [dest_dim - 1] = (((uint64_t) src_dim_spx * SMOL_SMALL_MUL - frac_stepF) / SMOL_SMALL_MUL);
+    if (dest_dim > 1 && dest_i >= dest_clip_before_px)
+        array [i++] = (((uint64_t) src_dim_spx * SMOL_SMALL_MUL - frac_stepF) / SMOL_SMALL_MUL);
 }
 
 static void
@@ -192,7 +217,8 @@ init_dim (SmolDim *dim)
                              dim->src_size_spx,
                              dim->placement_size_px,
                              dim->placement_ofs_spx,
-                             dim->placement_size_spx);
+                             dim->placement_size_spx,
+                             dim->clip_before_px);
     }
     else /* SMOL_FILTER_BILINEAR_?H */
     {
@@ -201,7 +227,8 @@ init_dim (SmolDim *dim)
                                 dim->placement_ofs_spx,
                                 dim->placement_size_prehalving_spx,
                                 dim->placement_size_prehalving_px,
-                                dim->n_halvings);
+                                dim->n_halvings,
+                                dim->clip_before_px);
     }
 }
 
