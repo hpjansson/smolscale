@@ -1460,6 +1460,22 @@ apply_subpixel_opacity_row_64bpp (uint64_t * SMOL_RESTRICT u64_inout, int n_pixe
 }
 
 static void
+apply_subpixel_opacity_row_copy_64bpp (uint64_t * SMOL_RESTRICT u64_in,
+                                       uint64_t * SMOL_RESTRICT u64_out,
+                                       int n_pixels,
+                                       uint16_t opacity)
+{
+    uint64_t *u64_out_max = u64_out + n_pixels;
+
+    while (u64_out != u64_out_max)
+    {
+        *u64_out = *u64_in++;
+        apply_subpixel_opacity_64bpp (u64_out, opacity);
+        u64_out++;
+    }
+}
+
+static void
 apply_subpixel_opacity_row_128bpp (uint64_t * SMOL_RESTRICT u64_inout, int n_pixels, uint16_t opacity)
 {
     uint64_t *u64_inout_max = u64_inout + (n_pixels * 2);
@@ -1469,6 +1485,25 @@ apply_subpixel_opacity_row_128bpp (uint64_t * SMOL_RESTRICT u64_inout, int n_pix
         apply_subpixel_opacity_128bpp_half (u64_inout, opacity);
         apply_subpixel_opacity_128bpp_half (u64_inout + 1, opacity);
         u64_inout += 2;
+    }
+}
+
+static void
+apply_subpixel_opacity_row_copy_128bpp (uint64_t * SMOL_RESTRICT u64_in,
+                                        uint64_t * SMOL_RESTRICT u64_out,
+                                        int n_pixels,
+                                        uint16_t opacity)
+{
+    uint64_t *u64_out_max = u64_out + (n_pixels * 2);
+
+    while (u64_out != u64_out_max)
+    {
+        u64_out [0] = u64_in [0];
+        u64_out [1] = u64_in [1];
+        apply_subpixel_opacity_128bpp_half (u64_out, opacity);
+        apply_subpixel_opacity_128bpp_half (u64_out + 1, opacity);
+        u64_in += 2;
+        u64_out += 2;
     }
 }
 
@@ -2656,6 +2691,8 @@ scale_dest_row_one_64bpp (const SmolScaleCtx *scale_ctx,
                           SmolLocalCtx *local_ctx,
                           uint32_t row_index)
 {
+    int si = 0;
+
     /* Scale the row and store it */
 
     if (local_ctx->src_ofs != 0)
@@ -2667,11 +2704,22 @@ scale_dest_row_one_64bpp (const SmolScaleCtx *scale_ctx,
         local_ctx->src_ofs = 0;
     }
 
-    if (row_index == (scale_ctx->vdim.placement_size_px - 1) && scale_ctx->vdim.last_opacity < 256)
-        apply_subpixel_opacity_row_64bpp (local_ctx->parts_row [0], scale_ctx->hdim.placement_size_px,
+    if (row_index == 0 && scale_ctx->vdim.first_opacity < 256)
+    {
+        apply_subpixel_opacity_row_copy_64bpp (local_ctx->parts_row [0],
+                                               local_ctx->parts_row [1],
+                                               scale_ctx->hdim.placement_size_px,
+                                               scale_ctx->vdim.first_opacity);
+        si = 1;
+    }
+    else if (row_index == (scale_ctx->vdim.placement_size_px - 1) && scale_ctx->vdim.last_opacity < 256)
+    {
+        apply_subpixel_opacity_row_64bpp (local_ctx->parts_row [0],
+                                          scale_ctx->hdim.placement_size_px,
                                           scale_ctx->vdim.last_opacity);
+    }
 
-    return 0;
+    return si;
 }
 
 static int
@@ -2679,6 +2727,8 @@ scale_dest_row_one_128bpp (const SmolScaleCtx *scale_ctx,
                            SmolLocalCtx *local_ctx,
                            uint32_t row_index)
 {
+    int si = 0;
+
     /* Scale the row and store it */
 
     if (local_ctx->src_ofs != 0)
@@ -2690,11 +2740,22 @@ scale_dest_row_one_128bpp (const SmolScaleCtx *scale_ctx,
         local_ctx->src_ofs = 0;
     }
 
-    if (row_index == (scale_ctx->vdim.placement_size_px - 1) && scale_ctx->vdim.last_opacity < 256)
-        apply_subpixel_opacity_row_128bpp (local_ctx->parts_row [0], scale_ctx->hdim.placement_size_px,
+    if (row_index == 0 && scale_ctx->vdim.first_opacity < 256)
+    {
+        apply_subpixel_opacity_row_copy_128bpp (local_ctx->parts_row [0],
+                                                local_ctx->parts_row [1],
+                                                scale_ctx->hdim.placement_size_px,
+                                                scale_ctx->vdim.first_opacity);
+        si = 1;
+    }
+    else if (row_index == (scale_ctx->vdim.placement_size_px - 1) && scale_ctx->vdim.last_opacity < 256)
+    {
+        apply_subpixel_opacity_row_128bpp (local_ctx->parts_row [0],
+                                           scale_ctx->hdim.placement_size_px,
                                            scale_ctx->vdim.last_opacity);
+    }
 
-    return 0;
+    return si;
 }
 
 static int
