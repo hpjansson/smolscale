@@ -431,6 +431,37 @@ const uint32_t _smol_inv_div_p16l_lut [256] =
     0x00000832, 0x00000829, 0x00000821, 0x00000819, 0x00000811, 0x00000809, 0x00000800, 0x000007f9
 };
 
+/* ------- *
+ * Helpers *
+ * ------- */
+
+static SMOL_INLINE int
+check_row_range (const SmolScaleCtx *scale_ctx,
+                 int32_t *first_dest_row,
+                 int32_t *n_dest_rows)
+{
+    if (*first_dest_row < 0)
+    {
+        *n_dest_rows += *first_dest_row;
+        *first_dest_row = 0;
+    }
+    else if (*first_dest_row >= (int32_t) scale_ctx->vdim.dest_size_px)
+    {
+        return 0;
+    }
+
+    if (*n_dest_rows < 0 || *first_dest_row + *n_dest_rows > (int32_t) scale_ctx->vdim.dest_size_px)
+    {
+        *n_dest_rows = scale_ctx->vdim.dest_size_px - *first_dest_row;
+    }
+    else if (*n_dest_rows == 0)
+    {
+        return 0;
+    }
+
+    return 1;
+}
+
 /* ------------------- *
  * Scaling: Outer loop *
  * ------------------- */
@@ -1236,33 +1267,6 @@ smol_scale_new_simple (const void *src_pixels,
                      NULL,
                      NULL);
     return scale_ctx;
-}
-
-static SMOL_INLINE int
-check_row_range (const SmolScaleCtx *scale_ctx,
-                 int32_t *first_dest_row,
-                 int32_t *n_dest_rows)
-{
-    if (*first_dest_row < 0)
-    {
-        *n_dest_rows += *first_dest_row;
-        *first_dest_row = 0;
-    }
-    else if (*first_dest_row >= (int32_t) scale_ctx->vdim.dest_size_px)
-    {
-        return 0;
-    }
-
-    if (*n_dest_rows < 0 || *first_dest_row + *n_dest_rows > (int32_t) scale_ctx->vdim.dest_size_px)
-    {
-        *n_dest_rows = scale_ctx->vdim.dest_size_px - *first_dest_row;
-    }
-    else if (*n_dest_rows == 0)
-    {
-        return 0;
-    }
-
-    return 1;
 }
 
 void
