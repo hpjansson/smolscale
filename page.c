@@ -153,6 +153,40 @@ make_premul_alpha_row (int width)
     return image;
 }
 
+static void
+draw_frame (Image *img, int x, int y, int width, int height)
+{
+    int pixel_stride = 4;
+    int rowstride = img->rowstride;
+    int i;
+
+    for (i = 0; i < width; i++)
+    {
+        img->data [(x + i) * pixel_stride + y * rowstride] = 0;
+        img->data [(x + i) * pixel_stride + y * rowstride + 1] = 0;
+        img->data [(x + i) * pixel_stride + y * rowstride + 2] = 0;
+        img->data [(x + i) * pixel_stride + y * rowstride + 3] = 0xff;
+
+        img->data [(x + i) * pixel_stride + (y + height - 1) * rowstride] = 0;
+        img->data [(x + i) * pixel_stride + (y + height - 1) * rowstride + 1] = 0;
+        img->data [(x + i) * pixel_stride + (y + height - 1) * rowstride + 2] = 0;
+        img->data [(x + i) * pixel_stride + (y + height - 1) * rowstride + 3] = 0xff;
+    }
+
+    for (i = 0; i < height; i++)
+    {
+        img->data [x * pixel_stride + (y + i) * rowstride] = 0;
+        img->data [x * pixel_stride + (y + i) * rowstride + 1] = 0;
+        img->data [x * pixel_stride + (y + i) * rowstride + 2] = 0;
+        img->data [x * pixel_stride + (y + i) * rowstride + 3] = 0xff;
+
+        img->data [(x + width - 1) * pixel_stride + (y + i) * rowstride] = 0;
+        img->data [(x + width - 1) * pixel_stride + (y + i) * rowstride + 1] = 0;
+        img->data [(x + width - 1) * pixel_stride + (y + i) * rowstride + 2] = 0;
+        img->data [(x + width - 1) * pixel_stride + (y + i) * rowstride + 3] = 0xff;
+    }
+}
+
 #if 0
 static void
 gen_horiz_alpha_ramp (Image *dest_img, const Rect *rect, SmolFlags flags)
@@ -339,6 +373,92 @@ gen_vert_wedges (Image *bg, Image *src, const Rect *r)
 }
 
 static void
+draw_clipped_color (Image *dest_img,
+                    int x,
+                    int y,
+                    int width,
+                    int height,
+                    const uint8_t *color_pixel,
+                    double color_x,
+                    double color_y,
+                    double color_width,
+                    double color_height,
+                    const uint8_t *clear_pixel)
+{
+    SmolScaleCtx *ctx;
+
+    assert (width > 2);
+    assert (height > 2);
+
+    draw_frame (dest_img, x, y, width, height);
+
+    ctx = smol_scale_new_full (
+        /* Input */
+        color_pixel,
+        SMOL_PIXEL_RGBA8_UNASSOCIATED,
+        1,
+        1,
+        4,
+        /* BG pixel */
+        clear_pixel,
+        SMOL_PIXEL_RGBA8_UNASSOCIATED,
+        /* Output */
+        dest_img->data + (x + 1) * 4 + (y + 1) * dest_img->rowstride,
+        dest_img->pixel_type,
+        width - 2,
+        height - 2,
+        dest_img->rowstride,
+        /* Placement */
+        color_x * SMOL_SUBPIXEL_MUL,
+        color_y * SMOL_SUBPIXEL_MUL,
+        color_width * SMOL_SUBPIXEL_MUL,
+        color_height * SMOL_SUBPIXEL_MUL,
+        /* Extra parameters */
+        SMOL_COMPOSITE_SRC_CLEAR_DEST,
+        SMOL_NO_FLAGS,
+        NULL,
+        NULL);
+    smol_scale_batch (ctx, 0, -1);
+    smol_scale_destroy (ctx);
+}
+
+static void
+draw_clip_boxes (Image *dest_img)
+{
+    const uint8_t pixels [] [4] =
+    {
+        { 0x7f, 0x7f, 0x7f, 0xff },
+        { 0xff, 0x00, 0x00, 0xff },
+        { 0x00, 0xff, 0x00, 0xff },
+        { 0x00, 0x00, 0xff, 0xff },
+    };
+
+    draw_clipped_color (dest_img,
+                        2, 2, 102, 102,
+                        pixels [1],
+                        -49.5, -49.5, 100, 100,
+                        pixels [0]);
+
+    draw_clipped_color (dest_img,
+                        104, 2, 102, 102,
+                        pixels [2],
+                        49.5, -49.5, 100, 100,
+                        pixels [0]);
+
+    draw_clipped_color (dest_img,
+                        2, 104, 102, 102,
+                        pixels [2],
+                        -49.5, 49.5, 100, 100,
+                        pixels [0]);
+
+    draw_clipped_color (dest_img,
+                        104, 104, 102, 102,
+                        pixels [1],
+                        49.5, 49.5, 100, 100,
+                        pixels [0]);
+}
+
+static void
 gen_page (void)
 {
     Image *bg, *solid_src, *alpha_src;
@@ -355,6 +475,7 @@ gen_page (void)
 
     gen_horiz_wedges (bg, alpha_src, &r [0]);
     gen_vert_wedges (bg, alpha_src, &r [1]);
+    draw_clip_boxes (bg);
 
     smoltest_save_image ("page", bg->data, WIDTH, HEIGHT);
 
