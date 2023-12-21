@@ -11,7 +11,7 @@
 #include "png.h"
 
 #define SCALE_FLAGS /* SMOL_DISABLE_SRGB_LINEARIZATION */ SMOL_NO_FLAGS
-#define PIXEL_TYPE SMOL_PIXEL_RGBA8_PREMULTIPLIED
+#define PIXEL_TYPE SMOL_PIXEL_RGBA8_UNASSOCIATED
 #define WIDTH 3000
 #define HEIGHT 2000
 #define N_CH 4
@@ -71,7 +71,7 @@ static Image *
 make_background (int width, int height)
 {
     Image *image;
-    uint8_t pixel [4] = { 255, 255, 255, 255 };
+    uint8_t pixel [4] = { 0, 0, 0, 0 };
     int i;
 
     image = image_alloc (PIXEL_TYPE, width, height);
