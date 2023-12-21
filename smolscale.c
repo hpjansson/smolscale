@@ -1199,17 +1199,17 @@ smol_scale_finalize (SmolScaleCtx *scale_ctx)
  * ---------- */
 
 SmolScaleCtx *
-smol_scale_new (const void *src_pixels,
-                SmolPixelType src_pixel_type,
-                uint32_t src_width,
-                uint32_t src_height,
-                uint32_t src_rowstride,
-                void *dest_pixels,
-                SmolPixelType dest_pixel_type,
-                uint32_t dest_width,
-                uint32_t dest_height,
-                uint32_t dest_rowstride,
-                SmolFlags flags)
+smol_scale_new_simple (const void *src_pixels,
+                       SmolPixelType src_pixel_type,
+                       uint32_t src_width,
+                       uint32_t src_height,
+                       uint32_t src_rowstride,
+                       void *dest_pixels,
+                       SmolPixelType dest_pixel_type,
+                       uint32_t dest_width,
+                       uint32_t dest_height,
+                       uint32_t dest_rowstride,
+                       SmolFlags flags)
 {
     SmolScaleCtx *scale_ctx;
 
@@ -1236,97 +1236,6 @@ smol_scale_new (const void *src_pixels,
                      NULL,
                      NULL);
     return scale_ctx;
-}
-
-SmolScaleCtx *
-smol_scale_new_full (const void *src_pixels,
-                     SmolPixelType src_pixel_type,
-                     uint32_t src_width,
-                     uint32_t src_height,
-                     uint32_t src_rowstride,
-                     void *dest_pixels,
-                     SmolPixelType dest_pixel_type,
-                     uint32_t dest_width,
-                     uint32_t dest_height,
-                     uint32_t dest_rowstride,
-                     SmolFlags flags,
-                     SmolPostRowFunc post_row_func,
-                     void *user_data)
-{
-    SmolScaleCtx *scale_ctx;
-
-    scale_ctx = calloc (sizeof (SmolScaleCtx), 1);
-    smol_scale_init (scale_ctx,
-                     src_pixels,
-                     src_pixel_type,
-                     SMOL_PX_TO_SPX (src_width),
-                     SMOL_PX_TO_SPX (src_height),
-                     src_rowstride,
-                     NULL,
-                     0,
-                     dest_pixels,
-                     dest_pixel_type,
-                     SMOL_PX_TO_SPX (dest_width),
-                     SMOL_PX_TO_SPX (dest_height),
-                     dest_rowstride,
-                     0,
-                     0,
-                     SMOL_PX_TO_SPX (dest_width),
-                     SMOL_PX_TO_SPX (dest_height),
-                     SMOL_COMPOSITE_SRC,
-                     flags,
-                     post_row_func,
-                     user_data);
-    return scale_ctx;
-}
-
-SmolScaleCtx *
-smol_scale_new_full_subpixel (const void *src_pixels,
-                              SmolPixelType src_pixel_type,
-                              uint32_t src_width,
-                              uint32_t src_height,
-                              uint32_t src_rowstride,
-                              void *dest_pixels,
-                              SmolPixelType dest_pixel_type,
-                              uint32_t dest_width,
-                              uint32_t dest_height,
-                              uint32_t dest_rowstride,
-                              SmolFlags flags,
-                              SmolPostRowFunc post_row_func,
-                              void *user_data)
-{
-    SmolScaleCtx *scale_ctx;
-
-    scale_ctx = calloc (sizeof (SmolScaleCtx), 1);
-    smol_scale_init (scale_ctx,
-                     src_pixels,
-                     src_pixel_type,
-                     src_width,
-                     src_height,
-                     src_rowstride,
-                     NULL,
-                     0,
-                     dest_pixels,
-                     dest_pixel_type,
-                     dest_width,
-                     dest_height,
-                     dest_rowstride,
-                     0,
-                     0,
-                     dest_width,
-                     dest_height,
-                     SMOL_COMPOSITE_SRC,
-                     flags,
-                     post_row_func,
-                     user_data);
-    return scale_ctx;
-}
-
-void
-smol_scale_destroy (SmolScaleCtx *scale_ctx)
-{
-    smol_scale_finalize (scale_ctx);
-    free (scale_ctx);
 }
 
 static SMOL_INLINE int
@@ -1408,26 +1317,26 @@ smol_scale_simple (const void *src_pixels,
 }
 
 SmolScaleCtx *
-smol_scale_new_composite (const void *src_pixels,
-                          SmolPixelType src_pixel_type,
-                          uint32_t src_width,
-                          uint32_t src_height,
-                          uint32_t src_rowstride,
-                          const void *color_pixel,
-                          SmolPixelType color_pixel_type,
-                          void *dest_pixels,
-                          SmolPixelType dest_pixel_type,
-                          uint32_t dest_width,
-                          uint32_t dest_height,
-                          uint32_t dest_rowstride,
-                          int32_t placement_x,
-                          int32_t placement_y,
-                          uint32_t placement_width,
-                          uint32_t placement_height,
-                          SmolCompositeOp composite_op,
-                          SmolFlags flags,
-                          SmolPostRowFunc post_row_func,
-                          void *user_data)
+smol_scale_new_full (const void *src_pixels,
+                     SmolPixelType src_pixel_type,
+                     uint32_t src_width,
+                     uint32_t src_height,
+                     uint32_t src_rowstride,
+                     const void *color_pixel,
+                     SmolPixelType color_pixel_type,
+                     void *dest_pixels,
+                     SmolPixelType dest_pixel_type,
+                     uint32_t dest_width,
+                     uint32_t dest_height,
+                     uint32_t dest_rowstride,
+                     int32_t placement_x,
+                     int32_t placement_y,
+                     uint32_t placement_width,
+                     uint32_t placement_height,
+                     SmolCompositeOp composite_op,
+                     SmolFlags flags,
+                     SmolPostRowFunc post_row_func,
+                     void *user_data)
 {
     SmolScaleCtx *scale_ctx;
 
@@ -1454,6 +1363,13 @@ smol_scale_new_composite (const void *src_pixels,
                      post_row_func,
                      user_data);
     return scale_ctx;
+}
+
+void
+smol_scale_destroy (SmolScaleCtx *scale_ctx)
+{
+    smol_scale_finalize (scale_ctx);
+    free (scale_ctx);
 }
 
 void

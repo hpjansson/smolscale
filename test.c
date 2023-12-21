@@ -853,13 +853,13 @@ scale_do_smol_threaded (ScaleParams *params, guint out_width, guint out_height)
 
     scaled = g_new (guint32, out_width * out_height);
 
-    scale_ctx = smol_scale_new (params->in_data,
-                                smol_ptype_in,
-                                params->in_width, params->in_height, params->in_width * sizeof (guint32),
-                                scaled,
-                                smol_ptype_out,
-                                out_width, out_height, out_width * sizeof (guint32),
-                                FALSE);
+    scale_ctx = smol_scale_new_simple (params->in_data,
+                                       smol_ptype_in,
+                                       params->in_width, params->in_height, params->in_width * sizeof (guint32),
+                                       scaled,
+                                       smol_ptype_out,
+                                       out_width, out_height, out_width * sizeof (guint32),
+                                       FALSE);
 
     n_threads = g_get_num_processors ();
     thread_pool = g_thread_pool_new ((GFunc) scale_smol_thread_worker,

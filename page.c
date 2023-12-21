@@ -204,7 +204,7 @@ gen_horiz_wedge (Image *dest_img, Image *src_pixel_row, const Rect *rect, int al
         int ofs_x = rect->x + i;
         int ofs_y = rect->y;
 
-        ctx = smol_scale_new_composite (
+        ctx = smol_scale_new_full (
             /* Input */
             src_pixel_row->data,
             src_pixel_row->pixel_type,
@@ -266,7 +266,7 @@ gen_vert_wedge (Image *dest_img, Image *src_pixel_row, const Rect *rect, int ali
         int ofs_x = rect->x;
         int ofs_y = rect->y + i;
 
-        ctx = smol_scale_new_composite (
+        ctx = smol_scale_new_full (
             /* Input */
             src_pixel_row->data,
             src_pixel_row->pixel_type,
