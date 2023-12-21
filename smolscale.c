@@ -509,6 +509,15 @@ scale_dest_row (const SmolScaleCtx *scale_ctx,
                                                         local_ctx,
                                                         dest_row_index - scale_ctx->vdim.clear_before_px);
 
+            if ((scale_ctx->composite_op == SMOL_COMPOSITE_SRC
+                 || scale_ctx->composite_op == SMOL_COMPOSITE_SRC_CLEAR_DEST)
+                && scale_ctx->have_composite_color)
+            {
+                scale_ctx->composite_over_color_func (local_ctx->parts_row [scaled_row_index],
+                                                      scale_ctx->color_pixel,
+                                                      scale_ctx->hdim.placement_size_px);
+            }
+
             scale_ctx->pack_row_func (local_ctx->parts_row [scaled_row_index],
                                       dest_hofs_to_pointer (scale_ctx, row_out, scale_ctx->hdim.placement_ofs_px),
                                       scale_ctx->hdim.placement_size_px);
@@ -866,6 +875,9 @@ get_implementations (SmolScaleCtx *scale_ctx, const void *color_pixel, SmolPixel
     SmolAlphaType internal_alpha = SMOL_ALPHA_PREMUL8;
     const SmolImplementation *implementations [IMPLEMENTATION_MAX];
     int i = 0;
+
+    if (color_pixel)
+        scale_ctx->have_composite_color = TRUE;
 
     /* Check for noop (direct copy) */
 
