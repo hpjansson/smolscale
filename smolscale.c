@@ -1214,7 +1214,7 @@ smol_scale_init (SmolScaleCtx *scale_ctx,
                                                 + (scale_ctx->vdim.placement_size_prehalving_px + 1) * 2)
                                                * sizeof (uint16_t),
                                                &scale_ctx->precalc_storage);
-    scale_ctx->vdim.precalc = scale_ctx->hdim.precalc + (scale_ctx->hdim.placement_size_prehalving_px + 1) * 2;
+    scale_ctx->vdim.precalc = ((uint16_t *) scale_ctx->hdim.precalc) + (scale_ctx->hdim.placement_size_prehalving_px + 1) * 2;
 
     get_implementations (scale_ctx, color_pixel, color_pixel_type);
 }
