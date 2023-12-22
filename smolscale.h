@@ -59,7 +59,7 @@ typedef enum
 }
 SmolCompositeOp;
 
-typedef void (SmolPostRowFunc) (uint32_t *row_inout,
+typedef void (SmolPostRowFunc) (void *row_inout,
                                 int width,
                                 void *user_data);
 
