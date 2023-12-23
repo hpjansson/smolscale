@@ -2790,8 +2790,8 @@ composite_over_color_128bpp (uint64_t * SMOL_RESTRICT srcdest_row,
     {
         uint64_t a = (srcdest_row [i + 1] >> 4) & 0xfff;
 
-        srcdest_row [i] += ((color_pixel [0] * (0xfff - a)) >> 12) & 0x00ffffff00ffffff;
-        srcdest_row [i + 1] += ((color_pixel [1] * (0xfff - a)) >> 12) & 0x00ffffff00ffffff;
+        srcdest_row [i] += ((color_pixel [0] * (0xfff - a)) >> 12) & 0x000fffff000fffff;
+        srcdest_row [i + 1] += ((color_pixel [1] * (0xfff - a)) >> 12) & 0x000fffff000fffff;
     }
 }
 
